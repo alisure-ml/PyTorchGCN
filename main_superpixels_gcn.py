@@ -15,31 +15,45 @@ from train.train_superpixels_graph_classification import train_epoch, evaluate_n
 
 
 def gpu_setup(use_gpu, gpu_id):
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-
     if torch.cuda.is_available() and use_gpu:
-        print('cuda available with GPU:', torch.cuda.get_device_name(0))
+        Tools.print('Cuda available with GPU: {}'.format(torch.cuda.get_device_name(0)))
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
         device = torch.device("cuda")
     else:
-        print('cuda not available')
+        Tools.print('Cuda not available')
         device = torch.device("cpu")
     return device
 
 
-def view_model_param(model_name, net_params):
-    model = gnn_model(model_name, net_params)
+def view_model_param(model):
     total_param = 0
-    print("MODEL DETAILS:\n")
     for param in model.parameters():
         total_param += np.prod(list(param.data.size()))
-    print('MODEL/Total parameters:', model_name, total_param)
     return total_param
 
 
+def set_seed(seed, device):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if device == 'cuda':
+        torch.cuda.manual_seed(seed)
+        pass
+    pass
+
+
+def save_checkpoint(model, root_ckpt_dir, epoch):
+    torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
+    for file in glob.glob(root_ckpt_dir + '/*.pkl'):
+        if int(file.split('_')[-1].split('.')[0]) < epoch - 1:
+            os.remove(file)
+            pass
+        pass
+    pass
+
+
 def train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, root_ckpt_dir):
-    Tools.print("Dataset: {}, Model: {}\n\nparams={}\n\nnet_params={}\n\nTotal Parameters: {}\n\n".format(
-        dataset.name, model_name, params, net_params, net_params['total_param']))
 
     if model_name in ['GCN', 'GAT'] and net_params['self_loop']:
         Tools.print("[!] Adding graph self-loops for GCN/GAT models (central node trick).")
@@ -47,20 +61,14 @@ def train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, ro
         pass
 
     device = net_params['device']
+    set_seed(params['seed'], device=device)
+
     writer = SummaryWriter(log_dir=os.path.join(root_log_dir, "RUN_" + str(0)))
 
-    # setting seeds
-    random.seed(params['seed'])
-    np.random.seed(params['seed'])
-    torch.manual_seed(params['seed'])
-    if device == 'cuda':
-        torch.cuda.manual_seed(params['seed'])
-        pass
-
-    Tools.print("Training Graphs: ", len(dataset.train))
-    Tools.print("Validation Graphs: ", len(dataset.val))
-    Tools.print("Test Graphs: ", len(dataset.test))
-    Tools.print("Number of Classes: ", net_params['n_classes'])
+    Tools.print("Training Graphs: {}".format(len(dataset.train)))
+    Tools.print("Validation Graphs: {}".format(len(dataset.val)))
+    Tools.print("Test Graphs: {}".format(len(dataset.test)))
+    Tools.print("Number of Classes: {}".format(net_params['n_classes']))
 
     model = gnn_model(model_name, net_params).to(device)
 
@@ -76,14 +84,24 @@ def train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, ro
     test_loader = DataLoader(dataset.test, batch_size=params['batch_size'],
                              shuffle=False, drop_last=drop_last, collate_fn=dataset.collate)
 
+    Tools.print()
+    net_params['total_param'] = view_model_param(model)
+    Tools.print("Dataset: {}, Model: {}\nparams={}\nnet_params={}".format(dataset.name, model_name, params, net_params))
+    Tools.print()
+
     t0, per_epoch_time = time.time(), []
     epoch_train_losses, epoch_val_losses, epoch_train_accs, epoch_val_accs = [], [], [], []
     for epoch in range(params['epochs']):
         start = time.time()
+        Tools.print()
         Tools.print("Start Epoch {}".format(epoch))
 
         epoch_train_loss, epoch_train_acc, optimizer = train_epoch(model, optimizer, device, train_loader)
         epoch_val_loss, epoch_val_acc = evaluate_network(model, device, val_loader)
+        epoch_test_loss, epoch_test_acc = evaluate_network(model, device, test_loader)
+
+        scheduler.step(epoch_val_loss)
+        save_checkpoint(model, root_ckpt_dir, epoch)
 
         epoch_train_losses.append(epoch_train_loss)
         epoch_val_losses.append(epoch_val_loss)
@@ -96,33 +114,19 @@ def train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, ro
         writer.add_scalar('val/_acc', epoch_val_acc, epoch)
         writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], epoch)
 
-        _, epoch_test_acc = evaluate_network(model, device, test_loader)
-
         per_epoch_time.append(time.time() - start)
-        Tools.print("time={}, lr={}, train_loss={}, val_loss={}, train_acc={}, val_acc={}, test_acc={}".format(
+        Tools.print("time={:.4f}, lr={:.4f}, loss={:.4f}/{:.4f}/{:.4f}, acc={:.4f}/{:.4f}/{:.4f}".format(
             time.time() - start, optimizer.param_groups[0]['lr'], epoch_train_loss,
-            epoch_val_loss, epoch_train_acc, epoch_val_acc, epoch_test_acc))
+            epoch_val_loss, epoch_test_loss, epoch_train_acc, epoch_val_acc, epoch_test_acc))
 
-        # Saving checkpoint
-        torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
-
-        for file in glob.glob(root_ckpt_dir + '/*.pkl'):
-            if int(file.split('_')[-1].split('.')[0]) < epoch - 1:
-                os.remove(file)
-                pass
-            pass
-
-        scheduler.step(epoch_val_loss)
-
+        # Stop training
         if optimizer.param_groups[0]['lr'] < params['min_lr']:
             Tools.print("\n!! LR EQUAL TO MIN LR SET.")
             break
-
-        # Stop training after params['max_time'] hours
         if time.time() - t0 > params['max_time'] * 3600:
-            Tools.print('-' * 89)
             Tools.print("Max_time for training elapsed {:.2f} hours, so stopping".format(params['max_time']))
             break
+
         pass
 
     _, test_acc = evaluate_network(model, device, test_loader)
@@ -184,10 +188,9 @@ def main(out_dir, data_file, dataset_name="MNIST", model_name="GCN", use_gpu=Fal
     root_log_dir = Tools.new_dir("{}/logs/{}".format(out_dir, file_name))
     root_ckpt_dir = Tools.new_dir("{}/checkpoints/{}".format(out_dir, file_name))
 
-    net_params['total_param'] = view_model_param(model_name, net_params)
     train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, root_ckpt_dir)
     pass
 
 
 if __name__ == '__main__':
-    main(out_dir=Tools.new_dir("result/m1_demo"), data_file="")
+    main(out_dir=Tools.new_dir("result/m1_demo"), data_file="/mnt/4T/ALISURE/GCN/MNIST.pkl")
