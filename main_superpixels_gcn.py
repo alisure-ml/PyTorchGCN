@@ -188,5 +188,6 @@ def main(out_dir, dataset_name="MNIST", model_name="GCN", use_gpu=False, gpu_id=
     train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, root_ckpt_dir)
     pass
 
+
 if __name__ == '__main__':
     main(out_dir="")
