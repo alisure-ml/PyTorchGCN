@@ -136,9 +136,9 @@ def train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, ro
     pass
 
 
-def main(out_dir, dataset_name="MNIST", model_name="GCN", use_gpu=False, gpu_id="0", batch_size=128):
+def main(out_dir, data_file, dataset_name="MNIST", model_name="GCN", use_gpu=False, gpu_id="0", batch_size=128):
     device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
-    dataset = SuperPixDataset(dataset_name)  # MNIST or CIFAR10
+    dataset = SuperPixDataset(dataset_name, data_file=data_file)  # MNIST or CIFAR10
     num_classes = len(np.unique(np.array(dataset.train[:][1])))
 
     # parameters
@@ -190,4 +190,4 @@ def main(out_dir, dataset_name="MNIST", model_name="GCN", use_gpu=False, gpu_id=
 
 
 if __name__ == '__main__':
-    main(out_dir="")
+    main(out_dir=Tools.new_dir("result/m1_demo"), data_file="")

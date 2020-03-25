@@ -5,24 +5,25 @@ import torch
 import pickle
 import numpy as np
 import torch.utils.data
+from alisuretool.Tools import Tools
 from scipy.spatial.distance import cdist
 
 
-def sigma(dists, kth=8):
-    # Compute sigma and reshape
-    try:
-        # Get k-nearest neighbors for each node
-        knns = np.partition(dists, kth, axis=-1)[:, kth::-1]
-        sigma = knns.sum(axis=1).reshape((knns.shape[0], 1)) / kth
-    except ValueError:  # handling for graphs with num_nodes less than kth
-        num_nodes = dists.shape[0]
-        # this sigma value is irrelevant since not used for final compute_edge_list
-        sigma = np.array([1] * num_nodes).reshape(num_nodes, 1)
-
-    return sigma + 1e-8  # adding epsilon to avoid zero value of sigma
-
-
 def compute_adjacency_matrix_images(coord, feat, use_feat=True, kth=8):
+
+    def sigma(dists, kth=8):
+        # Compute sigma and reshape
+        try:
+            # Get k-nearest neighbors for each node
+            knns = np.partition(dists, kth, axis=-1)[:, kth::-1]
+            sigma = knns.sum(axis=1).reshape((knns.shape[0], 1)) / kth
+        except ValueError:  # handling for graphs with num_nodes less than kth
+            num_nodes = dists.shape[0]
+            # this sigma value is irrelevant since not used for final compute_edge_list
+            sigma = np.array([1] * num_nodes).reshape(num_nodes, 1)
+
+        return sigma + 1e-8  # adding epsilon to avoid zero value of sigma
+
     coord = coord.reshape(-1, 2)
     # Compute coordinate distance
     c_dist = cdist(coord, coord)
@@ -31,9 +32,9 @@ def compute_adjacency_matrix_images(coord, feat, use_feat=True, kth=8):
         # Compute feature distance
         f_dist = cdist(feat, feat)
         # Compute adjacency
-        A = np.exp(- (c_dist / sigma(c_dist)) ** 2 - (f_dist / sigma(f_dist)) ** 2)
+        A = np.exp(- (c_dist / sigma(c_dist, kth)) ** 2 - (f_dist / sigma(f_dist, kth)) ** 2)
     else:
-        A = np.exp(- (c_dist / sigma(c_dist)) ** 2)
+        A = np.exp(- (c_dist / sigma(c_dist, kth)) ** 2)
 
     # Convert to symmetric matrix
     A = 0.5 * (A + A.T)
@@ -43,7 +44,6 @@ def compute_adjacency_matrix_images(coord, feat, use_feat=True, kth=8):
 
 def compute_edges_list(A, kth=8 + 1):
     # Get k-similar neighbor indices for each node
-
     num_nodes = A.shape[0]
     new_kth = num_nodes - kth
 
@@ -51,8 +51,7 @@ def compute_edges_list(A, kth=8 + 1):
         knns = np.argpartition(A, new_kth - 1, axis=-1)[:, new_kth:-1]
         knn_values = np.partition(A, new_kth - 1, axis=-1)[:, new_kth:-1]  # NEW
     else:
-        # handling for graphs with less than kth nodes
-        # in such cases, the resulting graph will be fully connected
+        # handling for graphs with less than kth nodes. In such cases, the resulting graph will be fully connected
         knns = np.tile(np.arange(num_nodes), num_nodes).reshape(num_nodes, num_nodes)
         knn_values = A  # NEW
 
@@ -64,15 +63,9 @@ def compute_edges_list(A, kth=8 + 1):
 
 
 class SuperPixDGL(torch.utils.data.Dataset):
-    def __init__(self,
-                 data_dir,
-                 dataset,
-                 split,
-                 use_mean_px=True,
-                 use_coord=True):
 
+    def __init__(self, data_dir, dataset, split, use_mean_px=True, use_coord=True):
         self.split = split
-
         self.graph_lists = []
 
         if dataset == 'MNIST':
@@ -80,47 +73,41 @@ class SuperPixDGL(torch.utils.data.Dataset):
             with open(os.path.join(data_dir, 'mnist_75sp_%s.pkl' % split), 'rb') as f:
                 self.labels, self.sp_data = pickle.load(f)
                 self.graph_labels = torch.LongTensor(self.labels)
+                pass
         elif dataset == 'CIFAR10':
             self.img_size = 32
             with open(os.path.join(data_dir, 'cifar10_150sp_%s.pkl' % split), 'rb') as f:
                 self.labels, self.sp_data = pickle.load(f)
                 self.graph_labels = torch.LongTensor(self.labels)
+                pass
+            pass
 
         self.use_mean_px = use_mean_px
         self.use_coord = use_coord
         self.n_samples = len(self.labels)
 
         self._prepare()
+        pass
 
     def _prepare(self):
-        print("preparing %d graphs for the %s set..." % (self.n_samples, self.split.upper()))
+        Tools.print("preparing %d graphs for the %s set..." % (self.n_samples, self.split.upper()))
+
         self.Adj_matrices, self.node_features, self.edges_lists, self.edge_features = [], [], [], []
         for index, sample in enumerate(self.sp_data):
             mean_px, coord = sample[:2]
+            coord = coord / self.img_size
 
-            try:
-                coord = coord / self.img_size
-            except AttributeError:
-                VOC_has_variable_image_sizes = True
-
-            if self.use_mean_px:
-                A = compute_adjacency_matrix_images(coord, mean_px)  # using super-pixel locations + features
-            else:
-                A = compute_adjacency_matrix_images(coord, mean_px, False)  # using only super-pixel locations
+            A = compute_adjacency_matrix_images(coord, mean_px, self.use_mean_px)  # super-pixel locations + features
             edges_list, edge_values_list = compute_edges_list(A)  # NEW
-
-            N_nodes = A.shape[0]
-
-            mean_px = mean_px.reshape(N_nodes, -1)
-            coord = coord.reshape(N_nodes, 2)
-            x = np.concatenate((mean_px, coord), axis=1)
-
             edge_values_list = edge_values_list.reshape(-1)  # NEW # TO DOUBLE-CHECK !
 
-            self.node_features.append(x)
-            self.edge_features.append(edge_values_list)  # NEW
+            x = np.concatenate((mean_px.reshape(A.shape[0], -1), coord.reshape(A.shape[0], 2)), axis=1)
+
             self.Adj_matrices.append(A)
             self.edges_lists.append(edges_list)
+            self.edge_features.append(edge_values_list)
+            self.node_features.append(x)
+            pass
 
         for index in range(len(self.sp_data)):
             g = dgl.DGLGraph()
@@ -134,31 +121,20 @@ class SuperPixDGL(torch.utils.data.Dataset):
                     g.add_edges(src, dsts)
                 else:
                     g.add_edges(src, dsts[dsts != src])
+                pass
 
             # adding edge features for Residual Gated ConvNet
-            edge_feat_dim = g.ndata['feat'].shape[1]  # dim same as node feature dim
-            # g.edata['feat'] = torch.ones(g.number_of_edges(), edge_feat_dim).half()
             g.edata['feat'] = torch.Tensor(self.edge_features[index]).unsqueeze(1).half()  # NEW 
 
             self.graph_lists.append(g)
+            pass
+
+        pass
 
     def __len__(self):
-        """Return the number of graphs in the dataset."""
         return self.n_samples
 
     def __getitem__(self, idx):
-        """
-            Get the idx^th sample.
-            Parameters
-            ---------
-            idx : int
-                The sample index.
-            Returns
-            -------
-            (dgl.DGLGraph, int)
-                DGLGraph with node feature stored in `feat` field
-                And its label.
-        """
         return self.graph_lists[idx], self.graph_labels[idx]
 
     pass
@@ -175,6 +151,7 @@ class DGLFormDataset(torch.utils.data.Dataset):
         self.lists = lists
         self.graph_lists = lists[0]
         self.graph_labels = lists[1]
+        pass
 
     def __getitem__(self, index):
         return tuple(li[index] for li in self.lists)
@@ -186,7 +163,8 @@ class DGLFormDataset(torch.utils.data.Dataset):
 
 
 class SuperPixDatasetDGL(torch.utils.data.Dataset):
-    def __init__(self, name, num_val=5000):
+
+    def __init__(self, name, num_val=5000, use_mean_px=True, use_coord=True):
         """
             Takes input standard image dataset name (MNIST/CIFAR10) 
             and returns the superpixels graph.
@@ -201,20 +179,15 @@ class SuperPixDatasetDGL(torch.utils.data.Dataset):
         t_data = time.time()
         self.name = name
 
-        use_mean_px = True  # using super-pixel locations + features
-        use_mean_px = False  # using only super-pixel locations
         if use_mean_px:
-            print('Adj matrix defined from super-pixel locations + features')
+            Tools.print('Adj matrix defined from super-pixel locations + features')
         else:
-            print('Adj matrix defined from super-pixel locations (only)')
-        use_coord = True
-        self.test = SuperPixDGL("./data/superpixels", dataset=self.name, split='test',
-                                use_mean_px=use_mean_px,
-                                use_coord=use_coord)
+            Tools.print('Adj matrix defined from super-pixel locations (only)')
 
-        self.train_ = SuperPixDGL("./data/superpixels", dataset=self.name, split='train',
-                                  use_mean_px=use_mean_px,
-                                  use_coord=use_coord)
+        self.test = SuperPixDGL("./data/superpixels", dataset=self.name,
+                                split='test', use_mean_px=use_mean_px, use_coord=use_coord)
+        self.train_ = SuperPixDGL("./data/superpixels", dataset=self.name,
+                                  split='train', use_mean_px=use_mean_px, use_coord=use_coord)
 
         _val_graphs, _val_labels = self.train_[:num_val]
         _train_graphs, _train_labels = self.train_[num_val:]
@@ -222,56 +195,29 @@ class SuperPixDatasetDGL(torch.utils.data.Dataset):
         self.val = DGLFormDataset(_val_graphs, _val_labels)
         self.train = DGLFormDataset(_train_graphs, _train_labels)
 
-        print("[I] Data load time: {:.4f}s".format(time.time() - t_data))
+        Tools.print("[I] Data load time: {:.4f}s".format(time.time() - t_data))
         pass
+
     pass
 
 
-def self_loop(g):
-    """
-        Utility function only, to be used only when necessary as per user self_loop flag
-        : Overwriting the function dgl.transform.add_self_loop() to not miss ndata['feat'] and edata['feat']
-        
-        
-        This function is called inside a function in SuperPixDataset class.
-    """
-    new_g = dgl.DGLGraph()
-    new_g.add_nodes(g.number_of_nodes())
-    new_g.ndata['feat'] = g.ndata['feat']
-
-    src, dst = g.all_edges(order="eid")
-    src = dgl.backend.zerocopy_to_numpy(src)
-    dst = dgl.backend.zerocopy_to_numpy(dst)
-    non_self_edges_idx = src != dst
-    nodes = np.arange(g.number_of_nodes())
-    new_g.add_edges(src[non_self_edges_idx], dst[non_self_edges_idx])
-    new_g.add_edges(nodes, nodes)
-
-    # This new edata is not used since this function gets called only for GCN, GAT
-    # However, we need this for the generic requirement of ndata and edata
-    new_g.edata['feat'] = torch.zeros(new_g.number_of_edges())
-    return new_g
-
-
 class SuperPixDataset(torch.utils.data.Dataset):
-    def __init__(self, name):
-        """
-            Loading Superpixels datasets
-        """
-        start = time.time()
-        print("[I] Loading dataset %s..." % (name))
-        self.name = name
-        data_dir = 'data/superpixels/'
-        with open(data_dir + name + '.pkl', "rb") as f:
-            f = pickle.load(f)
-            self.train = f[0]
-            self.val = f[1]
-            self.test = f[2]
-        print('train, test, val sizes :', len(self.train), len(self.test), len(self.val))
-        print("[I] Finished loading.")
-        print("[I] Data load time: {:.4f}s".format(time.time() - start))
 
-    # form a mini batch from a given list of samples = [(graph, label) pairs]
+    def __init__(self, name, data_file=None):
+        start = time.time()
+        Tools.print("[I] Loading dataset {}".format(name))
+        self.name = name
+        data_file = data_file if data_file else "data/superpixels/{}.pkl".format(name)
+        with open(data_file, "rb") as f:
+            f = pickle.load(f)
+            self.train, self.val, self.test = f[0], f[1], f[2]
+            pass
+
+        Tools.print("train, test, val sizes : {} {} {}".format(len(self.train), len(self.test), len(self.val)))
+        Tools.print("[I] Finished loading.")
+        Tools.print("[I] Data load time: {:.4f}s".format(time.time() - start))
+        pass
+
     def collate(self, samples):
         # The input samples is a list of pairs (graph, label).
         graphs, labels = map(list, zip(*samples))
@@ -290,16 +236,37 @@ class SuperPixDataset(torch.utils.data.Dataset):
 
     def add_self_loops(self):
         # function for adding self loops
-        # this function will be called only if self_loop flag is True
-
-        self.train.graph_lists = [self_loop(g) for g in self.train.graph_lists]
-        self.val.graph_lists = [self_loop(g) for g in self.val.graph_lists]
-        self.test.graph_lists = [self_loop(g) for g in self.test.graph_lists]
+        self.train.graph_lists = [self.self_loop(g) for g in self.train.graph_lists]
+        self.val.graph_lists = [self.self_loop(g) for g in self.val.graph_lists]
+        self.test.graph_lists = [self.self_loop(g) for g in self.test.graph_lists]
 
         self.train = DGLFormDataset(self.train.graph_lists, self.train.graph_labels)
         self.val = DGLFormDataset(self.val.graph_lists, self.val.graph_labels)
         self.test = DGLFormDataset(self.test.graph_lists, self.test.graph_labels)
         pass
 
-    pass
+    @staticmethod
+    def self_loop(g):
+        """
+            Utility function only, to be used only when necessary as per user self_loop flag
+            : Overwriting the function dgl.transform.add_self_loop() to not miss ndata['feat'] and edata['feat']
+            This function is called inside a function in SuperPixDataset class.
+        """
+        new_g = dgl.DGLGraph()
+        new_g.add_nodes(g.number_of_nodes())
+        new_g.ndata['feat'] = g.ndata['feat']
 
+        src, dst = g.all_edges(order="eid")
+        src = dgl.backend.zerocopy_to_numpy(src)
+        dst = dgl.backend.zerocopy_to_numpy(dst)
+        non_self_edges_idx = src != dst
+        nodes = np.arange(g.number_of_nodes())
+        new_g.add_edges(src[non_self_edges_idx], dst[non_self_edges_idx])
+        new_g.add_edges(nodes, nodes)
+
+        # This new edata is not used since this function gets called only for GCN, GAT
+        # However, we need this for the generic requirement of ndata and edata
+        new_g.edata['feat'] = torch.zeros(new_g.number_of_edges())
+        return new_g
+
+    pass
