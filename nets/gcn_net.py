@@ -13,6 +13,7 @@ from layers.mlp_readout_layer import MLPReadout
 
 
 class GCNNet(nn.Module):
+
     def __init__(self, net_params):
         super().__init__()
         in_dim = net_params['in_dim']
@@ -37,27 +38,27 @@ class GCNNet(nn.Module):
         self.MLP_layer = MLPReadout(out_dim, n_classes)
         pass
 
-    def forward(self, g, h, e, snorm_n, snorm_e):
-        h = self.embedding_h(h)
-        h = self.in_feat_dropout(h)
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        hidden_nodes_feat = self.embedding_h(nodes_feat)
+        hidden_nodes_feat = self.in_feat_dropout(hidden_nodes_feat)
         for conv in self.layers:
-            h = conv(g, h, snorm_n)
-        g.ndata['h'] = h
+            hidden_nodes_feat = conv(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = hidden_nodes_feat
 
         if self.readout == "sum":
-            hg = dgl.sum_nodes(g, 'h')
+            global_feat = dgl.sum_nodes(graphs, 'h')
         elif self.readout == "max":
-            hg = dgl.max_nodes(g, 'h')
+            global_feat = dgl.max_nodes(graphs, 'h')
         elif self.readout == "mean":
-            hg = dgl.mean_nodes(g, 'h')
+            global_feat = dgl.mean_nodes(graphs, 'h')
         else:
-            hg = dgl.mean_nodes(g, 'h')  # default readout is mean nodes
+            global_feat = dgl.mean_nodes(graphs, 'h')  # default readout is mean nodes
+            pass
 
-        return self.MLP_layer(hg)
+        return self.MLP_layer(global_feat)
 
     def loss(self, pred, label):
-        criterion = nn.CrossEntropyLoss()
-        loss = criterion(pred, label)
+        loss = nn.CrossEntropyLoss()(pred, label)
         return loss
 
     pass

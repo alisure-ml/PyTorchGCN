@@ -5,13 +5,11 @@ import torch
 import random
 import numpy as np
 import torch.optim as optim
+from nets.load_net import gnn_model
 from alisuretool.Tools import Tools
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
-
-from nets.load_net import gnn_model
 from data.superpixels import SuperPixDataset
-from train.train_superpixels_graph_classification import train_epoch, evaluate_network  # import train functions
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -51,6 +49,70 @@ def save_checkpoint(model, root_ckpt_dir, epoch):
             pass
         pass
     pass
+
+
+def accuracy(scores, targets):
+    return (scores.detach().argmax(dim=1) == targets).float().sum().item()
+
+
+def train_epoch(model, optimizer, device, data_loader):
+    model.train()
+
+    epoch_loss, epoch_train_acc, nb_data = 0, 0, 0
+    for _, (batch_graphs, batch_labels, batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(data_loader):
+        batch_nodes_feat = batch_graphs.ndata['feat'].to(device)  # num x feat
+        batch_edges_feat = batch_graphs.edata['feat'].to(device)
+        batch_labels = batch_labels.to(device)
+        batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(device)  # num x 1
+        batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(device)
+
+        optimizer.zero_grad()
+
+        batch_scores = model.forward(batch_graphs, batch_nodes_feat, batch_edges_feat,
+                                     batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
+        loss = model.loss(batch_scores, batch_labels)
+
+        loss.backward()
+        optimizer.step()
+
+        nb_data += batch_labels.size(0)
+        epoch_loss += loss.detach().item()
+        epoch_train_acc += accuracy(batch_scores, batch_labels)
+        pass
+
+    epoch_train_acc /= nb_data
+    epoch_loss /= (len(data_loader) + 1)
+
+    return epoch_loss, epoch_train_acc, optimizer
+
+
+def evaluate_network(model, device, data_loader):
+    model.eval()
+
+    epoch_test_loss, epoch_test_acc, nb_data = 0, 0, 0
+    with torch.no_grad():
+        for _, (batch_graphs, batch_labels,
+                batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(data_loader):
+            batch_nodes_feat = batch_graphs.ndata['feat'].to(device)
+            batch_edges_feat = batch_graphs.edata['feat'].to(device)
+            batch_labels = batch_labels.to(device)
+            batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(device)
+            batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(device)
+
+            batch_scores = model.forward(batch_graphs, batch_nodes_feat, batch_edges_feat,
+                                         batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
+            loss = model.loss(batch_scores, batch_labels)
+
+            nb_data += batch_labels.size(0)
+            epoch_test_loss += loss.detach().item()
+            epoch_test_acc += accuracy(batch_scores, batch_labels)
+            pass
+
+        epoch_test_loss /= (len(data_loader) + 1)
+        epoch_test_acc /= nb_data
+        pass
+
+    return epoch_test_loss, epoch_test_acc
 
 
 def train_val_pipeline(model_name, dataset, params, net_params, root_log_dir, root_ckpt_dir):
@@ -193,4 +255,4 @@ def main(out_dir, data_file, dataset_name="MNIST", model_name="GCN", use_gpu=Fal
 
 
 if __name__ == '__main__':
-    main(out_dir=Tools.new_dir("result/m1_demo"), data_file="/mnt/4T/ALISURE/GCN/MNIST.pkl")
+    main(out_dir=Tools.new_dir("result/m1_demo"), data_file="/mnt/4T/ALISURE/GCN/MNIST.pkl", batch_size=256)

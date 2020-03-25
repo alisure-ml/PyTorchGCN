@@ -140,28 +140,6 @@ class SuperPixDGL(torch.utils.data.Dataset):
     pass
 
 
-class DGLFormDataset(torch.utils.data.Dataset):
-    """
-        DGLFormDataset wrapping graph list and label list as per pytorch Dataset.
-        *lists (list): lists of 'graphs' and 'labels' with same len().
-    """
-
-    def __init__(self, *lists):
-        assert all(len(lists[0]) == len(li) for li in lists)
-        self.lists = lists
-        self.graph_lists = lists[0]
-        self.graph_labels = lists[1]
-        pass
-
-    def __getitem__(self, index):
-        return tuple(li[index] for li in self.lists)
-
-    def __len__(self):
-        return len(self.lists[0])
-
-    pass
-
-
 class SuperPixDatasetDGL(torch.utils.data.Dataset):
 
     def __init__(self, name, num_val=5000, use_mean_px=True, use_coord=True):
@@ -184,19 +162,41 @@ class SuperPixDatasetDGL(torch.utils.data.Dataset):
         else:
             Tools.print('Adj matrix defined from super-pixel locations (only)')
 
-        self.test = SuperPixDGL("./data/superpixels", dataset=self.name,
-                                split='test', use_mean_px=use_mean_px, use_coord=use_coord)
         self.train_ = SuperPixDGL("./data/superpixels", dataset=self.name,
                                   split='train', use_mean_px=use_mean_px, use_coord=use_coord)
+        self.test = SuperPixDGL("./data/superpixels", dataset=self.name,
+                                split='test', use_mean_px=use_mean_px, use_coord=use_coord)
 
-        _val_graphs, _val_labels = self.train_[:num_val]
         _train_graphs, _train_labels = self.train_[num_val:]
+        _val_graphs, _val_labels = self.train_[:num_val]
 
-        self.val = DGLFormDataset(_val_graphs, _val_labels)
         self.train = DGLFormDataset(_train_graphs, _train_labels)
+        self.val = DGLFormDataset(_val_graphs, _val_labels)
 
         Tools.print("[I] Data load time: {:.4f}s".format(time.time() - t_data))
         pass
+
+    pass
+
+
+class DGLFormDataset(torch.utils.data.Dataset):
+    """
+        DGLFormDataset wrapping graph list and label list as per pytorch Dataset.
+        *lists (list): lists of 'graphs' and 'labels' with same len().
+    """
+
+    def __init__(self, *lists):
+        assert all(len(lists[0]) == len(li) for li in lists)
+        self.lists = lists
+        self.graph_lists = lists[0]
+        self.graph_labels = lists[1]
+        pass
+
+    def __getitem__(self, index):
+        return tuple(li[index] for li in self.lists)
+
+    def __len__(self):
+        return len(self.lists[0])
 
     pass
 
@@ -219,20 +219,23 @@ class SuperPixDataset(torch.utils.data.Dataset):
         pass
 
     def collate(self, samples):
-        # The input samples is a list of pairs (graph, label).
         graphs, labels = map(list, zip(*samples))
         labels = torch.tensor(np.array(labels))
-        tab_sizes_n = [graphs[i].number_of_nodes() for i in range(len(graphs))]
-        tab_snorm_n = [torch.FloatTensor(size, 1).fill_(1. / float(size)) for size in tab_sizes_n]
-        snorm_n = torch.cat(tab_snorm_n).sqrt()
-        tab_sizes_e = [graphs[i].number_of_edges() for i in range(len(graphs))]
-        tab_snorm_e = [torch.FloatTensor(size, 1).fill_(1. / float(size)) for size in tab_sizes_e]
-        snorm_e = torch.cat(tab_snorm_e).sqrt()
+
+        nodes_num = [graphs[i].number_of_nodes() for i in range(len(graphs))]
+        edges_num = [graphs[i].number_of_edges() for i in range(len(graphs))]
+        nodes_num_norm = [torch.FloatTensor(num, 1).fill_(1. / float(num)) for num in nodes_num]
+        edges_num_norm = [torch.FloatTensor(num, 1).fill_(1. / float(num)) for num in edges_num]
+        nodes_num_norm_sqrt = torch.cat(nodes_num_norm).sqrt()
+        edges_num_norm_sqrt = torch.cat(edges_num_norm).sqrt()
+
         for idx, graph in enumerate(graphs):
             graphs[idx].ndata['feat'] = graph.ndata['feat'].float()
             graphs[idx].edata['feat'] = graph.edata['feat'].float()
+            pass
+
         batched_graph = dgl.batch(graphs)
-        return batched_graph, labels, snorm_n, snorm_e
+        return batched_graph, labels, nodes_num_norm_sqrt, edges_num_norm_sqrt
 
     def add_self_loops(self):
         # function for adding self loops
