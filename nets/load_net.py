@@ -40,7 +40,7 @@ def MLP(net_params):
     return MLPNet(net_params)
 
 
-def gnn_model(model_name, net_params):
+def gnn_model(params):
     models = {
         'GatedGCN': GatedGCN,
         'GCN': GCN,
@@ -52,4 +52,4 @@ def gnn_model(model_name, net_params):
         'MLP': MLP
     }
 
-    return models[model_name](net_params)
+    return models[params.model_name](params)

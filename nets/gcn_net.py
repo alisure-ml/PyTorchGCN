@@ -16,26 +16,23 @@ class GCNNet(nn.Module):
 
     def __init__(self, net_params):
         super().__init__()
-        in_dim = net_params['in_dim']
-        hidden_dim = net_params['hidden_dim']
-        out_dim = net_params['out_dim']
-        n_classes = net_params['n_classes']
-        in_feat_dropout = net_params['in_feat_dropout']
-        dropout = net_params['dropout']
-        n_layers = net_params['L']
-        self.readout = net_params['readout']
-        self.graph_norm = net_params['graph_norm']
-        self.batch_norm = net_params['batch_norm']
-        self.residual = net_params['residual']
 
-        self.embedding_h = nn.Linear(in_dim, hidden_dim)
-        self.in_feat_dropout = nn.Dropout(in_feat_dropout)
+        self.net_params = net_params
+        self.readout = self.net_params.readout
 
-        self.layers = nn.ModuleList([GCNLayer(hidden_dim, hidden_dim, F.relu, dropout, self.graph_norm,
-                                              self.batch_norm, self.residual) for _ in range(n_layers - 1)])
-        self.layers.append(GCNLayer(hidden_dim, out_dim, F.relu, dropout,
-                                    self.graph_norm, self.batch_norm, self.residual))
-        self.MLP_layer = MLPReadout(out_dim, n_classes)
+        self.embedding_h = nn.Linear(self.net_params.in_dim, self.net_params.hidden_dim)
+        self.in_feat_dropout = nn.Dropout(self.net_params.in_feat_dropout)
+
+        self.layers = nn.ModuleList([GCNLayer(
+            self.net_params.hidden_dim, self.net_params.hidden_dim, F.relu,
+            self.net_params.dropout, self.net_params.graph_norm, self.net_params.batch_norm,
+            self.net_params.residual) for _ in range(self.net_params.L - 1)])
+
+        self.layers.append(GCNLayer(
+            self.net_params.hidden_dim, self.net_params.out_dim, F.relu, self.net_params.dropout,
+            self.net_params.graph_norm, self.net_params.batch_norm, self.net_params.residual))
+
+        self.MLP_layer = MLPReadout(self.net_params.out_dim, self.net_params.n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -56,9 +53,5 @@ class GCNNet(nn.Module):
             pass
 
         return self.MLP_layer(global_feat)
-
-    def loss(self, pred, label):
-        loss = nn.CrossEntropyLoss()(pred, label)
-        return loss
 
     pass

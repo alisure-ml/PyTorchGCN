@@ -255,4 +255,5 @@ def main(out_dir, data_file, dataset_name="MNIST", model_name="GCN", use_gpu=Fal
 
 
 if __name__ == '__main__':
-    main(out_dir=Tools.new_dir("result/m1_demo"), data_file="/mnt/4T/ALISURE/GCN/MNIST.pkl", batch_size=256)
+    main(out_dir=Tools.new_dir("result/m1_demo"), data_file="/mnt/4T/ALISURE/GCN/MNIST.pkl",
+         batch_size=256, use_gpu=True, gpu_id="0")
