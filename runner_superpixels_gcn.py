@@ -177,9 +177,9 @@ class Runner(object):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
 
-            epoch_train_loss, epoch_train_acc = self.train_epoch(self.params.device, self.train_loader)
-            epoch_val_loss, epoch_val_acc = self.evaluate_network(self.params.device, self.val_loader)
-            epoch_test_loss, epoch_test_acc = self.evaluate_network(self.params.device, self.test_loader)
+            epoch_train_loss, epoch_train_acc = self.train_epoch(self.train_loader)
+            epoch_val_loss, epoch_val_acc = self.evaluate_network(self.val_loader)
+            epoch_test_loss, epoch_test_acc = self.evaluate_network(self.test_loader)
 
             self.scheduler.step(epoch_val_loss)
             self.save_checkpoint(self.model, self.params.root_ckpt_dir, epoch)
@@ -212,9 +212,9 @@ class Runner(object):
 
             pass
 
-        _, val_acc = self.evaluate_network(self.params.device, self.val_loader)
-        _, test_acc = self.evaluate_network(self.params.device, self.test_loader)
-        _, train_acc = self.evaluate_network(self.params.device, self.train_loader)
+        _, val_acc = self.evaluate_network(self.val_loader)
+        _, test_acc = self.evaluate_network(self.test_loader)
+        _, train_acc = self.evaluate_network(self.train_loader)
 
         Tools.print()
         Tools.print("Val Accuracy: {:.4f}".format(val_acc))
@@ -226,17 +226,17 @@ class Runner(object):
         self.writer.close()
         pass
 
-    def train_epoch(self, device, data_loader):
+    def train_epoch(self, data_loader):
         self.model.train()
 
         epoch_loss, epoch_train_acc, nb_data = 0, 0, 0
         for _, (batch_graphs, batch_labels,
                 batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(data_loader):
-            batch_nodes_feat = batch_graphs.ndata['feat'].to(device)  # num x feat
-            batch_edges_feat = batch_graphs.edata['feat'].to(device)
-            batch_labels = batch_labels.to(device)
-            batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(device)  # num x 1
-            batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(device)
+            batch_nodes_feat = batch_graphs.ndata['feat'].to(self.params.device)  # num x feat
+            batch_edges_feat = batch_graphs.edata['feat'].to(self.params.device)
+            batch_labels = batch_labels.to(self.params.device)
+            batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.params.device)  # num x 1
+            batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.params.device)
 
             self.optimizer.zero_grad()
 
@@ -257,18 +257,18 @@ class Runner(object):
 
         return epoch_loss, epoch_train_acc
 
-    def evaluate_network(self, device, data_loader):
+    def evaluate_network(self, data_loader):
         self.model.eval()
 
         epoch_test_loss, epoch_test_acc, nb_data = 0, 0, 0
         with torch.no_grad():
             for _, (batch_graphs, batch_labels,
                     batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(data_loader):
-                batch_nodes_feat = batch_graphs.ndata['feat'].to(device)
-                batch_edges_feat = batch_graphs.edata['feat'].to(device)
-                batch_labels = batch_labels.to(device)
-                batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(device)
-                batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(device)
+                batch_nodes_feat = batch_graphs.ndata['feat'].to(self.params.device)
+                batch_edges_feat = batch_graphs.edata['feat'].to(self.params.device)
+                batch_labels = batch_labels.to(self.params.device)
+                batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.params.device)
+                batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.params.device)
 
                 batch_scores = self.model.forward(batch_graphs, batch_nodes_feat, batch_edges_feat,
                                                   batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
