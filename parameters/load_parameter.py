@@ -37,7 +37,7 @@ def MLPGated(*args, **kwargs):
     return ParametersMLPGated(*args, **kwargs)
 
 
-def GNNParameter(model_name, *args, **kwargs):
+def GNNParameter(which_model, *args, **kwargs):
     models = {
         'GatedGCN': GatedGCN,
         'GCN': GCN,
@@ -50,4 +50,4 @@ def GNNParameter(model_name, *args, **kwargs):
         'MLPGated': MLPGated
     }
 
-    return models[model_name](*args, **kwargs)
+    return models[which_model](*args, **kwargs)

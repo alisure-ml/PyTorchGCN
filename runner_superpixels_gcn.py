@@ -181,16 +181,19 @@ class Runner(object):
 
 
 if __name__ == '__main__':
+    now_use_gpu = False
     now_gpu_id = "0"
     now_model_name = "GCN"  # GCN GatedGCN GAT GraphSage GIN MoNet DiffPool MLP MLPGated
     now_dataset_name = "MNIST"  # MNIST CIFAR10
     now_run_name = "{}_{}_demo".format(now_dataset_name, now_model_name)
+    now_data_file = "D:\data\{}.pkl".format(now_dataset_name)
+    # now_data_file = "/mnt/4T/ALISURE/GCN/{}.pkl".format(now_dataset_name)
 
     now_batch_size = 128
-    now_dataset = SuperPixDataset(now_dataset_name, data_file="/mnt/4T/ALISURE/GCN/{}.pkl".format(now_dataset_name))
+    now_dataset = SuperPixDataset(now_dataset_name, data_file=now_data_file)
     now_params = GNNParameter(now_model_name, dataset=now_dataset, dataset_name=now_dataset_name,
-                              out_dir=Tools.new_dir("result/{}".format(now_run_name)),
-                              model_name=now_model_name, batch_size=now_batch_size, use_gpu=True, gpu_id=now_gpu_id)
+                              out_dir=Tools.new_dir("result/{}".format(now_run_name)), model_name=now_model_name,
+                              batch_size=now_batch_size, use_gpu=now_use_gpu, gpu_id=now_gpu_id)
     now_params.print_info()
 
     runner = Runner(params=now_params)
