@@ -13,50 +13,48 @@ import dgl
 from layers.graphsage_layer import GraphSageLayer
 from layers.mlp_readout_layer import MLPReadout
 
+
 class GraphSageNet(nn.Module):
     """
     Grahpsage network with multiple GraphSageLayer layers
     """
+
     def __init__(self, net_params):
         super().__init__()
-        in_dim = net_params['in_dim']
-        hidden_dim = net_params['hidden_dim']
-        out_dim = net_params['out_dim']
-        n_classes = net_params['n_classes']
-        in_feat_dropout = net_params['in_feat_dropout']
-        dropout = net_params['dropout']
-        aggregator_type = net_params['sage_aggregator']
-        n_layers = net_params['L']
-        self.readout = net_params['readout']
-        self.residual = net_params['residual']
-        
-        self.embedding_h = nn.Linear(in_dim, hidden_dim)
-        self.in_feat_dropout = nn.Dropout(in_feat_dropout)
-        
-        self.layers = nn.ModuleList([GraphSageLayer(hidden_dim, hidden_dim, F.relu,
-                                              dropout, aggregator_type, self.residual) for _ in range(n_layers-1)])
-        self.layers.append(GraphSageLayer(hidden_dim, out_dim, F.relu, dropout, aggregator_type, self.residual))
-        self.MLP_layer = MLPReadout(out_dim, n_classes)
-        
-    def forward(self, g, h, e, snorm_n, snorm_e):
-        h = self.embedding_h(h)
+        self.readout = net_params.readout
+
+        self.embedding_h = nn.Linear(net_params.in_dim, net_params.hidden_dim)
+        self.in_feat_dropout = nn.Dropout(net_params.in_feat_dropout)
+
+        self.layers = nn.ModuleList([GraphSageLayer(
+            net_params.hidden_dim, net_params.hidden_dim, F.relu, net_params.dropout,
+            net_params.sage_aggregator, net_params.residual) for _ in range(net_params.L - 1)])
+        self.layers.append(GraphSageLayer(net_params.hidden_dim, net_params.out_dim, F.relu,
+                                          net_params.dropout, net_params.sage_aggregator, net_params.residual))
+        self.readout_mlp = MLPReadout(net_params.out_dim, net_params.n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
         h = self.in_feat_dropout(h)
         for conv in self.layers:
-            h = conv(g, h, snorm_n)
-        g.ndata['h'] = h
-        
-        if self.readout == "sum":
-            hg = dgl.sum_nodes(g, 'h')
-        elif self.readout == "max":
-            hg = dgl.max_nodes(g, 'h')
-        elif self.readout == "mean":
-            hg = dgl.mean_nodes(g, 'h')
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = self.readout_fn(self.readout, graphs, 'h')
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    @staticmethod
+    def readout_fn(readout, graphs, h):
+        if readout == "sum":
+            hg = dgl.sum_nodes(graphs, h)
+        elif readout == "max":
+            hg = dgl.max_nodes(graphs, h)
+        elif readout == "mean":
+            hg = dgl.mean_nodes(graphs, h)
         else:
-            hg = dgl.mean_nodes(g, 'h')  # default readout is mean nodes
-            
-        return self.MLP_layer(hg)
-    
-    def loss(self, pred, label):
-        criterion = nn.CrossEntropyLoss()
-        loss = criterion(pred, label)
-        return loss
+            hg = dgl.mean_nodes(graphs, h)  # default readout is mean nodes
+        return hg
+
+    pass

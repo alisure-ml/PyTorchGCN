@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 import dgl
 
@@ -33,21 +32,20 @@ class MLPNet(nn.Module):
         self.readout_mlp = MLPReadout(net_params.hidden_dim, net_params.n_classes)
         pass
 
-    def forward(self, g, h, e, snorm_n, snorm_e):
-        h = self.in_feat_dropout(h)
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.in_feat_dropout(nodes_feat)
         h = self.feat_mlp(h)
+
         if self.gated:
             h = torch.sigmoid(self.gates(h)) * h
-            g.ndata['h'] = h
-            hg = dgl.sum_nodes(g, 'h')
+            graphs.ndata['h'] = h
+            hg = dgl.sum_nodes(graphs, 'h')
         else:
-            g.ndata['h'] = h
-            hg = dgl.mean_nodes(g, 'h')
+            graphs.ndata['h'] = h
+            hg = dgl.mean_nodes(graphs, 'h')
             pass
 
-        return self.readout_mlp(hg)
-
-    def loss(self, pred, label):
-        return nn.CrossEntropyLoss()(pred, label)
+        logits = self.readout_mlp(hg)
+        return logits
 
     pass

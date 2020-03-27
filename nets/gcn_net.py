@@ -32,7 +32,7 @@ class GCNNet(nn.Module):
             self.net_params.hidden_dim, self.net_params.out_dim, F.relu, self.net_params.dropout,
             self.net_params.graph_norm, self.net_params.batch_norm, self.net_params.residual))
 
-        self.MLP_layer = MLPReadout(self.net_params.out_dim, self.net_params.n_classes)
+        self.readout_mlp = MLPReadout(self.net_params.out_dim, self.net_params.n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -41,17 +41,21 @@ class GCNNet(nn.Module):
         for conv in self.layers:
             hidden_nodes_feat = conv(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
         graphs.ndata['h'] = hidden_nodes_feat
+        hg = self.readout_fn(self.readout, graphs, 'h')
 
-        if self.readout == "sum":
-            global_feat = dgl.sum_nodes(graphs, 'h')
-        elif self.readout == "max":
-            global_feat = dgl.max_nodes(graphs, 'h')
-        elif self.readout == "mean":
-            global_feat = dgl.mean_nodes(graphs, 'h')
+        logits = self.readout_mlp(hg)
+        return logits
+
+    @staticmethod
+    def readout_fn(readout, graphs, h):
+        if readout == "sum":
+            hg = dgl.sum_nodes(graphs, h)
+        elif readout == "max":
+            hg = dgl.max_nodes(graphs, h)
+        elif readout == "mean":
+            hg = dgl.mean_nodes(graphs, h)
         else:
-            global_feat = dgl.mean_nodes(graphs, 'h')  # default readout is mean nodes
-            pass
-
-        return self.MLP_layer(global_feat)
+            hg = dgl.mean_nodes(graphs, h)  # default readout is mean nodes
+        return hg
 
     pass

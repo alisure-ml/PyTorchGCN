@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from layers.gin_layer import GINLayer, ApplyNodeFunc, MLP
 
 import dgl
 from dgl.nn.pytorch.glob import SumPooling, AvgPooling, MaxPooling
@@ -11,73 +11,57 @@ from dgl.nn.pytorch.glob import SumPooling, AvgPooling, MaxPooling
     https://arxiv.org/pdf/1810.00826.pdf
 """
 
-from layers.gin_layer import GINLayer, ApplyNodeFunc, MLP
 
 class GINNet(nn.Module):
     
     def __init__(self, net_params):
         super().__init__()
-        in_dim = net_params['in_dim']
-        hidden_dim = net_params['hidden_dim']
-        n_classes = net_params['n_classes']
-        dropout = net_params['dropout']
-        self.n_layers = net_params['L']
-        n_mlp_layers = net_params['n_mlp_GIN']               # GIN
-        learn_eps = net_params['learn_eps_GIN']              # GIN
-        neighbor_aggr_type = net_params['neighbor_aggr_GIN'] # GIN
-        readout = net_params['readout']                      # this is graph_pooling_type
-        graph_norm = net_params['graph_norm']      
-        batch_norm = net_params['batch_norm']
-        residual = net_params['residual']     
-        
-        # List of MLPs
+        self.embedding_h = nn.Linear(net_params.in_dim, net_params.hidden_dim)
+
         self.ginlayers = torch.nn.ModuleList()
-        
-        self.embedding_h = nn.Linear(in_dim, hidden_dim)
-        
-        for layer in range(self.n_layers):
-            mlp = MLP(n_mlp_layers, hidden_dim, hidden_dim, hidden_dim)
-            
-            self.ginlayers.append(GINLayer(ApplyNodeFunc(mlp), neighbor_aggr_type,
-                                           dropout, graph_norm, batch_norm, residual, 0, learn_eps))
+        for layer in range(net_params.L):
+            mlp = MLP(net_params.n_mlp_GIN, net_params.hidden_dim, net_params.hidden_dim, net_params.hidden_dim)
+            self.ginlayers.append(GINLayer(ApplyNodeFunc(mlp), net_params.neighbor_aggr_GIN, net_params.dropout,
+                                           net_params.graph_norm, net_params.batch_norm,
+                                           net_params.residual, 0, net_params.learn_eps_GIN))
+            pass
 
         # Linear function for graph poolings (readout) of output of each layer
         # which maps the output of different layers into a prediction score
         self.linears_prediction = torch.nn.ModuleList()
-
         for layer in range(self.n_layers+1):
-            self.linears_prediction.append(nn.Linear(hidden_dim, n_classes))
+            self.linears_prediction.append(nn.Linear(net_params.hidden_dim, net_params.n_classes))
+            pass
         
-        if readout == 'sum':
+        if net_params.readout == 'sum':
             self.pool = SumPooling()
-        elif readout == 'mean':
+        elif net_params.readout == 'mean':
             self.pool = AvgPooling()
-        elif readout == 'max':
+        elif net_params.readout == 'max':
             self.pool = MaxPooling()
         else:
             raise NotImplementedError
+
+        pass
         
-    def forward(self, g, h, e, snorm_n, snorm_e):
-        
-        h = self.embedding_h(h)
-        
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
         # list of hidden representation at each layer (including input)
         hidden_rep = [h]
 
         for i in range(self.n_layers):
-            h = self.ginlayers[i](g, h, snorm_n)
+            h = self.ginlayers[i](graphs, h, nodes_num_norm_sqrt)
             hidden_rep.append(h)
+            pass
 
         score_over_layer = 0
 
         # perform pooling over all nodes in each graph in every layer
         for i, h in enumerate(hidden_rep):
-            pooled_h = self.pool(g, h)
+            pooled_h = self.pool(graphs, h)
             score_over_layer += self.linears_prediction[i](pooled_h)
+            pass
 
         return score_over_layer
         
-    def loss(self, pred, label):
-        criterion = nn.CrossEntropyLoss()
-        loss = criterion(pred, label)
-        return loss
+    pass
