@@ -12,7 +12,9 @@ from torch.autograd import Variable
 
 from .dense_graphsage_layer import DenseGraphSage
 
+
 class DiffPoolAssignment(nn.Module):
+
     def __init__(self, nfeat, nnext):
         super().__init__()
         self.assign_mat = DenseGraphSage(nfeat, nnext, use_bn=True)
@@ -21,3 +23,5 @@ class DiffPoolAssignment(nn.Module):
         s_l_init = self.assign_mat(x, adj)
         s_l = F.softmax(s_l_init, dim=-1)
         return s_l
+
+    pass

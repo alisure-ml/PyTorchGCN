@@ -9,6 +9,7 @@ import dgl.function as fn
     https://arxiv.org/pdf/1810.00826.pdf
 """
 
+
 class GINLayer(nn.Module):
     """
     [!] code adapted from dgl implementation of GINConv
@@ -36,10 +37,12 @@ class GINLayer(nn.Module):
         If True, :math:`\epsilon` will be a learnable parameter.
     
     """
-    def __init__(self, apply_func, aggr_type, dropout, graph_norm, batch_norm, residual=False, init_eps=0, learn_eps=False):
+
+    def __init__(self, apply_func, aggr_type, dropout, graph_norm, batch_norm, residual=False, init_eps=0,
+                 learn_eps=False):
         super().__init__()
         self.apply_func = apply_func
-        
+
         if aggr_type == 'sum':
             self._reducer = fn.sum
         elif aggr_type == 'max':
@@ -48,29 +51,30 @@ class GINLayer(nn.Module):
             self._reducer = fn.mean
         else:
             raise KeyError('Aggregator type {} not recognized.'.format(aggr_type))
-            
+
         self.graph_norm = graph_norm
         self.batch_norm = batch_norm
         self.residual = residual
         self.dropout = dropout
-        
+
         in_dim = apply_func.mlp.input_dim
         out_dim = apply_func.mlp.output_dim
-        
+
         if in_dim != out_dim:
             self.residual = False
-            
+
         # to specify whether eps is trainable or not.
         if learn_eps:
             self.eps = torch.nn.Parameter(torch.FloatTensor([init_eps]))
         else:
             self.register_buffer('eps', torch.FloatTensor([init_eps]))
-            
+
         self.bn_node_h = nn.BatchNorm1d(out_dim)
+        pass
 
     def forward(self, g, h, snorm_n):
-        h_in = h # for residual connection
-        
+        h_in = h  # for residual connection
+
         g = g.local_var()
         g.ndata['h'] = h
         g.update_all(fn.copy_u('h', 'm'), self._reducer('m', 'neigh'))
@@ -79,26 +83,29 @@ class GINLayer(nn.Module):
             h = self.apply_func(h)
 
         if self.graph_norm:
-            h = h* snorm_n # normalize activation w.r.t. graph size
-        
+            h = h * snorm_n  # normalize activation w.r.t. graph size
+
         if self.batch_norm:
-            h = self.bn_node_h(h) # batch normalization  
-        
-        h = F.relu(h) # non-linear activation
-        
+            h = self.bn_node_h(h)  # batch normalization
+
+        h = F.relu(h)  # non-linear activation
+
         if self.residual:
-            h = h_in + h # residual connection
-        
+            h = h_in + h  # residual connection
+
         h = F.dropout(h, self.dropout, training=self.training)
-        
+
         return h
-    
-    
+
+    pass
+
+
 class ApplyNodeFunc(nn.Module):
     """
         This class is used in class GINNet
         Update the node feature hv with MLP
     """
+
     def __init__(self, mlp):
         super().__init__()
         self.mlp = mlp
@@ -107,9 +114,12 @@ class ApplyNodeFunc(nn.Module):
         h = self.mlp(h)
         return h
 
+    pass
+
 
 class MLP(nn.Module):
     """MLP with linear output"""
+
     def __init__(self, num_layers, input_dim, hidden_dim, output_dim):
 
         super().__init__()
@@ -136,14 +146,18 @@ class MLP(nn.Module):
 
             for layer in range(num_layers - 1):
                 self.batch_norms.append(nn.BatchNorm1d((hidden_dim)))
+                pass
+            pass
+        pass
 
     def forward(self, x):
-        if self.linear_or_not:
-            # If linear model
+        if self.linear_or_not: # If linear model
             return self.linear(x)
-        else:
-            # If MLP
+        else: # If MLP
             h = x
             for i in range(self.num_layers - 1):
                 h = F.relu(self.batch_norms[i](self.linears[i](h)))
             return self.linears[-1](h)
+        pass
+
+    pass

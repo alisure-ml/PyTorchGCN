@@ -1,26 +1,16 @@
-"""
-
-! Code started from dgl diffpool examples dir
-"""
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 
 class NodeApply(nn.Module):
-    """
-    Works -> the node_apply function in DGL paradigm
-    """
 
     def __init__(self, in_feats, out_feats, activation, dropout, bias=True):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
         self.linear = nn.Linear(in_feats * 2, out_feats, bias)
         self.activation = activation
-
-#         nn.init.xavier_uniform_(self.linear.weight,
-#                                 gain=nn.init.calculate_gain('relu'))
+        pass
 
     def concat(self, h, aggre_result):
         bundle = torch.cat((h, aggre_result), 1)
@@ -35,3 +25,5 @@ class NodeApply(nn.Module):
         if self.activation:
             bundle = self.activation(bundle)
         return {"h": bundle}
+
+    pass

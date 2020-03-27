@@ -25,8 +25,11 @@ class EntropyLoss(nn.Module):
         assert not torch.isnan(entropy)
         return entropy
 
+    pass
+
 
 class LinkPredLoss(nn.Module):
+
     # loss used in diffpool
     def forward(self, adj, anext, s_l):
         link_pred_loss = (
@@ -34,8 +37,11 @@ class LinkPredLoss(nn.Module):
         link_pred_loss = link_pred_loss / (adj.size(1) * adj.size(2))
         return link_pred_loss.mean()
 
+    pass
+
 
 class DenseDiffPool(nn.Module):
+
     def __init__(self, nfeat, nnext, nhid, link_pred=False, entropy=True):
         super().__init__()
         self.link_pred = link_pred
@@ -49,6 +55,8 @@ class DenseDiffPool(nn.Module):
             self.reg_loss.append(LinkPredLoss())
         if entropy:
             self.reg_loss.append(EntropyLoss())
+            pass
+        pass
 
     def forward(self, x, adj, log=False):
         z_l = self.embed(x, adj)
@@ -64,4 +72,6 @@ class DenseDiffPool(nn.Module):
         if log:
             self.log['a'] = anext.cpu().numpy()
         return xnext, anext
+
+    pass
 

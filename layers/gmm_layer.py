@@ -10,6 +10,7 @@ import dgl.function as fn
     https://arxiv.org/pdf/1611.08402.pdf
 """
 
+
 class GMMLayer(nn.Module):
     """
     [!] code adapted from dgl implementation of GMMConv
@@ -38,10 +39,11 @@ class GMMLayer(nn.Module):
         If True, adds a learnable bias to the output. Default: ``True``.
     
     """
+
     def __init__(self, in_dim, out_dim, dim, kernel, aggr_type, dropout,
                  graph_norm, batch_norm, residual=False, bias=True):
         super().__init__()
-        
+
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.dim = dim
@@ -50,7 +52,7 @@ class GMMLayer(nn.Module):
         self.batch_norm = batch_norm
         self.residual = residual
         self.dropout = dropout
-        
+
         if aggr_type == 'sum':
             self._reducer = fn.sum
         elif aggr_type == 'mean':
@@ -63,18 +65,19 @@ class GMMLayer(nn.Module):
         self.mu = nn.Parameter(torch.Tensor(kernel, dim))
         self.inv_sigma = nn.Parameter(torch.Tensor(kernel, dim))
         self.fc = nn.Linear(in_dim, kernel * out_dim, bias=False)
-        
+
         self.bn_node_h = nn.BatchNorm1d(out_dim)
-        
+
         if in_dim != out_dim:
             self.residual = False
-        
+
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_dim))
         else:
             self.register_buffer('bias', None)
         self.reset_parameters()
-    
+        pass
+
     def reset_parameters(self):
         """Reinitialize learnable parameters."""
         gain = init.calculate_gain('relu')
@@ -83,37 +86,40 @@ class GMMLayer(nn.Module):
         init.constant_(self.inv_sigma.data, 1)
         if self.bias is not None:
             init.zeros_(self.bias.data)
-    
+            pass
+        pass
+
     def forward(self, g, h, pseudo, snorm_n):
-        h_in = h # for residual connection
-        
+        h_in = h  # for residual connection
+
         g = g.local_var()
         g.ndata['h'] = self.fc(h).view(-1, self.kernel, self.out_dim)
         E = g.number_of_edges()
-        
+
         # compute gaussian weight
-        gaussian = -0.5 * ((pseudo.view(E, 1, self.dim) -
-                            self.mu.view(1, self.kernel, self.dim)) ** 2)
+        gaussian = -0.5 * ((pseudo.view(E, 1, self.dim) - self.mu.view(1, self.kernel, self.dim)) ** 2)
         gaussian = gaussian * (self.inv_sigma.view(1, self.kernel, self.dim) ** 2)
-        gaussian = torch.exp(gaussian.sum(dim=-1, keepdim=True)) # (E, K, 1)
+        gaussian = torch.exp(gaussian.sum(dim=-1, keepdim=True))  # (E, K, 1)
         g.edata['w'] = gaussian
         g.update_all(fn.u_mul_e('h', 'w', 'm'), self._reducer('m', 'h'))
         h = g.ndata['h'].sum(1)
-        
+
         if self.graph_norm:
-            h = h* snorm_n # normalize activation w.r.t. graph size
-        
+            h = h * snorm_n  # normalize activation w.r.t. graph size
+
         if self.batch_norm:
-            h = self.bn_node_h(h) # batch normalization  
-        
-        h = F.relu(h) # non-linear activation
-        
+            h = self.bn_node_h(h)  # batch normalization
+
+        h = F.relu(h)  # non-linear activation
+
         if self.residual:
-            h = h_in + h # residual connection
-        
+            h = h_in + h  # residual connection
+
         if self.bias is not None:
             h = h + self.bias
-        
+
         h = F.dropout(h, self.dropout, training=self.training)
-        
+
         return h
+
+    pass

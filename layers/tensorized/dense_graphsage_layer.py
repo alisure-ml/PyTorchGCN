@@ -12,27 +12,26 @@ from torch.nn import functional as F
     ! code started from the dgl diffpool examples dir
 """
 
+
 class DenseGraphSage(nn.Module):
-    def __init__(self, infeat, outfeat, residual=False, use_bn=True,
-                 mean=False, add_self=False):
+    def __init__(self, infeat, outfeat, residual=False, use_bn=True, mean=False, add_self=False):
         super().__init__()
         self.add_self = add_self
         self.use_bn = use_bn
         self.mean = mean
         self.residual = residual
-        
+
         if infeat != outfeat:
             self.residual = False
-        
+
         self.W = nn.Linear(infeat, outfeat, bias=True)
 
-        nn.init.xavier_uniform_(
-            self.W.weight,
-            gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self.W.weight, gain=nn.init.calculate_gain('relu'))
+        pass
 
     def forward(self, x, adj):
-        h_in = x               # for residual connection
-        
+        h_in = x  # for residual connection
+
         if self.use_bn and not hasattr(self, 'bn'):
             self.bn = nn.BatchNorm1d(adj.size(1)).to(adj.device)
 
@@ -46,16 +45,15 @@ class DenseGraphSage(nn.Module):
         h_k = self.W(h_k_N)
         h_k = F.normalize(h_k, dim=2, p=2)
         h_k = F.relu(h_k)
-        
+
         if self.residual:
-            h_k = h_in + h_k    # residual connection
-        
+            h_k = h_in + h_k  # residual connection
+
         if self.use_bn:
             h_k = self.bn(h_k)
         return h_k
 
     def __repr__(self):
-        if self.use_bn:
-            return 'BN' + super(DenseGraphSage, self).__repr__()
-        else:
-            return super(DenseGraphSage, self).__repr__()
+        return 'BN'+super(DenseGraphSage, self).__repr__() if self.use_bn else super(DenseGraphSage, self).__repr__()
+
+    pass

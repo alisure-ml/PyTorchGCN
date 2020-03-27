@@ -8,7 +8,7 @@ import dgl.function as fn
     Thomas N. Kipf, Max Welling, Semi-Supervised Classification with Graph Convolutional Networks (ICLR 2017)
     http://arxiv.org/abs/1609.02907
 """
-    
+
 # Sends a message of node feature h
 # Equivalent to => return {'m': edges.src['h']}
 msg = fn.copy_src(src='h', out='m')
@@ -25,7 +25,7 @@ class NodeApplyModule(nn.Module):
         super().__init__()
         self.linear = nn.Linear(in_dim, out_dim)
         pass
-        
+
     def forward(self, node):
         h = self.linear(node.data['h'])
         return {'h': h}
@@ -42,35 +42,35 @@ class GCNLayer(nn.Module):
         self.graph_norm = graph_norm
         self.batch_norm = batch_norm
         self.residual = False if in_dim != out_dim else residual
-        
+
         self.apply_mod = NodeApplyModule(in_dim, out_dim)
         self.batchnorm_h = nn.BatchNorm1d(out_dim)
         self.activation = activation
         self.dropout = nn.Dropout(dropout)
         pass
-        
+
     def forward(self, g, feature, snorm_n):
-        h_in = feature   # to be used for residual connection
+        h_in = feature  # to be used for residual connection
         g.ndata['h'] = feature
         g.update_all(msg, reduce)
         g.apply_nodes(func=self.apply_mod)  # 对所有节点应用函数
         h = g.ndata['h']  # result of graph convolution
-        
+
         if self.graph_norm:
             h = h * snorm_n  # normalize activation w.r.t. graph size
         if self.batch_norm:
             h = self.batchnorm_h(h)  # batch normalization
-        
+
         h = self.activation(h)
-        
+
         if self.residual:
             h = h_in + h  # residual connection
-            
+
         h = self.dropout(h)
         return h
-    
+
     def __repr__(self):
         return '{}(in_channels={}, out_channels={}, residual={})'.format(
-            self.__class__.__name__,  self.in_channels, self.out_channels, self.residual)
+            self.__class__.__name__, self.in_channels, self.out_channels, self.residual)
 
     pass

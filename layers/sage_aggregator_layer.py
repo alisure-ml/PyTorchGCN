@@ -1,18 +1,8 @@
-"""
-Aggregator class(s) for the GraphSAGE example
-
-! Code started from dgl diffpool examples dir
-"""
-
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class Aggregator(nn.Module):
-    """
-    Base Aggregator class. 
-    """
 
     def __init__(self):
         super().__init__()
@@ -22,9 +12,10 @@ class Aggregator(nn.Module):
         c = self.aggre(neighbour)
         return {"c": c}
 
-    def aggre(self, neighbour):
-        # N x F
+    def aggre(self, neighbour): # N x F
         raise NotImplementedError
+
+    pass
 
 
 class MeanAggregator(Aggregator):
@@ -39,6 +30,8 @@ class MeanAggregator(Aggregator):
         mean_neighbour = torch.mean(neighbour, dim=1)
         return mean_neighbour
 
+    pass
+
 
 class MaxPoolAggregator(Aggregator):
     """
@@ -49,9 +42,7 @@ class MaxPoolAggregator(Aggregator):
         super().__init__()
         self.linear = nn.Linear(in_feats, out_feats, bias=bias)
         self.activation = activation
-        # Xavier initialization of weight
-#         nn.init.xavier_uniform_(self.linear.weight,
-#                                 gain=nn.init.calculate_gain('relu'))
+        pass
 
     def aggre(self, neighbour):
         neighbour = self.linear(neighbour)
@@ -59,6 +50,8 @@ class MaxPoolAggregator(Aggregator):
             neighbour = self.activation(neighbour)
         maxpool_neighbour = torch.max(neighbour, dim=1)[0]
         return maxpool_neighbour
+
+    pass
 
 
 class LSTMAggregator(Aggregator):
@@ -72,15 +65,14 @@ class LSTMAggregator(Aggregator):
         self.hidden_dim = hidden_feats
         self.hidden = self.init_hidden()
 
-        nn.init.xavier_uniform_(self.lstm.weight,
-                                gain=nn.init.calculate_gain('relu'))
+        nn.init.xavier_uniform_(self.lstm.weight, gain=nn.init.calculate_gain('relu'))
+        pass
 
     def init_hidden(self):
         """
         Defaulted to initialite all zero
         """
-        return (torch.zeros(1, 1, self.hidden_dim),
-                torch.zeros(1, 1, self.hidden_dim))
+        return (torch.zeros(1, 1, self.hidden_dim), torch.zeros(1, 1, self.hidden_dim))
 
     def aggre(self, neighbours):
         """
@@ -90,13 +82,12 @@ class LSTMAggregator(Aggregator):
         rand_order = torch.randperm(neighbours.size()[1])
         neighbours = neighbours[:, rand_order, :]
 
-        (lstm_out, self.hidden) = self.lstm(neighbours.view(neighbours.size()[0],
-                                                            neighbours.size()[
-            1],
-            -1))
+        lstm_out, self.hidden = self.lstm(neighbours.view(neighbours.size()[0], neighbours.size()[1], -1))
         return lstm_out[:, -1, :]
 
     def forward(self, node):
         neighbour = node.mailbox['m']
         c = self.aggre(neighbour)
         return {"c": c}
+
+    pass
