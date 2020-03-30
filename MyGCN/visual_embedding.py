@@ -5,11 +5,17 @@
 import os
 import cv2
 import time
+import torch
 import numpy as np
+import torch.nn as nn
 from skimage import io
+import torch.optim as optim
+import torch.utils.data as data
 import matplotlib.pyplot as plt
 from skimage import segmentation
 from alisuretool.Tools import Tools
+import torchvision.datasets as datasets
+import torchvision.transforms as transforms
 
 
 class DealSuperPixel(object):
@@ -27,13 +33,9 @@ class DealSuperPixel(object):
         pass
 
     def run(self):
-        start = time.time()
         segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
                                     sigma=self.slic_sigma, max_iter=self.slic_max_iter)
-        end = time.time() - start
-        Tools.print("SLIC time {} {}".format(self.super_pixel_num, end))
 
-        start = time.time()
         super_pixel_info = {}
         for i in range(segment.max() + 1):
             _now_i = segment == i
@@ -41,17 +43,19 @@ class DealSuperPixel(object):
             x_min, x_max = _now_where[:, 0].min(), _now_where[:, 0].max()
             y_min, y_max = _now_where[:, 1].min(), _now_where[:, 1].max()
 
-            super_pixel_size = len(_now_where)  # 大小
+            # 大小
+            super_pixel_size = len(_now_where)
             assert super_pixel_size > 0
-            super_pixel_area = (x_min, x_max, y_min, y_max)  # 坐标
-            super_pixel_label = np.asarray(_now_i[x_min: x_max + 1, y_min: y_max + 1], dtype=np.int)  # 是否属于超像素
-
-            _super_pixel_label_3 = np.expand_dims(super_pixel_label, axis=-1)
-            _super_pixel_label_3 = np.concatenate([_super_pixel_label_3,
-                                                   _super_pixel_label_3, _super_pixel_label_3], axis=-1)
-
-            super_pixel_data = self.image_data[x_min: x_max + 1, y_min: y_max + 1]  # 属于超像素所在矩形区域的值
-            super_pixel_data2 = super_pixel_data * _super_pixel_label_3  # 属于超像素的值
+            # 坐标
+            super_pixel_area = (x_min, x_max, y_min, y_max)
+            # 是否属于超像素
+            super_pixel_label = np.asarray(_now_i[x_min: x_max + 1, y_min: y_max + 1], dtype=np.int)
+            super_pixel_label = np.expand_dims(super_pixel_label, axis=-1)
+            # 属于超像素所在矩形区域的值
+            super_pixel_data = self.image_data[x_min: x_max + 1, y_min: y_max + 1]
+            # 属于超像素的值
+            _super_pixel_label_3 = np.concatenate([super_pixel_label, super_pixel_label, super_pixel_label], axis=-1)
+            super_pixel_data2 = super_pixel_data * _super_pixel_label_3
 
             # 计算邻接矩阵
             _x_min_a = x_min - (1 if x_min > 0 else 0)
@@ -62,6 +66,7 @@ class DealSuperPixel(object):
             super_pixel_unique_id = np.unique(super_pixel_area_large)
             super_pixel_adjacency = [sp_id for sp_id in super_pixel_unique_id if sp_id != i]
 
+            # 结果
             super_pixel_info[i] = {"size": super_pixel_size, "area": super_pixel_area,
                                    "label": super_pixel_label, "data": super_pixel_data,
                                    "data2": super_pixel_data2, "adj": super_pixel_adjacency}
@@ -84,8 +89,6 @@ class DealSuperPixel(object):
             adjacency_info.extend(adjacency_w)
             pass
 
-        end = time.time() - start
-        Tools.print("SLIC time {} {}".format(self.super_pixel_num, end))
         return segment, super_pixel_info, adjacency_info
 
     def show(self, segment):
@@ -99,15 +102,337 @@ class DealSuperPixel(object):
 
     @staticmethod
     def _softmax_of_distance(distance):
-        distance = np.sum(np.asarray(distance)) / np.asarray(distance)
-        return np.exp(distance) / np.sum(np.exp(distance), axis=0)
+        distance = np.asarray(distance) + 1e-6
+        distance = np.sum(distance) / distance
+        exp_distance= np.exp(distance)
+        return exp_distance / np.sum(exp_distance, axis=0)
+
+    @staticmethod
+    def demo():
+        now_image_name = "data\\input\\1.jpg"
+        now_image_data = io.imread(now_image_name)
+        deal_super_pixel = DealSuperPixel(image_data=now_image_data, ds_image_size=224)
+        now_segment, now_super_pixel_info, now_adjacency_info = deal_super_pixel.run()
+        deal_super_pixel.show(now_segment)
+        pass
+
+    pass
+
+
+class MyCIFAR10(datasets.CIFAR10):
+
+    def __getitem__(self, index):
+        img, target = super().__getitem__(index)
+        return np.asarray(img), target
+
+    pass
+
+
+class DataCIFAR10(object):
+
+    def __init__(self, train_batch=32, test_batch=32, data_root_path='D:\data\CIFAR'):
+        # Data
+        transform_train = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip()])
+        transform_test = transforms.Compose([transforms.ToTensor()])
+
+        train_set = MyCIFAR10(root=data_root_path, train=True, download=True, transform=transform_train)
+        self.train_loader = data.DataLoader(train_set, batch_size=train_batch, shuffle=True, num_workers=1)
+
+        test_set = MyCIFAR10(root=data_root_path, train=False, download=False, transform=None)
+        self.test_loader = data.DataLoader(test_set, batch_size=test_batch, shuffle=False, num_workers=1)
+        pass
+
+    pass
+
+
+class ConvBlock(nn.Module):
+
+    def __init__(self, cin, cout, stride=1, padding=1, has_relu=True, bias=True):
+        super().__init__()
+        self.has_relu = has_relu
+
+        self.conv = nn.Conv2d(cin, cout, kernel_size=3, stride=stride, padding=padding, bias=bias)
+        self.bn = nn.BatchNorm2d(cout)
+        self.relu = nn.ReLU(inplace=True)
+        pass
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        if self.has_relu:
+            out = self.relu(out)
+        return out
+
+    pass
+
+
+class ConvTransposeBlock(nn.Module):
+
+    def __init__(self, cin, cout, stride=2, padding=1, has_relu=True):
+        super().__init__()
+        self.has_relu = has_relu
+
+        self.conv = nn.ConvTranspose2d(cin, cout, kernel_size=3, stride=stride, padding=padding, bias=False)
+        self.bn = nn.BatchNorm2d(cout)
+        self.relu = nn.ReLU(inplace=True)
+        pass
+
+    def forward(self, x):
+        out = self.conv(x)
+        out = self.bn(out)
+        if self.has_relu:
+            out = self.relu(out)
+        return out
+
+    pass
+
+
+class EmbeddingNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        # input 24
+        self.conv11 = ConvBlock(3, 64, 1, padding=1, has_relu=True)  # 24
+        self.conv12 = ConvBlock(64, 64, 1, padding=1, has_relu=True)  # 24
+        self.pool1 = nn.MaxPool2d(2, 2)  # 12
+        self.conv21 = ConvBlock(64, 128, 1, padding=1, has_relu=True)  # 12
+        self.conv22 = ConvBlock(128, 128, 1, padding=1, has_relu=True)  # 12
+        self.pool2 = nn.MaxPool2d(2, 2)  # 6
+        self.conv31 = ConvBlock(128, 128, 1, padding=1, has_relu=True)  # 6
+        self.conv32 = ConvBlock(128, 128, 1, padding=1, has_relu=True)  # 6
+        self.pool3 = nn.MaxPool2d(2, 2)  # 3
+
+        self.conv_shape = ConvBlock(128, 32, 1, padding=0, has_relu=True, bias=False)  # 1
+        self.conv_texture = ConvBlock(128, 32, 1, padding=0, has_relu=True, bias=False)  # 1
+
+        self.shape_conv0 = ConvTransposeBlock(32, 128, padding=0, has_relu=True)  # 3
+        self.shape_conv1 = ConvBlock(128, 128, 1, padding=1, has_relu=True)  # 3
+        self.shape_up1 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.shape_conv2 = ConvBlock(128, 64, padding=1, has_relu=True)  # 6
+        self.shape_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 12
+        self.shape_conv3 = ConvBlock(64, 64, padding=1, has_relu=True)  # 12
+        self.shape_up3 = nn.UpsamplingBilinear2d(scale_factor=2)  # 24
+        self.shape_out = ConvBlock(64, 1, padding=1, has_relu=False)  # 24
+
+        self.texture_conv0 = ConvTransposeBlock(64, 128, padding=0, has_relu=True)  # 3
+        self.texture_conv1 = ConvBlock(128, 128, 1, padding=1, has_relu=True)  # 3
+        self.texture_up1 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.texture_conv2 = ConvBlock(128, 64, padding=1, has_relu=True)  # 6
+        self.texture_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 12
+        self.texture_conv3 = ConvBlock(64, 64, padding=1, has_relu=True)  # 12
+        self.texture_up3 = nn.UpsamplingBilinear2d(scale_factor=2)  # 24
+        self.texture_out = ConvBlock(64, 3, padding=1, has_relu=False)  # 24
+        pass
+
+    def forward(self, x):
+        if x.size()[2] != 24 or x.size()[3] != 24:
+            x = torch.nn.functional.interpolate(x, size=[24, 24], mode='bilinear')
+            pass
+
+        e1 = self.conv12(self.conv11(x))
+        p1 = self.pool1(e1)
+        e2 = self.conv22(self.conv21(p1))
+        p2 = self.pool2(e2)
+        e3 = self.conv32(self.conv31(p2))
+        p3 = self.pool3(e3)
+        shape = self.conv_shape(p3)
+        texture = self.conv_texture(p3)
+
+        shape_d0 = self.shape_conv0(shape)
+        shape_d1 = self.shape_up1(self.shape_conv1(shape_d0))
+        shape_d2 = self.shape_up2(self.shape_conv2(shape_d1))
+        shape_d3 = self.shape_up3(self.shape_conv3(shape_d2))
+        shape_out = self.shape_out(shape_d3)
+
+        texture_d0 = self.texture_conv0(torch.cat([texture, shape], dim=1))
+        texture_d1 = self.texture_up1(self.texture_conv1(texture_d0))
+        texture_d2 = self.texture_up2(self.texture_conv2(texture_d1))
+        texture_d3 = self.texture_up3(self.texture_conv3(texture_d2))
+        texture_out = self.texture_out(texture_d3)
+
+        shape_feature = shape.view(shape.size()[0], -1)
+        texture_feature = texture.view(texture.size()[0], -1)
+
+        return shape_feature, texture_feature, shape_out, texture_out
+
+    pass
+
+
+class EmbeddingNetCIFAR(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.input_size = 6
+
+        # input 24
+        self.conv11 = ConvBlock(3, 64, 1, padding=1, has_relu=True)  # 6
+        self.conv12 = ConvBlock(64, 128, 1, padding=1, has_relu=True)  # 6
+        self.pool1 = nn.MaxPool2d(2, 2)  # 3
+        self.conv21 = ConvBlock(128, 128, 1, padding=1, has_relu=True)  # 3
+
+        self.conv_shape = ConvBlock(128, 32, 1, padding=0, has_relu=True, bias=False)  # 1
+        self.conv_texture = ConvBlock(128, 32, 1, padding=0, has_relu=True, bias=False)  # 1
+
+        self.shape_conv0 = ConvTransposeBlock(32, 128, padding=0, has_relu=True)  # 3
+        self.shape_conv1 = ConvBlock(128, 64, 1, padding=1, has_relu=True)  # 3
+        self.shape_up1 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.shape_conv2 = ConvBlock(64, 64, padding=1, has_relu=True)  # 6
+        self.shape_out = ConvBlock(64, 1, padding=1, has_relu=False)  # 6
+
+        self.texture_conv0 = ConvTransposeBlock(64, 128, padding=0, has_relu=True)  # 3
+        self.texture_conv1 = ConvBlock(128, 64, 1, padding=1, has_relu=True)  # 3
+        self.texture_up1 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.texture_conv2 = ConvBlock(64, 64, padding=1, has_relu=True)  # 6
+        self.texture_out = ConvBlock(64, 3, padding=1, has_relu=False)  # 6
+        pass
+
+    def forward(self, x):
+        if x.size()[2] != self.input_size or x.size()[3] != self.input_size:
+            raise Exception("1234567890")
+
+        e1 = self.conv12(self.conv11(x))
+        p1 = self.pool1(e1)
+        e2 = self.conv21(p1)
+        shape = self.conv_shape(e2)
+        texture = self.conv_texture(e2)
+
+        shape_d0 = self.shape_conv0(shape)
+        shape_d1 = self.shape_up1(self.shape_conv1(shape_d0))
+        shape_d2 = self.shape_conv2(shape_d1)
+        shape_out = self.shape_out(shape_d2)
+
+        texture_d0 = self.texture_conv0(torch.cat([texture, shape], dim=1))
+        texture_d1 = self.texture_up1(self.texture_conv1(texture_d0))
+        texture_d2 = self.texture_conv2(texture_d1)
+        texture_out = self.texture_out(texture_d2)
+
+        shape_feature = shape.view(shape.size()[0], -1)
+        texture_feature = texture.view(texture.size()[0], -1)
+
+        return shape_feature, texture_feature, shape_out, texture_out
+
+    pass
+
+
+class Runner(object):
+
+    def __init__(self, root_ckpt_dir, use_gpu=False, gpu_id="0"):
+        self.root_ckpt_dir = root_ckpt_dir
+        self.device = self._gpu_setup(use_gpu, gpu_id)
+
+        self.model = EmbeddingNetCIFAR().to(self.device)
+        Tools.print("Total param: {}".format(self._view_model_param(self.model)))
+
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode='min', factor=0.5, patience=50, verbose=True)
+
+        self.loss_mse = nn.MSELoss()
+        self.data_cifar10 = DataCIFAR10(train_batch=32, test_batch=32)
+        pass
+
+    def train(self, epochs=100):
+        for epoch in range(epochs):
+            Tools.print()
+            Tools.print("Start Epoch {}".format(epoch))
+
+            epoch_loss, epoch_loss_shape, epoch_loss_texture = self.train_epoch(self.data_cifar10.train_loader)
+            self.scheduler.step(epoch_val_loss)
+            self.save_checkpoint(self.model, self.root_ckpt_dir, epoch)
+
+            Tools.print("time={:.4f}, lr={:.4f}, loss={:.4f}, shape={:.4f}, texture={:.4f}".format(
+                time.time() - start, self.optimizer.param_groups[0]['lr'],
+                epoch_loss, epoch_loss_shape, epoch_loss_texture))
+            pass
+        pass
+
+    def train_epoch(self, data_loader):
+        self.model.train()
+
+        epoch_loss, epoch_loss_shape, epoch_loss_texture = 0, 0, 0
+        for i, (img, target) in enumerate(data_loader):
+            start = time.time()
+            batch_img, shape_target = self.get_super_pixel(img.detach().numpy())
+            super_pixel_time = time.time() - start
+
+            start = time.time()
+            batch_img = batch_img.to(self.device)
+            shape_target = shape_target.to(self.device)
+            self.optimizer.zero_grad()
+            shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
+            loss_shape = self.loss_mse(shape_out, shape_target)
+            loss_texture = self.loss_mse(texture_out, batch_img)
+            loss = loss_shape + loss_texture
+            loss.backward()
+            self.optimizer.step()
+            net_time = time.time() - start
+
+            now_loss = loss.detach().item()
+            now_loss_shape = loss_shape.detach().item()
+            now_loss_texture = loss_texture.detach().item()
+            epoch_loss += now_loss
+            epoch_loss_shape += now_loss_shape
+            epoch_loss_texture += now_loss_texture
+
+            Tools.print("{}-{} time:{:4f} {:4f}, loss={:4f}/{:4f} - {:4f}/{:4f} - {:4f}/{:4f}".format(
+                i, len(data_loader), super_pixel_time, net_time, now_loss, epoch_loss / (i+1),
+                now_loss_shape, epoch_loss_shape / (i+1), now_loss_texture, epoch_loss_texture / (i+1)))
+            pass
+
+        return epoch_loss/len(data_loader), epoch_loss_shape/len(data_loader), epoch_loss_texture/len(data_loader)
+
+    @staticmethod
+    def get_super_pixel(batch_img, ds_image_size=32, super_pixel_size=4, super_pixel_data_size=6):
+        now_data_list = []
+        now_shape_list = []
+        for img in batch_img:
+            deal_super_pixel = DealSuperPixel(image_data=img,
+                                              ds_image_size=ds_image_size, super_pixel_size=super_pixel_size)
+            now_segment, now_super_pixel_info, now_adjacency_info = deal_super_pixel.run()
+            for key in now_super_pixel_info:
+                now_data = now_super_pixel_info[key]["data2"] / 255
+                now_data = cv2.resize(now_data, (super_pixel_data_size,
+                                                 super_pixel_data_size), interpolation=cv2.INTER_NEAREST)
+                now_shape = now_super_pixel_info[key]["label"] / 1
+                now_shape = cv2.resize(now_shape, (super_pixel_data_size,
+                                                   super_pixel_data_size), interpolation=cv2.INTER_NEAREST)
+                now_shape = np.expand_dims(now_shape, axis=-1)
+                now_data_list.append(now_data)
+                now_shape_list.append(now_shape)
+                pass
+            pass
+
+        now_data_list = np.transpose(now_data_list, axes=(0, 3, 1, 2))
+        now_data_list = torch.from_numpy(now_data_list).float()
+        now_shape_list = np.transpose(now_shape_list, axes=(0, 3, 1, 2))
+        now_shape_list = torch.from_numpy(now_shape_list).float()
+        return now_data_list, now_shape_list
+
+    @staticmethod
+    def _gpu_setup(use_gpu, gpu_id):
+        if torch.cuda.is_available() and use_gpu:
+            Tools.print()
+            Tools.print('Cuda available with GPU: {}'.format(torch.cuda.get_device_name(0)))
+            os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+            device = torch.device("cuda")
+        else:
+            Tools.print()
+            Tools.print('Cuda not available')
+            device = torch.device("cpu")
+        return device
+
+    @staticmethod
+    def _view_model_param(model):
+        total_param = 0
+        for param in model.parameters():
+            total_param += np.prod(list(param.data.size()))
+        return total_param
 
     pass
 
 if __name__ == '__main__':
-    now_image_name = "data\\input\\1.jpg"
-    now_image_data = io.imread(now_image_name)
-    deal_super_pixel = DealSuperPixel(image_data=now_image_data, ds_image_size=224)
-    now_segment, now_super_pixel_info, now_adjacency_info = deal_super_pixel.run()
-    deal_super_pixel.show(now_segment)
+    runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt"))
+    runner.train(10)
+    print()
     pass
