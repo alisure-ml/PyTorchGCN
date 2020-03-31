@@ -5,8 +5,10 @@
 import os
 import cv2
 import time
+import glob
 import torch
 import numpy as np
+from PIL import Image
 import torch.nn as nn
 from skimage import io
 import torch.optim as optim
@@ -56,6 +58,8 @@ class DealSuperPixel(object):
             # 属于超像素的值
             _super_pixel_label_3 = np.concatenate([super_pixel_label, super_pixel_label, super_pixel_label], axis=-1)
             super_pixel_data2 = super_pixel_data * _super_pixel_label_3
+            super_pixel_data3 = super_pixel_data.copy()
+            super_pixel_data3[_super_pixel_label_3==0] = -255
 
             # 计算邻接矩阵
             _x_min_a = x_min - (1 if x_min > 0 else 0)
@@ -69,7 +73,8 @@ class DealSuperPixel(object):
             # 结果
             super_pixel_info[i] = {"size": super_pixel_size, "area": super_pixel_area,
                                    "label": super_pixel_label, "data": super_pixel_data,
-                                   "data2": super_pixel_data2, "adj": super_pixel_adjacency}
+                                   "data2": super_pixel_data2, "data3": super_pixel_data3,
+                                   "adj": super_pixel_adjacency}
             pass
 
         adjacency_info = []
@@ -314,21 +319,70 @@ class EmbeddingNetCIFAR(nn.Module):
     pass
 
 
+class EmbeddingNetCIFARSmall(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.input_size = 6
+
+        # input 24
+        self.conv1 = ConvBlock(3, 64, 1, padding=1, has_relu=True)  # 6
+        self.pool1 = nn.MaxPool2d(2, 2)  # 3
+        self.conv2 = ConvBlock(64, 64, 1, padding=1, has_relu=True)  # 3
+
+        self.conv_shape = ConvBlock(64, 16, 1, padding=0, has_relu=True, bias=False)  # 1
+        self.conv_texture = ConvBlock(64, 16, 1, padding=0, has_relu=True, bias=False)  # 1
+
+        self.shape_up1 = nn.UpsamplingBilinear2d(scale_factor=3)  # 3
+        self.shape_conv1 = ConvBlock(16, 64, 1, padding=1, has_relu=True)  # 3
+        self.shape_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.shape_out = ConvBlock(64, 1, padding=1, has_relu=False)  # 6
+
+        self.texture_up1 = nn.UpsamplingBilinear2d(scale_factor=3)  # 3
+        self.texture_conv1 = ConvBlock(32, 64, 1, padding=1, has_relu=True)  # 3
+        self.texture_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.texture_out = ConvBlock(64, 3, padding=1, has_relu=False)  # 6
+        pass
+
+    def forward(self, x):
+        if x.size()[2] != self.input_size or x.size()[3] != self.input_size:
+            raise Exception("1234567890")
+
+        e1 = self.pool1(self.conv1(x))
+        e2 = self.conv2(e1)
+        shape = self.conv_shape(e2)
+        texture = self.conv_texture(e2)
+
+        shape_feature = shape.view(shape.size()[0], -1)
+        texture_feature = texture.view(texture.size()[0], -1)
+
+        shape_d0 = self.shape_conv1(self.shape_up1(shape))
+        shape_out = self.shape_out(self.shape_up2(shape_d0))
+
+        texture_d0 = self.texture_conv1(self.texture_up1(torch.cat([texture, shape], dim=1)))
+        texture_out = self.texture_out(self.texture_up2(texture_d0))
+
+        return shape_feature, texture_feature, shape_out, texture_out
+
+    pass
+
+
 class Runner(object):
 
     def __init__(self, root_ckpt_dir, use_gpu=False, gpu_id="0"):
         self.root_ckpt_dir = root_ckpt_dir
         self.device = self._gpu_setup(use_gpu, gpu_id)
 
-        self.model = EmbeddingNetCIFAR().to(self.device)
+        # self.model = EmbeddingNetCIFAR().to(self.device)
+        self.model = EmbeddingNetCIFARSmall().to(self.device)
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
-        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode='min', factor=0.5, patience=50, verbose=True)
+        self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
+                                                              factor=0.5, patience=0, verbose=True)
 
         self.loss_mse = nn.MSELoss()
-        self.data_cifar10 = DataCIFAR10(train_batch=32, test_batch=32)
+        self.data_cifar10 = DataCIFAR10(train_batch=64, test_batch=32)
         pass
 
     def train(self, epochs=100):
@@ -337,12 +391,11 @@ class Runner(object):
             Tools.print("Start Epoch {}".format(epoch))
 
             epoch_loss, epoch_loss_shape, epoch_loss_texture = self.train_epoch(self.data_cifar10.train_loader)
-            self.scheduler.step(epoch_val_loss)
             self.save_checkpoint(self.model, self.root_ckpt_dir, epoch)
+            self.scheduler.step(epoch_loss)
 
-            Tools.print("time={:.4f}, lr={:.4f}, loss={:.4f}, shape={:.4f}, texture={:.4f}".format(
-                time.time() - start, self.optimizer.param_groups[0]['lr'],
-                epoch_loss, epoch_loss_shape, epoch_loss_texture))
+            Tools.print("lr={:.4f}, loss={:.4f}, shape={:.4f}, texture={:.4f}".format(
+                self.optimizer.param_groups[0]['lr'], epoch_loss, epoch_loss_shape, epoch_loss_texture))
             pass
         pass
 
@@ -352,12 +405,12 @@ class Runner(object):
         epoch_loss, epoch_loss_shape, epoch_loss_texture = 0, 0, 0
         for i, (img, target) in enumerate(data_loader):
             start = time.time()
-            batch_img, shape_target = self.get_super_pixel(img.detach().numpy())
+            net_input, sp_info = self.get_super_pixel(img.detach().numpy())
             super_pixel_time = time.time() - start
 
             start = time.time()
-            batch_img = batch_img.to(self.device)
-            shape_target = shape_target.to(self.device)
+            batch_img = net_input["data"].to(self.device)
+            shape_target = net_input["shape"].to(self.device)
             self.optimizer.zero_grad()
             shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
             loss_shape = self.loss_mse(shape_out, shape_target)
@@ -381,10 +434,88 @@ class Runner(object):
 
         return epoch_loss/len(data_loader), epoch_loss_shape/len(data_loader), epoch_loss_texture/len(data_loader)
 
+    def show_train(self):
+        self.model.eval()
+
+        for i, (img, target) in enumerate(self.data_cifar10.train_loader):
+            net_input, sp_info = self.get_super_pixel(img.detach().numpy())
+            batch_img = net_input["data"].to(self.device)
+            shape_target = net_input["shape"].to(self.device)
+            self.optimizer.zero_grad()
+            shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
+
+            for sp_i in range(batch_img.size(0)):
+                # 1
+                Image.fromarray(np.asarray(np.transpose(batch_img.detach().numpy()[sp_i],
+                                                        axes=(1, 2, 0)) * 255, dtype=np.uint8)).resize((60, 60)).show()
+                # 2
+                Image.fromarray(shape_target.detach().numpy()[sp_i][0] * 255).resize((60, 60)).show()
+                # 3
+                texture_out_one = np.transpose(texture_out.detach().numpy()[sp_i], axes=(1, 2, 0))
+                texture_out_one[texture_out_one < 0] = 0
+                texture_out_one[texture_out_one > 1] = 1
+                Image.fromarray(np.asarray(texture_out_one * 255, dtype=np.uint8)).resize((60, 60)).show()
+                # 4
+                shape_out_one = shape_out.detach().numpy()[sp_i][0]
+                shape_out_one[shape_out_one < 0] = 0
+                shape_out_one[shape_out_one > 1] = 1
+                Image.fromarray(np.asarray(shape_out_one * 255, dtype=np.uint8)).resize((60, 60)).show()
+                pass
+            pass
+
+        pass
+
+    def reconstruct_image(self):
+        self.model.eval()
+
+        for i, (img, target) in enumerate(self.data_cifar10.test_loader):
+            img = img.detach().numpy()
+            net_input, sp_info = self.get_super_pixel(img)
+            batch_img = net_input["data"].to(self.device)
+            shape_target = net_input["shape"].to(self.device)
+            sp_node = sp_info["node"]
+            sp_edge = sp_info["edge"]
+            self.optimizer.zero_grad()
+            shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
+            shape_out = shape_out.detach().numpy()
+            texture_out = texture_out.detach().numpy()
+
+            node_num = 0
+            for img_i in range(len(img)):
+                now_img = img[img_i]
+                now_node = sp_node[img_i]
+                now_texture = np.transpose(texture_out[node_num: node_num + len(now_node)], axes=(0, 2, 3, 1))
+                now_shape = np.transpose(shape_out[node_num: node_num + len(now_node)], axes=(0, 2, 3, 1))
+
+                now_result = np.zeros_like(now_img, dtype=np.float)
+                for sp_i in range(len(now_texture)):
+                    now_area_sp_i = now_node[sp_i]["area"]
+                    now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
+                                                                           now_area_sp_i[1] - now_area_sp_i[0] + 1),
+                                                interpolation=cv2.INTER_NEAREST)
+                    now_shape_sp_i[now_shape_sp_i < 0.3] = 0
+                    now_texture_sp_i = cv2.resize(now_texture[sp_i], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
+                                                                      now_area_sp_i[1] - now_area_sp_i[0] + 1),
+                                                  interpolation=cv2.INTER_NEAREST)
+                    now_texture_sp_i[now_texture_sp_i > 1] = 1
+                    now_texture_sp_i[now_texture_sp_i < 0] = 0
+                    _result_area = now_result[now_area_sp_i[0]: now_area_sp_i[1] + 1,
+                                   now_area_sp_i[2]: now_area_sp_i[3] + 1, :]
+                    _result_area[now_shape_sp_i > 0] = now_texture_sp_i[now_shape_sp_i > 0]
+                    pass
+
+                Image.fromarray(now_img).show()
+                Image.fromarray(np.asarray(now_result * 255, dtype=np.uint8)).show()
+                node_num += len(now_node)
+                pass
+            pass
+
+        pass
+
     @staticmethod
     def get_super_pixel(batch_img, ds_image_size=32, super_pixel_size=4, super_pixel_data_size=6):
-        now_data_list = []
-        now_shape_list = []
+        now_data_list, now_shape_list = [], []
+        now_segment_list, now_super_pixel_info_list, now_adjacency_info_list = [], [], []
         for img in batch_img:
             deal_super_pixel = DealSuperPixel(image_data=img,
                                               ds_image_size=ds_image_size, super_pixel_size=super_pixel_size)
@@ -400,13 +531,33 @@ class Runner(object):
                 now_data_list.append(now_data)
                 now_shape_list.append(now_shape)
                 pass
+
+            now_segment_list.append(now_segment)
+            now_super_pixel_info_list.append(now_super_pixel_info)
+            now_adjacency_info_list.append(now_adjacency_info)
             pass
 
         now_data_list = np.transpose(now_data_list, axes=(0, 3, 1, 2))
         now_data_list = torch.from_numpy(now_data_list).float()
         now_shape_list = np.transpose(now_shape_list, axes=(0, 3, 1, 2))
         now_shape_list = torch.from_numpy(now_shape_list).float()
-        return now_data_list, now_shape_list
+        return {"data": now_data_list, "shape": now_shape_list}, {
+            "segment": now_segment_list, "node": now_super_pixel_info_list, "edge": now_adjacency_info_list}
+
+    @staticmethod
+    def save_checkpoint(model, root_ckpt_dir, epoch):
+        torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
+        for file in glob.glob(root_ckpt_dir + '/*.pkl'):
+            if int(file.split('_')[-1].split('.')[0]) < epoch - 1:
+                os.remove(file)
+                pass
+            pass
+        pass
+
+    def load_model(self, model_file_name):
+        self.model.load_state_dict(torch.load(model_file_name), strict=False)
+        Tools.print("restore from {}".format(model_file_name))
+        pass
 
     @staticmethod
     def _gpu_setup(use_gpu, gpu_id):
@@ -431,8 +582,173 @@ class Runner(object):
 
     pass
 
+
+class VisualEmbeddingVisualization(object):
+
+    def __init__(self, model_file_name, use_gpu=False, gpu_id="0"):
+        self.model_file_name = model_file_name
+        self.device = Runner._gpu_setup(use_gpu, gpu_id)
+
+        self.data_cifar10 = DataCIFAR10(train_batch=64, test_batch=32)
+
+        self.model = EmbeddingNetCIFAR().to(self.device)
+        self.model.load_state_dict(torch.load(self.model_file_name), strict=False)
+
+        Tools.print("Total param: {}, Restore from {}".format(
+            Runner._view_model_param(self.model), self.model_file_name))
+        pass
+
+    def show_train(self):
+        self.model.eval()
+
+        for i, (img, target) in enumerate(self.data_cifar10.train_loader):
+            net_input, sp_info = self.get_super_pixel(img.detach().numpy())
+            batch_img = net_input["data"].to(self.device)
+            shape_target = net_input["shape"].to(self.device)
+            self.optimizer.zero_grad()
+            shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
+
+            for sp_i in range(batch_img.size(0)):
+                # 1
+                Image.fromarray(np.asarray(np.transpose(batch_img.detach().numpy()[sp_i],
+                                                        axes=(1, 2, 0)) * 255, dtype=np.uint8)).resize((60, 60)).show()
+                # 2
+                Image.fromarray(shape_target.detach().numpy()[sp_i][0] * 255).resize((60, 60)).show()
+                # 3
+                texture_out_one = np.transpose(texture_out.detach().numpy()[sp_i], axes=(1, 2, 0))
+                texture_out_one[texture_out_one < 0] = 0
+                texture_out_one[texture_out_one > 1] = 1
+                Image.fromarray(np.asarray(texture_out_one * 255, dtype=np.uint8)).resize((60, 60)).show()
+                # 4
+                shape_out_one = shape_out.detach().numpy()[sp_i][0]
+                shape_out_one[shape_out_one < 0] = 0
+                shape_out_one[shape_out_one > 1] = 1
+                Image.fromarray(np.asarray(shape_out_one * 255, dtype=np.uint8)).resize((60, 60)).show()
+                pass
+            pass
+
+        pass
+
+    def reconstruct_image(self):
+        self.model.eval()
+
+        for i, (img, target) in enumerate(self.data_cifar10.test_loader):
+            img = img.detach().numpy()
+            net_input, sp_info = self.get_super_pixel(img)
+            batch_img = net_input["data"].to(self.device)
+            shape_target = net_input["shape"].to(self.device)
+            sp_node = sp_info["node"]
+            sp_edge = sp_info["edge"]
+            self.optimizer.zero_grad()
+            shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
+            shape_out = shape_out.detach().numpy()
+            texture_out = texture_out.detach().numpy()
+
+            node_num = 0
+            for img_i in range(len(img)):
+                now_img = img[img_i]
+                now_node = sp_node[img_i]
+                now_texture = np.transpose(texture_out[node_num: node_num + len(now_node)], axes=(0, 2, 3, 1))
+                now_shape = np.transpose(shape_out[node_num: node_num + len(now_node)], axes=(0, 2, 3, 1))
+
+                now_result = np.zeros_like(now_img, dtype=np.float)
+                for sp_i in range(len(now_texture)):
+                    now_area_sp_i = now_node[sp_i]["area"]
+                    now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
+                                                                           now_area_sp_i[1] - now_area_sp_i[0] + 1),
+                                                interpolation=cv2.INTER_NEAREST)
+                    now_shape_sp_i[now_shape_sp_i < 0.3] = 0
+                    now_texture_sp_i = cv2.resize(now_texture[sp_i], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
+                                                                      now_area_sp_i[1] - now_area_sp_i[0] + 1),
+                                                  interpolation=cv2.INTER_NEAREST)
+                    now_texture_sp_i[now_texture_sp_i > 1] = 1
+                    now_texture_sp_i[now_texture_sp_i < 0] = 0
+                    _result_area = now_result[now_area_sp_i[0]: now_area_sp_i[1] + 1,
+                                   now_area_sp_i[2]: now_area_sp_i[3] + 1, :]
+                    _result_area[now_shape_sp_i > 0] = now_texture_sp_i[now_shape_sp_i > 0]
+                    pass
+
+                Image.fromarray(now_img).show()
+                Image.fromarray(np.asarray(now_result * 255, dtype=np.uint8)).show()
+                node_num += len(now_node)
+                pass
+            pass
+
+        pass
+
+    pass
+
+
+class VisualEmbedding(object):
+
+    def __init__(self, model_file_name, use_gpu=False, gpu_id="0"):
+        self.model_file_name = model_file_name
+        self.device = Runner._gpu_setup(use_gpu, gpu_id)
+
+        self.data_cifar10 = DataCIFAR10(train_batch=64, test_batch=32)
+
+        self.model = EmbeddingNetCIFAR().to(self.device)
+        self.model.load_state_dict(torch.load(self.model_file_name), strict=False)
+
+        Tools.print("Total param: {}, Restore from {}".format(
+            Runner._view_model_param(self.model), self.model_file_name))
+        pass
+
+    def run(self):
+        self.model.eval()
+        for i, (img, target) in enumerate(self.data_cifar10.train_loader):
+            img = img.detach().numpy()
+
+            start = time.time()
+            sp_info = self.get_sp_info(img)
+            super_pixel_time = time.time() - start
+
+            Tools.print("{} Time: {}".format(i, super_pixel_time))
+            pass
+        pass
+
+    def get_sp_info(self, img):
+        net_input, sp_info = Runner.get_super_pixel(img)
+        batch_img = net_input["data"].to(self.device)
+
+        shape_feature, texture_feature, _, _ = self.model.forward(batch_img)
+        shape_feature, texture_feature = shape_feature.detach().numpy(), texture_feature.detach().numpy()
+
+        node_num = 0
+        for img_i in range(len(img)):
+            now_node_i = sp_info["node"][img_i]
+            now_shape_feature_i = shape_feature[node_num: node_num + len(now_node_i)]
+            now_texture_feature_i = texture_feature[node_num: node_num + len(now_node_i)]
+
+            for sp_i in range(len(now_node_i)):
+                now_node_i[sp_i]["feature_shape"] = now_shape_feature_i[sp_i]
+                now_node_i[sp_i]["feature_texture"] = now_texture_feature_i[sp_i]
+                pass
+
+            node_num += len(now_node_i)
+            pass
+        return sp_info
+
+    pass
+
+
 if __name__ == '__main__':
-    runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt"))
-    runner.train(10)
+    ############################################################################################
+    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\first"))
+    # runner.load_model("ckpt\\first\\epoch_1.pkl")
+    # runner.train(2)
+    ############################################################################################
+    # visual_embedding_visualization = VisualEmbeddingVisualization(model_file_name="ckpt\\first\\epoch_1.pkl")
+    # visual_embedding_visualization.show_train()
+    ############################################################################################
+    # visual_embedding_visualization = VisualEmbeddingVisualization(model_file_name="ckpt\\first\\epoch_1.pkl")
+    # visual_embedding_visualization.reconstruct_image()
+    ############################################################################################
+    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\first\\epoch_1.pkl")
+    # visual_embedding.run()
+    ############################################################################################
+    runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\small"))
+    # runner.load_model('ckpt\\small\\epoch_0.pkl')
+    runner.train(2)
     print()
     pass
