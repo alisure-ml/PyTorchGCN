@@ -369,12 +369,11 @@ class EmbeddingNetCIFARSmall(nn.Module):
 
 class Runner(object):
 
-    def __init__(self, root_ckpt_dir, use_gpu=False, gpu_id="0"):
+    def __init__(self, root_ckpt_dir, model=EmbeddingNetCIFAR, use_gpu=False, gpu_id="0"):
         self.root_ckpt_dir = root_ckpt_dir
         self.device = self._gpu_setup(use_gpu, gpu_id)
 
-        # self.model = EmbeddingNetCIFAR().to(self.device)
-        self.model = EmbeddingNetCIFARSmall().to(self.device)
+        self.model = model().to(self.device)
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
 
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
@@ -507,13 +506,13 @@ class Runner(object):
 
 class VisualEmbeddingVisualization(object):
 
-    def __init__(self, model_file_name, use_gpu=False, gpu_id="0"):
+    def __init__(self, model_file_name, model=EmbeddingNetCIFAR, use_gpu=False, gpu_id="0"):
         self.model_file_name = model_file_name
         self.device = Runner._gpu_setup(use_gpu, gpu_id)
 
         self.data_cifar10 = DataCIFAR10(train_batch=64, test_batch=32)
 
-        self.model = EmbeddingNetCIFAR().to(self.device)
+        self.model = model().to(self.device)
         self.model.load_state_dict(torch.load(self.model_file_name), strict=False)
 
         Tools.print("Total param: {}, Restore from {}".format(
@@ -556,12 +555,11 @@ class VisualEmbeddingVisualization(object):
 
         for i, (img, target) in enumerate(self.data_cifar10.test_loader):
             img = img.detach().numpy()
-            net_input, sp_info = self.get_super_pixel(img)
+            net_input, sp_info = Runner.get_super_pixel(img)
             batch_img = net_input["data"].to(self.device)
             shape_target = net_input["shape"].to(self.device)
             sp_node = sp_info["node"]
             sp_edge = sp_info["edge"]
-            self.optimizer.zero_grad()
             shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
             shape_out = shape_out.detach().numpy()
             texture_out = texture_out.detach().numpy()
@@ -603,13 +601,13 @@ class VisualEmbeddingVisualization(object):
 
 class VisualEmbedding(object):
 
-    def __init__(self, model_file_name, use_gpu=False, gpu_id="0"):
+    def __init__(self, model_file_name, model=EmbeddingNetCIFAR, use_gpu=False, gpu_id="0"):
         self.model_file_name = model_file_name
         self.device = Runner._gpu_setup(use_gpu, gpu_id)
 
         self.data_cifar10 = DataCIFAR10(train_batch=64, test_batch=32)
 
-        self.model = EmbeddingNetCIFAR().to(self.device)
+        self.model = model().to(self.device)
         self.model.load_state_dict(torch.load(self.model_file_name), strict=False)
 
         Tools.print("Total param: {}, Restore from {}".format(
@@ -656,21 +654,32 @@ class VisualEmbedding(object):
 
 if __name__ == '__main__':
     ############################################################################################
-    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\first"))
+    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\first"), model=EmbeddingNetCIFAR)
     # runner.load_model("ckpt\\first\\epoch_1.pkl")
     # runner.train(2)
     ############################################################################################
-    # visual_embedding_visualization = VisualEmbeddingVisualization(model_file_name="ckpt\\first\\epoch_1.pkl")
+    # visual_embedding_visualization = VisualEmbeddingVisualization(
+    #     model_file_name="ckpt\\first\\epoch_1.pkl", model=EmbeddingNetCIFAR)
     # visual_embedding_visualization.show_train()
     ############################################################################################
-    # visual_embedding_visualization = VisualEmbeddingVisualization(model_file_name="ckpt\\first\\epoch_1.pkl")
+    # visual_embedding_visualization = VisualEmbeddingVisualization(
+    #     model_file_name="ckpt\\first\\epoch_1.pkl", model=EmbeddingNetCIFAR)
     # visual_embedding_visualization.reconstruct_image()
     ############################################################################################
-    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\first\\epoch_1.pkl")
+    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\first\\epoch_1.pkl", model=EmbeddingNetCIFAR)
     # visual_embedding.run()
     ############################################################################################
-    runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\small"))
-    # runner.load_model('ckpt\\small\\epoch_0.pkl')
-    runner.train(2)
-    print()
+
+    ############################################################################################
+    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\small"), model=EmbeddingNetCIFARSmall)
+    # runner.load_model('ckpt\\small\\epoch_2.pkl')
+    # runner.train(2)
+    ############################################################################################
+    # visual_embedding_visualization = VisualEmbeddingVisualization(
+    #     model_file_name="ckpt\\small\\epoch_1.pkl", model=EmbeddingNetCIFARSmall)
+    # visual_embedding_visualization.reconstruct_image()
+    ############################################################################################
+    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\small\\epoch_1.pkl", model=EmbeddingNetCIFARSmall)
+    # visual_embedding.run()
+    ############################################################################################
     pass
