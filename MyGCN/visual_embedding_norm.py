@@ -55,11 +55,10 @@ class DealSuperPixel(object):
             super_pixel_label = np.expand_dims(super_pixel_label, axis=-1)
             # 属于超像素所在矩形区域的值
             super_pixel_data = self.image_data[x_min: x_max + 1, y_min: y_max + 1]
-            # 属于超像素的值
+            # 属于超像素的值, 不属于超像素的值设置为-255，用来区分不属于超像素的点和[0,0,0]
             _super_pixel_label_3 = np.concatenate([super_pixel_label, super_pixel_label, super_pixel_label], axis=-1)
-            super_pixel_data2 = super_pixel_data * _super_pixel_label_3
-            super_pixel_data3 = super_pixel_data.copy()
-            super_pixel_data3[_super_pixel_label_3==0] = -255
+            super_pixel_data2 = np.array(super_pixel_data, dtype=np.int)
+            super_pixel_data2[_super_pixel_label_3==0] = -255
 
             # 计算邻接矩阵
             _x_min_a = x_min - (1 if x_min > 0 else 0)
@@ -73,8 +72,7 @@ class DealSuperPixel(object):
             # 结果
             super_pixel_info[i] = {"size": super_pixel_size, "area": super_pixel_area,
                                    "label": super_pixel_label, "data": super_pixel_data,
-                                   "data2": super_pixel_data2, "data3": super_pixel_data3,
-                                   "adj": super_pixel_adjacency}
+                                   "data2": super_pixel_data2, "adj": super_pixel_adjacency}
             pass
 
         adjacency_info = []
@@ -138,7 +136,7 @@ class DataCIFAR10(object):
     def __init__(self, train_batch=32, test_batch=32, data_root_path='D:\data\CIFAR'):
         # Data
         transform_train = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip()])
-        transform_test = transforms.Compose([transforms.ToTensor()])
+        # transform_test = transforms.Compose([transforms.ToTensor()])
 
         train_set = MyCIFAR10(root=data_root_path, train=True, download=True, transform=transform_train)
         self.train_loader = data.DataLoader(train_set, batch_size=train_batch, shuffle=True, num_workers=1)
@@ -150,20 +148,37 @@ class DataCIFAR10(object):
     pass
 
 
+class Normalize(nn.Module):
+
+    def __init__(self, power=2):
+        super().__init__()
+        self.power = power
+        pass
+
+    def forward(self, x, dim=1):
+        norm = x.pow(self.power).sum(dim, keepdim=True).pow(1. / self.power)
+        out = x.div(norm)
+        return out
+
+    pass
+
+
 class ConvBlock(nn.Module):
 
-    def __init__(self, cin, cout, stride=1, padding=1, has_relu=True, bias=True):
+    def __init__(self, cin, cout, stride=1, padding=1, ks=3, has_relu=True, has_bn=True, bias=True):
         super().__init__()
         self.has_relu = has_relu
+        self.has_bn = has_bn
 
-        self.conv = nn.Conv2d(cin, cout, kernel_size=3, stride=stride, padding=padding, bias=bias)
+        self.conv = nn.Conv2d(cin, cout, kernel_size=ks, stride=stride, padding=padding, bias=bias)
         self.bn = nn.BatchNorm2d(cout)
         self.relu = nn.ReLU(inplace=True)
         pass
 
     def forward(self, x):
         out = self.conv(x)
-        out = self.bn(out)
+        if self.has_bn:
+            out = self.bn(out)
         if self.has_relu:
             out = self.relu(out)
         return out
@@ -319,7 +334,7 @@ class EmbeddingNetCIFAR(nn.Module):
     pass
 
 
-class EmbeddingNetCIFARSmall(nn.Module):
+class EmbeddingNetCIFARSmallNorm(nn.Module):
 
     def __init__(self):
         super().__init__()
@@ -333,15 +348,20 @@ class EmbeddingNetCIFARSmall(nn.Module):
         self.conv_shape = ConvBlock(64, 16, 1, padding=0, has_relu=True, bias=False)  # 1
         self.conv_texture = ConvBlock(64, 16, 1, padding=0, has_relu=True, bias=False)  # 1
 
-        self.shape_up1 = nn.UpsamplingBilinear2d(scale_factor=3)  # 3
-        self.shape_conv1 = ConvBlock(16, 64, 1, padding=1, has_relu=True)  # 3
+        self.shape_up1 = ConvTransposeBlock(16, 64, padding=0, has_relu=True)  # 3
+        self.shape_conv1 = ConvBlock(64, 64, 1, padding=1, has_relu=True)  # 3
         self.shape_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.shape_conv2 = ConvBlock(64, 64, padding=1, has_relu=True)  # 6
         self.shape_out = ConvBlock(64, 1, padding=1, has_relu=False)  # 6
 
-        self.texture_up1 = nn.UpsamplingBilinear2d(scale_factor=3)  # 3
-        self.texture_conv1 = ConvBlock(32, 64, 1, padding=1, has_relu=True)  # 3
+        self.texture_up1 = ConvTransposeBlock(32, 64, padding=0, has_relu=True)  # 3
+        self.texture_conv1 = ConvBlock(64, 64, 1, padding=1, has_relu=True)  # 3
         self.texture_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.texture_conv2 = ConvBlock(64, 64, padding=1, has_relu=True)  # 6
         self.texture_out = ConvBlock(64, 3, padding=1, has_relu=False)  # 6
+
+        self.norm = Normalize()
+        self.sigmoid = nn.Sigmoid()
         pass
 
     def forward(self, x):
@@ -350,17 +370,148 @@ class EmbeddingNetCIFARSmall(nn.Module):
 
         e1 = self.pool1(self.conv1(x))
         e2 = self.conv2(e1)
+
         shape = self.conv_shape(e2)
         texture = self.conv_texture(e2)
+        shape_norm = self.norm(shape)
+        texture_norm = self.norm(texture)
 
-        shape_feature = shape.view(shape.size()[0], -1)
-        texture_feature = texture.view(texture.size()[0], -1)
+        shape_feature = shape_norm.view(shape_norm.size()[0], -1)
+        texture_feature = texture_norm.view(texture_norm.size()[0], -1)
 
-        shape_d0 = self.shape_conv1(self.shape_up1(shape))
-        shape_out = self.shape_out(self.shape_up2(shape_d0))
+        shape_d0 = self.shape_conv1(self.shape_up1(shape_norm))
+        shape_d1 = self.shape_conv2(self.shape_up2(shape_d0))
+        shape_out = self.sigmoid(self.shape_out(shape_d1))
 
-        texture_d0 = self.texture_conv1(self.texture_up1(torch.cat([texture, shape], dim=1)))
-        texture_out = self.texture_out(self.texture_up2(texture_d0))
+        texture_d0 = self.texture_conv1(self.texture_up1(torch.cat([texture_norm, shape_norm], dim=1)))
+        texture_d1 = self.texture_conv2(self.texture_up2(texture_d0))
+        texture_out = self.sigmoid(self.texture_out(texture_d1))
+
+        return shape_feature, texture_feature, shape_out, texture_out
+
+    pass
+
+
+class EmbeddingNetCIFARSmallNorm2(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.input_size = 6
+        self.embedding_size = 16
+        self.has_bn = False
+
+        # input 24
+        self.conv11 = ConvBlock(3, 32, 1, padding=1, has_relu=True, has_bn=self.has_bn)  # 6
+        self.conv12 = ConvBlock(32, 32, 1, padding=1, has_relu=True, has_bn=self.has_bn)  # 3
+        self.pool1 = nn.MaxPool2d(2, 2)  # 3
+        self.conv21 = ConvBlock(32, 64, 1, padding=1, has_relu=True, has_bn=self.has_bn)  # 3
+        self.conv22 = ConvBlock(64, 64, 1, padding=1, has_relu=True, has_bn=self.has_bn)  # 3
+
+        self.conv_shape = ConvBlock(64, self.embedding_size, 1, 0, has_relu=True, has_bn=False, bias=self.has_bn)  # 1
+        self.conv_texture = ConvBlock(64, self.embedding_size, 1, 0, has_relu=True, has_bn=False, bias=self.has_bn)
+
+        self.shape_up1 = nn.UpsamplingBilinear2d(scale_factor=3)  # 3
+        self.shape_conv1 = ConvBlock(self.embedding_size, 64, 1, padding=1, has_relu=True, has_bn=self.has_bn)  # 3
+        self.shape_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.shape_conv2 = ConvBlock(64, 32, padding=1, has_relu=True, has_bn=self.has_bn)  # 6
+        self.shape_out = ConvBlock(32, 1, padding=1, has_relu=False, has_bn=self.has_bn)  # 6
+
+        self.texture_up1 = nn.UpsamplingBilinear2d(scale_factor=3) # 3
+        self.texture_conv1 = ConvBlock(self.embedding_size * 2, 128, 1, 1, has_relu=True, has_bn=self.has_bn)  # 3
+        self.texture_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.texture_conv2 = ConvBlock(128, 32, padding=1, has_relu=True, has_bn=self.has_bn)  # 6
+        self.texture_out = ConvBlock(32, 3, padding=1, has_relu=False, has_bn=self.has_bn)  # 6
+
+        self.norm = Normalize()
+        self.sigmoid = nn.Sigmoid()
+        pass
+
+    def forward(self, x):
+        if x.size()[2] != self.input_size or x.size()[3] != self.input_size:
+            raise Exception("1234567890")
+
+        e1 = self.pool1(self.conv12(self.conv11(x)))
+        e2 = self.conv22(self.conv21(e1))
+
+        shape = self.conv_shape(e2)
+        texture = self.conv_texture(e2)
+        shape_norm = self.norm(shape)
+        texture_norm = self.norm(texture)
+
+        shape_feature = shape_norm.view(shape_norm.size()[0], -1)
+        texture_feature = texture_norm.view(texture_norm.size()[0], -1)
+
+        shape_d0 = self.shape_conv1(self.shape_up1(shape_norm))
+        shape_d1 = self.shape_conv2(self.shape_up2(shape_d0))
+        shape_out = self.sigmoid(self.shape_out(shape_d1))
+
+        texture_d0 = self.texture_conv1(self.texture_up1(torch.cat([texture_norm, shape_norm], dim=1)))
+        texture_d1 = self.texture_conv2(self.texture_up2(texture_d0))
+        texture_out = self.sigmoid(self.texture_out(texture_d1))
+
+        return shape_feature, texture_feature, shape_out, texture_out
+
+    pass
+
+
+class EmbeddingNetCIFARSmallNorm3(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.input_size = 6
+        self.embedding_size = 16
+        self.has_bn = False
+
+        # input 24
+        self.conv11 = ConvBlock(3, 64, has_bn=self.has_bn)  # 6
+        self.conv12 = ConvBlock(64, 64, has_bn=self.has_bn)  # 3
+        self.pool1 = nn.MaxPool2d(2, 2)  # 3
+        self.conv21 = ConvBlock(64, 128, has_bn=self.has_bn)  # 3
+        self.conv22 = ConvBlock(128, 128, has_bn=self.has_bn)  # 3
+
+        self.conv_shape1 = ConvBlock(128, 128, padding=0, has_bn=self.has_bn)  # 1
+        self.conv_shape2 = ConvBlock(128, self.embedding_size, padding=0, ks=1, has_bn=self.has_bn, bias=False)  # 1
+        self.conv_texture1 = ConvBlock(128, 128, padding=0, has_bn=self.has_bn, bias=self.has_bn)
+        self.conv_texture2 = ConvBlock(128, self.embedding_size, padding=0, ks=1, has_bn=self.has_bn, bias=False)
+
+        self.shape_conv1 = ConvBlock(self.embedding_size, 32, padding=0, ks=1, has_bn=self.has_bn)  # 3
+        self.shape_up1 = nn.UpsamplingBilinear2d(scale_factor=3)  # 3
+        self.shape_conv2 = ConvBlock(32, 32, has_bn=self.has_bn)  # 3
+        self.shape_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.shape_conv3 = ConvBlock(32, 32, has_bn=self.has_bn)  # 6
+        self.shape_out = ConvBlock(32, 1, has_relu=False, has_bn=self.has_bn)  # 6
+
+        self.texture_conv1 = ConvBlock(self.embedding_size * 2, 128, padding=0, ks=1, has_bn=self.has_bn)  # 3
+        self.texture_up1 = nn.UpsamplingBilinear2d(scale_factor=3) # 3
+        self.texture_conv21 = ConvBlock(128, 128, has_bn=self.has_bn)  # 3
+        self.texture_conv22 = ConvBlock(128, 128, has_bn=self.has_bn)  # 3
+        self.texture_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
+        self.texture_conv31 = ConvBlock(128, 64, has_bn=self.has_bn)  # 6
+        self.texture_conv32 = ConvBlock(64, 64, has_bn=self.has_bn)  # 6
+        self.texture_out = ConvBlock(64, 3, has_relu=False, has_bn=self.has_bn)  # 6
+
+        self.norm = Normalize()
+        self.sigmoid = nn.Sigmoid()
+        pass
+
+    def forward(self, x):
+        e1 = self.pool1(self.conv12(self.conv11(x)))
+        e2 = self.conv22(self.conv21(e1))
+
+        shape_norm = self.norm(self.conv_shape2(self.conv_shape1(e2)))
+        texture_norm = self.norm(self.conv_texture2(self.conv_texture1(e2)))
+
+        shape_feature = shape_norm.view(shape_norm.size()[0], -1)
+        texture_feature = texture_norm.view(texture_norm.size()[0], -1)
+
+        shape_d1 = self.shape_up1(self.shape_conv1(shape_norm))
+        shape_d2 = self.shape_up2(self.shape_conv2(shape_d1))
+        shape_out = self.sigmoid(self.shape_out(self.shape_conv3(shape_d2)))
+
+        texture_d0 = torch.cat([texture_norm, shape_norm], dim=1)
+        texture_d1 = self.texture_up1(self.texture_conv1(texture_d0))
+        texture_d2 = self.texture_up2(self.texture_conv22(self.texture_conv21(texture_d1)))
+        texture_out = self.sigmoid(self.texture_out(self.texture_conv32(self.texture_conv31(texture_d2))))
 
         return shape_feature, texture_feature, shape_out, texture_out
 
@@ -380,7 +531,8 @@ class Runner(object):
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
                                                               factor=0.5, patience=0, verbose=True)
 
-        self.loss_mse = nn.MSELoss()
+        self.loss_shape = nn.BCELoss()
+        self.loss_texture = nn.BCELoss()
         self.data_CIFAR10 = DataCIFAR10(train_batch=64, test_batch=32)
         pass
 
@@ -408,12 +560,13 @@ class Runner(object):
             super_pixel_time = time.time() - start
 
             start = time.time()
-            batch_img = net_input["data"].to(self.device)
-            shape_target = net_input["shape"].to(self.device)
+            batch_img = torch.from_numpy(net_input["data"]).float().to(self.device)
+            shape_target = torch.from_numpy(net_input["shape"]).float().to(self.device)
             self.optimizer.zero_grad()
             shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
-            loss_shape = self.loss_mse(shape_out, shape_target)
-            loss_texture = self.loss_mse(texture_out, batch_img)
+            loss_shape = self.loss_shape(shape_out, shape_target)
+            _positions = batch_img >= 0
+            loss_texture = self.loss_texture(texture_out[_positions], batch_img[_positions])
             loss = loss_shape + loss_texture
             loss.backward()
             self.optimizer.step()
@@ -458,12 +611,10 @@ class Runner(object):
             now_adjacency_info_list.append(now_adjacency_info)
             pass
 
-        now_data_list = np.transpose(now_data_list, axes=(0, 3, 1, 2))
-        now_data_list = torch.from_numpy(now_data_list).float()
-        now_shape_list = np.transpose(now_shape_list, axes=(0, 3, 1, 2))
-        now_shape_list = torch.from_numpy(now_shape_list).float()
-        return {"data": now_data_list, "shape": now_shape_list}, {
-            "segment": now_segment_list, "node": now_super_pixel_info_list, "edge": now_adjacency_info_list}
+        net_input = {"data": np.transpose(now_data_list, axes=(0, 3, 1, 2)),
+                     "shape": np.transpose(now_shape_list, axes=(0, 3, 1, 2))}
+        sp_info = {"segment": now_segment_list, "node": now_super_pixel_info_list, "edge": now_adjacency_info_list}
+        return net_input, sp_info
 
     @staticmethod
     def save_checkpoint(model, root_ckpt_dir, epoch):
@@ -524,8 +675,9 @@ class VisualEmbeddingVisualization(object):
 
         for i, (img, target) in enumerate(self.data_CIFAR10.train_loader):
             net_input, sp_info = self.get_super_pixel(img.detach().numpy())
-            batch_img = net_input["data"].to(self.device)
-            shape_target = net_input["shape"].to(self.device)
+            batch_img = torch.from_numpy(net_input["data"]).float().to(self.device)
+            shape_target = torch.from_numpy(net_input["shape"]).float().to(self.device)
+
             self.optimizer.zero_grad()
             shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
 
@@ -555,11 +707,11 @@ class VisualEmbeddingVisualization(object):
 
         for i, (img, target) in enumerate(self.data_CIFAR10.test_loader):
             img = img.detach().numpy()
+
             net_input, sp_info = Runner.get_super_pixel(img)
-            batch_img = net_input["data"].to(self.device)
-            # shape_target = net_input["shape"].to(self.device)
+            batch_img = torch.from_numpy(net_input["data"]).float().to(self.device)
+
             sp_node = sp_info["node"]
-            # sp_edge = sp_info["edge"]
             shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
             shape_out = shape_out.detach().numpy()
             texture_out = texture_out.detach().numpy()
@@ -574,15 +726,21 @@ class VisualEmbeddingVisualization(object):
                 now_result = np.zeros_like(now_img, dtype=np.float)
                 for sp_i in range(len(now_texture)):
                     now_area_sp_i = now_node[sp_i]["area"]
-                    now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
-                                                                           now_area_sp_i[1] - now_area_sp_i[0] + 1),
-                                                interpolation=cv2.INTER_NEAREST)
-                    now_shape_sp_i[now_shape_sp_i < 0.3] = 0
+                    # 形状
+                    now_shape_sp_i = np.squeeze(now_node[sp_i]["label"], axis=-1)
+                    # now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
+                    #                                                        now_area_sp_i[1] - now_area_sp_i[0] + 1),
+                    #                             interpolation=cv2.INTER_NEAREST)
+                    # now_shape_sp_i[now_shape_sp_i < 0.2] = 0
+
+                    # 纹理
                     now_texture_sp_i = cv2.resize(now_texture[sp_i], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
                                                                       now_area_sp_i[1] - now_area_sp_i[0] + 1),
                                                   interpolation=cv2.INTER_NEAREST)
                     now_texture_sp_i[now_texture_sp_i > 1] = 1
                     now_texture_sp_i[now_texture_sp_i < 0] = 0
+
+                    # 填充
                     _result_area = now_result[now_area_sp_i[0]: now_area_sp_i[1] + 1,
                                    now_area_sp_i[2]: now_area_sp_i[3] + 1, :]
                     _result_area[now_shape_sp_i > 0] = now_texture_sp_i[now_shape_sp_i > 0]
@@ -592,6 +750,7 @@ class VisualEmbeddingVisualization(object):
                 Image.fromarray(np.asarray(now_result * 255, dtype=np.uint8)).show()
                 node_num += len(now_node)
                 pass
+
             pass
 
         pass
@@ -629,7 +788,7 @@ class VisualEmbedding(object):
 
     def get_sp_info(self, img):
         net_input, sp_info = Runner.get_super_pixel(img)
-        batch_img = net_input["data"].to(self.device)
+        batch_img = torch.from_numpy(net_input["data"]).float().to(self.device)
 
         shape_feature, texture_feature, _, _ = self.model.forward(batch_img)
         shape_feature, texture_feature = shape_feature.detach().numpy(), texture_feature.detach().numpy()
@@ -654,32 +813,19 @@ class VisualEmbedding(object):
 
 if __name__ == '__main__':
     ############################################################################################
-    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\first"), model=EmbeddingNetCIFAR)
-    # runner.load_model("ckpt\\first\\epoch_1.pkl")
-    # runner.train(2)
+    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\norm3"), model=EmbeddingNetCIFARSmallNorm3)
+    # runner.load_model("ckpt\\norm3\\epoch_1.pkl")
+    # runner.train(5)
     ############################################################################################
     # visual_embedding_visualization = VisualEmbeddingVisualization(
-    #     model_file_name="ckpt\\first\\epoch_1.pkl", model=EmbeddingNetCIFAR)
+    #     model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding_visualization.show_train()
     ############################################################################################
-    # visual_embedding_visualization = VisualEmbeddingVisualization(
-    #     model_file_name="ckpt\\first\\epoch_1.pkl", model=EmbeddingNetCIFAR)
-    # visual_embedding_visualization.reconstruct_image()
+    visual_embedding_visualization = VisualEmbeddingVisualization(
+        model_file_name="ckpt\\norm3\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm3)
+    visual_embedding_visualization.reconstruct_image()
     ############################################################################################
-    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\first\\epoch_1.pkl", model=EmbeddingNetCIFAR)
-    # visual_embedding.run()
-    ############################################################################################
-
-    ############################################################################################
-    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\small"), model=EmbeddingNetCIFARSmall)
-    # runner.load_model('ckpt\\small\\epoch_2.pkl')
-    # runner.train(2)
-    ############################################################################################
-    # visual_embedding_visualization = VisualEmbeddingVisualization(
-    #     model_file_name="ckpt\\small\\epoch_1.pkl", model=EmbeddingNetCIFARSmall)
-    # visual_embedding_visualization.reconstruct_image()
-    ############################################################################################
-    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\small\\epoch_1.pkl", model=EmbeddingNetCIFARSmall)
+    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding.run()
     ############################################################################################
     pass

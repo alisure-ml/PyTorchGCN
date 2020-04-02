@@ -13,13 +13,12 @@ data = dataset[0]
 
 
 class Net(torch.nn.Module):
-
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = GATConv(dataset.num_features, 8, heads=8, dropout=0.6)
         # On the Pubmed dataset, use heads=8 in conv2.
-        self.conv2 = GATConv(8 * 8, dataset.num_classes, heads=1, concat=True, dropout=0.6)
-        pass
+        self.conv2 = GATConv(
+            8 * 8, dataset.num_classes, heads=1, concat=True, dropout=0.6)
 
     def forward(self):
         x = F.dropout(data.x, p=0.6, training=self.training)
@@ -27,8 +26,6 @@ class Net(torch.nn.Module):
         x = F.dropout(x, p=0.6, training=self.training)
         x = self.conv2(x, data.edge_index)
         return F.log_softmax(x, dim=1)
-
-    pass
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -57,7 +54,3 @@ for epoch in range(1, 201):
     train()
     log = 'Epoch: {:03d}, Train: {:.4f}, Val: {:.4f}, Test: {:.4f}'
     print(log.format(epoch, *test()))
-
-if __name__ == '__main__':
-
-    pass
