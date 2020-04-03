@@ -2,6 +2,7 @@ import os
 import cv2
 import torch
 import numpy as np
+from SPEUtil_1 import gpu_setup
 from skimage import segmentation
 from alisuretool.Tools import Tools
 import torchvision.datasets as datasets
@@ -106,7 +107,7 @@ class MyDataset(Dataset):
 
 if __name__ == '__main__':
 
-    _device = Runner.gpu_setup(use_gpu=False, gpu_id="0")
+    _device = gpu_setup(use_gpu=False, gpu_id="0")
 
     my_dataset = MyDataset(data_root_path='D:\data\CIFAR', is_train=True, device=_device,
                            ve_model_file_name="ckpt\\norm3\\epoch_1.pkl", VEModel=EmbeddingNetCIFARSmallNorm3,

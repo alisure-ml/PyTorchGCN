@@ -11,17 +11,17 @@ class GCN(torch.nn.Module):
     def __init__(self):
         super().__init__()
 
-        self.in_dim = in_dim
-        self.hidden_dim = hidden_dim
-        self.out_dim = out_dim
-        self.n_classes = n_classes
+        self.in_dim = 32
+        self.hidden_dim = 64
+        self.out_dim = 64
+        self.n_classes = 10
 
         self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim)
 
-        self.conv1 = GCNConv(self.hidden_dim, self.hidden_dim, cached=True, normalize=True)
-        self.conv2 = GCNConv(self.hidden_dim, self.hidden_dim, cached=True, normalize=True)
-        self.conv3 = GCNConv(self.hidden_dim, self.hidden_dim, cached=True, normalize=True)
-        self.conv4 = GCNConv(self.hidden_dim, self.out_dim, cached=True, normalize=True)
+        self.conv1 = GCNConv(self.hidden_dim, self.hidden_dim, normalize=True)
+        self.conv2 = GCNConv(self.hidden_dim, self.hidden_dim, normalize=True)
+        self.conv3 = GCNConv(self.hidden_dim, self.hidden_dim, normalize=True)
+        self.conv4 = GCNConv(self.hidden_dim, self.out_dim, normalize=True)
 
         self.read_out1 = nn.Linear(self.out_dim, self.out_dim // 2, bias=True)
         self.read_out2 = nn.Linear(self.out_dim // 2, self.out_dim // 4, bias=True)
@@ -30,21 +30,20 @@ class GCN(torch.nn.Module):
         self.relu = nn.ReLU()
         pass
 
-    def forward(self, x, edge_index, edge_weight):
-        embedding_x = self.embedding_h(x)
+    def forward(self, data):
+        embedding_x = self.embedding_h(data.x)
 
-        gcn_conv1 = self.relu(self.conv1(embedding_x, edge_index, edge_weight))
-        gcn_conv2 = self.relu(self.conv2(gcn_conv1, edge_index, edge_weight))
-        gcn_conv3 = self.relu(self.conv3(gcn_conv2, edge_index, edge_weight))
-        gcn_conv4 = self.relu(self.conv4(gcn_conv3, edge_index, edge_weight))
+        gcn_conv1 = self.relu(self.conv1(embedding_x, data.edge_index))
+        gcn_conv2 = self.relu(self.conv2(gcn_conv1, data.edge_index))
+        gcn_conv3 = self.relu(self.conv3(gcn_conv2, data.edge_index))
+        gcn_conv4 = self.relu(self.conv4(gcn_conv3, data.edge_index))
 
-        batch = None
-        aggr_out = global_mean_pool(gcn_conv4, batch)
+        aggr_out = global_mean_pool(gcn_conv4, data.batch)
 
         read_out1 = self.relu(self.read_out1(aggr_out))
         read_out2 = self.relu(self.read_out2(read_out1))
         read_out3 = self.read_out3(read_out2)
-        return read_out3
+        return F.log_softmax(read_out3, dim=1)
 
     pass
 
