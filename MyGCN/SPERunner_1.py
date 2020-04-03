@@ -61,6 +61,7 @@ class RunnerSPE(object):
                 param_group['lr'] = 0.0001
             pass
 
+        avg_loss = 0
         for i, data in enumerate(self.train_loader):
             data = data.to(self.device)
 
@@ -69,7 +70,9 @@ class RunnerSPE(object):
             loss.backward()
             self.optimizer.step()
 
-            Tools.print("{} {} loss={}".format(i, len(self.train_loader), loss.item()))
+            avg_loss += loss.item()
+
+            Tools.print("{} {} loss={:4f}/{:4f}".format(i, len(self.train_loader), avg_loss/(i+1), loss.item()))
             pass
 
         pass
