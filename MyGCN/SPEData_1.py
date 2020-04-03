@@ -6,140 +6,116 @@ from skimage import segmentation
 from alisuretool.Tools import Tools
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
-from torch_geometric.data import Dataset, Data
+from torch_geometric.data import Data, Batch
+from torch.utils.data import Dataset, DataLoader
 from visual_embedding_norm import DealSuperPixel, MyCIFAR10, Runner, EmbeddingNetCIFARSmallNorm3
 
 
-class CIFAR10Graph(Dataset):
+class MyDataset(Dataset):
 
-    def __init__(self, root, transform=None, pre_transform=None):
-        super().__init__(root, transform, pre_transform)
+    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True, device=None,
+                 ve_model_file_name="ckpt\\norm3\\epoch_1.pkl", VEModel=EmbeddingNetCIFARSmallNorm3,
+                 image_size=32, sp_size=4, sp_ve_size=6):
+        super().__init__()
+
+        # 1. Data
+        self.is_train = is_train
+        self.data_root_path = data_root_path
+        self.ve_transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
+                                                transforms.RandomHorizontalFlip()]) if self.is_train else None
+        self.ve_data_set = MyCIFAR10(root=self.data_root_path, train=self.is_train, transform=self.ve_transform)
+
+        # 2. Model
+        self.device = torch.device("cpu") if device is None else device
+        self.ve_model_file_name = ve_model_file_name
+        self.ve_model = VEModel().to(self.device)
+        self.ve_model.load_state_dict(torch.load(self.ve_model_file_name), strict=False)
+
+        # 3. Super Pixel
+        self.image_size = image_size
+        self.sp_size = sp_size
+        self.sp_ve_size = sp_ve_size
         pass
 
-    # __init__()中调用该函数
-    def process(self):
-        """对原始数据进行处理"""
-        i = 0
-        for raw_path in self.raw_paths:
-            # Read data from `raw_path`.
-            data = Data(...)
+    def __len__(self):
+        return len(self.ve_data_set)
 
-            if self.pre_filter is not None and not self.pre_filter(data):
-                continue
+    def __getitem__(self, idx):
+        img, target = self.ve_data_set.__getitem__(idx)
+        g_data = self.get_sp_info(img, target)
+        return g_data
 
-            if self.pre_transform is not None:
-                data = self.pre_transform(data)
+    def get_sp_info(self, img, target):
+        # 3. Super Pixel
+        deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=self.image_size, super_pixel_size=self.sp_size)
+        segment, super_pixel_info, adjacency_info = deal_super_pixel.run()
 
-            torch.save(data, os.path.join(self.processed_dir, 'data_{}.pt'.format(i)))
-            i += 1
+        # Resize Super Pixel
+        _now_data_list = []
+        for key in super_pixel_info:
+            _now_data = cv2.resize(super_pixel_info[key]["data2"] / 255,
+                                   (self.sp_ve_size, self.sp_ve_size), interpolation=cv2.INTER_NEAREST)
+            _now_data_list.append(_now_data)
             pass
-        pass
+        net_data = np.transpose(_now_data_list, axes=(0, 3, 1, 2))
 
-    def len(self):
-        return len(self.processed_file_names)
-
-    # __getitem__()中调用该函数
-    def get(self, idx):
-        """价值数据"""
-        data = torch.load(os.path.join(self.processed_dir, 'data_{}.pt'.format(idx)))
-        return data
-
-    pass
-
-
-class MNISTSuperpixels(Dataset):
-
-    def __init__(self, root, train=True, transform=None, pre_transform=None, pre_filter=None):
-        super(MNISTSuperpixels, self).__init__(root, transform, pre_transform, pre_filter)
-        path = self.processed_paths[0] if train else self.processed_paths[1]
-        self.data, self.slices = torch.load(path)
-        pass
-
-    @property
-    def raw_file_names(self):
-        return ['training.pt', 'test.pt']
-
-    @property
-    def processed_file_names(self):
-        return ['training.pt', 'test.pt']
-
-    def process(self):
-        for raw_path, path in zip(self.raw_paths, self.processed_paths):
-            x, edge_index, edge_slice, pos, y = torch.load(raw_path)
-            edge_index, y = edge_index.to(torch.long), y.to(torch.long)
-            m, n = y.size(0), 75
-            x, pos = x.view(m * n, 1), pos.view(m * n, 2)
-            node_slice = torch.arange(0, (m + 1) * n, step=n, dtype=torch.long)
-            graph_slice = torch.arange(m + 1, dtype=torch.long)
-            self.data = Data(x=x, edge_index=edge_index, y=y, pos=pos)
-            self.slices = {
-                'x': node_slice,
-                'edge_index': edge_slice,
-                'y': graph_slice,
-                'pos': node_slice
-            }
-
-            if self.pre_filter is not None:
-                data_list = [self.get(idx) for idx in range(len(self))]
-                data_list = [d for d in data_list if self.pre_filter(d)]
-                self.data, self.slices = self.collate(data_list)
-
-            if self.pre_transform is not None:
-                data_list = [self.get(idx) for idx in range(len(self))]
-                data_list = [self.pre_transform(data) for data in data_list]
-                self.data, self.slices = self.collate(data_list)
-
-            torch.save((self.data, self.slices), path)
+        # 4. Visual Embedding
+        shape_feature, texture_feature, _, _ = self.ve_model.forward(torch.from_numpy(net_data).float().to(self.device))
+        shape_feature, texture_feature = shape_feature.detach().numpy(), texture_feature.detach().numpy()
+        for sp_i in range(len(super_pixel_info)):
+            super_pixel_info[sp_i]["feature_shape"] = shape_feature[sp_i]
+            super_pixel_info[sp_i]["feature_texture"] = texture_feature[sp_i]
             pass
-        pass
+
+        # Data for Batch: super_pixel_info
+        x, pos, area, size = [], [], [], []
+        for sp_i in range(len(super_pixel_info)):
+            now_sp = super_pixel_info[sp_i]
+
+            _size = now_sp["size"]
+            _area = now_sp["area"]
+            _x = np.concatenate([now_sp["feature_shape"], now_sp["feature_texture"]], axis=0)
+
+            x.append(_x)
+            size.append([_size])
+            area.append(_area)
+            pos.append([_area[1] - _area[0], _area[3] - _area[2]])
+            pass
+
+        # Data for Batch: adjacency_info
+        edge_index, edge_w = [], []
+        for edge_i in range(len(adjacency_info)):
+            edge_index.append([adjacency_info[edge_i][0], adjacency_info[edge_i][1]])
+            edge_w.append([adjacency_info[edge_i][2]])
+            pass
+        edge_index = np.transpose(edge_index, axes=(1, 0))
+
+        # Data for Batch: Data
+        g_data = Data(x=torch.from_numpy(np.asarray(x)), edge_index=torch.from_numpy(edge_index),
+                      y=torch.tensor([target]), pos=torch.from_numpy(np.asarray(pos)),
+                      area=torch.from_numpy(np.asarray(area)), size=torch.from_numpy(np.asarray(size)),
+                      edge_w=torch.from_numpy(np.asarray(edge_w)))
+        return g_data
+
+    @staticmethod
+    def collate_fn(batch_data):
+        return Batch.from_data_list(batch_data)
 
     pass
 
 
 if __name__ == '__main__':
 
-    # 1. Data
-    data_root_path = 'D:\data\CIFAR'
-    transform_train = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip()])
-    train_set = MyCIFAR10(root=data_root_path, train=True, download=True, transform=transform_train)
-    img, target = train_set.__getitem__(0)
+    _device = Runner.gpu_setup(use_gpu=False, gpu_id="0")
 
-    # 2. Model
-    use_gpu = False
-    gpu_id = "0"
-    device = Runner.gpu_setup(use_gpu, gpu_id)
-    model_file_name = "ckpt\\norm3\\epoch_1.pkl"
-    model = EmbeddingNetCIFARSmallNorm3
-    model = model().to(device)
-    model.load_state_dict(torch.load(model_file_name), strict=False)
+    my_dataset = MyDataset(data_root_path='D:\data\CIFAR', is_train=True, device=_device,
+                           ve_model_file_name="ckpt\\norm3\\epoch_1.pkl", VEModel=EmbeddingNetCIFARSmallNorm3,
+                           image_size=32, sp_size=4, sp_ve_size=6)
 
-    # 3. Super Pixel
-    ds_image_size = 32
-    sp_size = 4
-    sp_data_size = 6
-    now_data_list, now_shape_list = [], []
-    deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=ds_image_size, super_pixel_size=sp_size)
-    now_segment, now_super_pixel_info, now_adjacency_info = deal_super_pixel.run()
-    now_node_num = len(now_super_pixel_info)
-    for key in now_super_pixel_info:
-        _now_data = now_super_pixel_info[key]["data2"] / 255
-        _now_data = cv2.resize(_now_data, (sp_data_size, sp_data_size), interpolation=cv2.INTER_NEAREST)
-        _now_shape = now_super_pixel_info[key]["label"] / 1
-        _now_shape = cv2.resize(_now_shape, (sp_data_size, sp_data_size), interpolation=cv2.INTER_NEAREST)
-        now_data_list.append(_now_data)
-        now_shape_list.append(np.expand_dims(_now_shape, axis=-1))
-        pass
-    net_data = np.transpose(now_data_list, axes=(0, 3, 1, 2))
-    net_shape = np.transpose(now_shape_list, axes=(0, 3, 1, 2))
-    sp_result = {"segment": now_segment, "node": now_super_pixel_info, "edge": now_adjacency_info}
+    data_loader = DataLoader(my_dataset, batch_size=4, shuffle=True, num_workers=2, collate_fn=my_dataset.collate_fn)
 
-    # 4. Visual Embedding
-    net_data_tensor = torch.from_numpy(net_data).float().to(device)
-    shape_feature, texture_feature, _, _ = model.forward(net_data_tensor)
-    shape_feature, texture_feature = shape_feature.detach().numpy(), texture_feature.detach().numpy()
-    for sp_i in range(now_node_num):
-        sp_result["node"][sp_i]["feature_shape"] = shape_feature[sp_i]
-        sp_result["node"][sp_i]["feature_texture"] = texture_feature[sp_i]
+    for i, data in enumerate(data_loader):
+        Tools.print("{}".format(i))
         pass
 
     pass

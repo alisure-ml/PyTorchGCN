@@ -727,11 +727,11 @@ class VisualEmbeddingVisualization(object):
                 for sp_i in range(len(now_texture)):
                     now_area_sp_i = now_node[sp_i]["area"]
                     # 形状
-                    now_shape_sp_i = np.squeeze(now_node[sp_i]["label"], axis=-1)
-                    # now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
-                    #                                                        now_area_sp_i[1] - now_area_sp_i[0] + 1),
-                    #                             interpolation=cv2.INTER_NEAREST)
-                    # now_shape_sp_i[now_shape_sp_i < 0.2] = 0
+                    # now_shape_sp_i = np.squeeze(now_node[sp_i]["label"], axis=-1)
+                    now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
+                                                                           now_area_sp_i[1] - now_area_sp_i[0] + 1),
+                                                interpolation=cv2.INTER_NEAREST)
+                    now_shape_sp_i[now_shape_sp_i < 0.2] = 0
 
                     # 纹理
                     now_texture_sp_i = cv2.resize(now_texture[sp_i], (now_area_sp_i[3] - now_area_sp_i[2] + 1,

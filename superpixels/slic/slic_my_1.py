@@ -55,6 +55,13 @@ def demo2(image_name="input\\3.jpg", image_size=None, pixel_size=8, sigma=1, max
     image_size = 224 if image_size is None else image_size
     image = cv2.resize(image, (image_size, image_size))
 
+
+    fig = plt.figure("image")
+    ax = fig.add_subplot(1, 1, 1)
+    ax.imshow(image)
+    plt.axis("off")
+    plt.show()
+
     n_segment = (image_size // pixel_size) ** 2
 
     start = time.time()
@@ -76,5 +83,5 @@ if __name__ == '__main__':
     # demo_multi(image_name="input\\11.jpg", n_segments=[2 ** (i + 1) for i in range(8)])
     # demo(image_name="input\\11.jpg", n_segment=128, sigma=2, max_iter=10)
     # demo2(image_name="input\\1.jpg", image_size=224, pixel_size=14, sigma=1, max_iter=2)
-    demo2(image_name="input\\1.jpg", image_size=224, pixel_size=14, sigma=1, max_iter=5)
+    demo2(image_name="input\\2.jpg", image_size=224, pixel_size=14, sigma=1, max_iter=5)
     pass
