@@ -28,7 +28,7 @@ class MyDataset(Dataset):
         # 2. Model
         self.device = torch.device("cpu") if device is None else device
         self.ve_model_file_name = ve_model_file_name
-        self.ve_model = VEModel().to(self.device)
+        self.ve_model = VEModel(is_train=False).to(self.device)
         self.ve_model.load_state_dict(torch.load(self.ve_model_file_name), strict=False)
 
         # 3. Super Pixel

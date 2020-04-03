@@ -456,8 +456,10 @@ class EmbeddingNetCIFARSmallNorm2(nn.Module):
 
 class EmbeddingNetCIFARSmallNorm3(nn.Module):
 
-    def __init__(self):
+    def __init__(self, is_train=True):
         super().__init__()
+        self.is_train = is_train
+
         self.input_size = 6
         self.embedding_size = 16
         self.has_bn = False
@@ -495,6 +497,9 @@ class EmbeddingNetCIFARSmallNorm3(nn.Module):
         pass
 
     def forward(self, x):
+        return self.forward_train(x) if self.is_train else self.forward_inference(x)
+
+    def forward_train(self, x):
         e1 = self.pool1(self.conv12(self.conv11(x)))
         e2 = self.conv22(self.conv21(e1))
 
@@ -514,6 +519,17 @@ class EmbeddingNetCIFARSmallNorm3(nn.Module):
         texture_out = self.sigmoid(self.texture_out(self.texture_conv32(self.texture_conv31(texture_d2))))
 
         return shape_feature, texture_feature, shape_out, texture_out
+
+    def forward_inference(self, x):
+        e1 = self.pool1(self.conv12(self.conv11(x)))
+        e2 = self.conv22(self.conv21(e1))
+
+        shape_norm = self.norm(self.conv_shape2(self.conv_shape1(e2)))
+        texture_norm = self.norm(self.conv_texture2(self.conv_texture1(e2)))
+
+        shape_feature = shape_norm.view(shape_norm.size()[0], -1)
+        texture_feature = texture_norm.view(texture_norm.size()[0], -1)
+        return shape_feature, texture_feature
 
     pass
 
