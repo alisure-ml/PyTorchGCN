@@ -105,7 +105,7 @@ class DealSuperPixel(object):
 
     @staticmethod
     def _softmax_of_distance(distance):
-        distance = np.asarray(distance) + 1e-6
+        distance = np.asarray(distance) + 1
         distance = np.sum(distance) / distance
         exp_distance= np.exp(distance)
         return exp_distance / np.sum(exp_distance, axis=0)

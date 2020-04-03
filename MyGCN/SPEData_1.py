@@ -60,7 +60,7 @@ class MyDataset(Dataset):
         net_data = np.transpose(_now_data_list, axes=(0, 3, 1, 2))
 
         # 4. Visual Embedding
-        shape_feature, texture_feature, _, _ = self.ve_model.forward(torch.from_numpy(net_data).float().to(self.device))
+        shape_feature, texture_feature = self.ve_model.forward(torch.from_numpy(net_data).float().to(self.device))
         shape_feature, texture_feature = shape_feature.detach().numpy(), texture_feature.detach().numpy()
         for sp_i in range(len(super_pixel_info)):
             super_pixel_info[sp_i]["feature_shape"] = shape_feature[sp_i]
@@ -112,7 +112,7 @@ if __name__ == '__main__':
                            ve_model_file_name="ckpt\\norm3\\epoch_1.pkl", VEModel=EmbeddingNetCIFARSmallNorm3,
                            image_size=32, sp_size=4, sp_ve_size=6)
 
-    data_loader = DataLoader(my_dataset, batch_size=4, shuffle=True, num_workers=2, collate_fn=my_dataset.collate_fn)
+    data_loader = DataLoader(my_dataset, batch_size=32, shuffle=True, num_workers=2, collate_fn=my_dataset.collate_fn)
 
     for i, data in enumerate(data_loader):
         Tools.print("{}".format(i))
