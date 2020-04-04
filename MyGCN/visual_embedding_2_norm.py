@@ -123,6 +123,12 @@ class DealSuperPixel(object):
 
 class MyCIFAR10(datasets.CIFAR10):
 
+    # def __init__(self, root, train, transform):
+    #     super().__init__(root=root, train=train, transform=transform)
+    #     self.data = self.data[:10]
+    #     self.targets = self.targets[:10]
+    #     pass
+
     def __getitem__(self, index):
         img, target = super().__getitem__(index)
         return np.asarray(img), target

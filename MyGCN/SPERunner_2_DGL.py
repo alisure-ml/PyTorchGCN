@@ -1,6 +1,7 @@
 import os
 import cv2
 import dgl
+import glob
 import torch
 import numpy as np
 import torch.nn as nn
@@ -352,8 +353,8 @@ class RunnerSPE(object):
             epoch_loss += loss.detach().item()
             epoch_train_acc += self.accuracy(batch_scores, batch_labels)
 
-            Tools.print("{}-{} loss={:4f}/{:4f} acc={:4.f}".format(
-                i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item()), epoch_train_acc/nb_data)
+            Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
+                i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
             pass
 
         epoch_train_acc /= nb_data
@@ -363,30 +364,38 @@ class RunnerSPE(object):
     def test(self):
         self.model.eval()
 
+        Tools.print()
         epoch_test_loss, epoch_test_acc, nb_data = 0, 0, 0
         with torch.no_grad():
-            for _, (batch_graphs, batch_labels,
-                    batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(data_loader):
+            for i, (batch_graphs, batch_labels,
+                    batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(self.test_loader):
                 batch_nodes_feat = batch_graphs.ndata['feat'].to(self.device)
                 batch_edges_feat = batch_graphs.edata['feat'].to(self.device)
-                batch_labels = batch_labels.to(self.device)
+                batch_labels = batch_labels.long().to(self.device)
                 batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.device)
                 batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.device)
 
                 batch_scores = self.model.forward(batch_graphs, batch_nodes_feat, batch_edges_feat,
                                                   batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
-                loss = self.loss_ce(batch_scores, batch_labels)
+                loss = self.loss(batch_scores, batch_labels)
 
                 nb_data += batch_labels.size(0)
                 epoch_test_loss += loss.detach().item()
                 epoch_test_acc += self.accuracy(batch_scores, batch_labels)
-                pass
 
-            epoch_test_loss /= (len(data_loader) + 1)
-            epoch_test_acc /= nb_data
+                Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
+                    i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(), epoch_test_acc/nb_data))
+                pass
             pass
 
+        epoch_test_loss /= (len(self.test_loader) + 1)
+        epoch_test_acc /= nb_data
         return epoch_test_loss, epoch_test_acc
+
+    def load_model(self, model_file_name):
+        self.model.load_state_dict(torch.load(model_file_name), strict=False)
+        Tools.print('Load Model: {}'.format(model_file_name))
+        pass
 
     @staticmethod
     def save_checkpoint(model, root_ckpt_dir, epoch):
@@ -415,6 +424,9 @@ class RunnerSPE(object):
 if __name__ == '__main__':
 
     runner = RunnerSPE()
+    runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
+    _test_loss, _test_acc = runner.test()
+    Tools.print('Test: {:.4f}/{:.4f}'.format(_test_acc, _test_loss))
     runner.train(10)
 
     pass
