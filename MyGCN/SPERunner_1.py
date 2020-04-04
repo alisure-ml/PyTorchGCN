@@ -22,7 +22,7 @@ def gpu_setup(use_gpu, gpu_id):
         Tools.print('Cuda available with GPU: {}'.format(torch.cuda.get_device_name(0)))
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-        device = torch.device("cuda")
+        device = torch.device("cuda:{}".format(gpu_id))
     else:
         Tools.print()
         Tools.print('Cuda not available')

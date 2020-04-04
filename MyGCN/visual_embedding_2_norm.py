@@ -133,7 +133,7 @@ class MyCIFAR10(datasets.CIFAR10):
 
 class DataCIFAR10(object):
 
-    def __init__(self, train_batch=32, test_batch=32, data_root_path='D:\data\CIFAR'):
+    def __init__(self, train_batch=32, test_batch=32, data_root_path='/mnt/4T/Data/cifar/cifar-10'):
         # Data
         transform_train = transforms.Compose([transforms.RandomCrop(32, padding=4), transforms.RandomHorizontalFlip()])
         # transform_test = transforms.Compose([transforms.ToTensor()])
@@ -536,7 +536,8 @@ class EmbeddingNetCIFARSmallNorm3(nn.Module):
 
 class Runner(object):
 
-    def __init__(self, root_ckpt_dir, model=EmbeddingNetCIFAR, use_gpu=False, gpu_id="0"):
+    def __init__(self, root_ckpt_dir, model=EmbeddingNetCIFAR,
+                 data_root_path='/mnt/4T/Data/cifar/cifar-10', use_gpu=False, gpu_id="0"):
         self.root_ckpt_dir = root_ckpt_dir
         self.device = self.gpu_setup(use_gpu, gpu_id)
 
@@ -549,7 +550,7 @@ class Runner(object):
 
         self.loss_shape = nn.BCELoss()
         self.loss_texture = nn.BCELoss()
-        self.data_CIFAR10 = DataCIFAR10(train_batch=64, test_batch=32)
+        self.data_CIFAR10 = DataCIFAR10(train_batch=64, test_batch=32, data_root_path=data_root_path)
         pass
 
     def train(self, epochs=100):
@@ -654,7 +655,7 @@ class Runner(object):
             Tools.print('Cuda available with GPU: {}'.format(torch.cuda.get_device_name(0)))
             os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
             os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
-            device = torch.device("cuda")
+            device = torch.device("cuda:{}".format(gpu_id))
         else:
             Tools.print()
             Tools.print('Cuda not available')
@@ -673,11 +674,12 @@ class Runner(object):
 
 class VisualEmbeddingVisualization(object):
 
-    def __init__(self, model_file_name, model=EmbeddingNetCIFAR, use_gpu=False, gpu_id="0"):
+    def __init__(self, model_file_name, model=EmbeddingNetCIFAR,
+                 data_root_path='/mnt/4T/Data/cifar/cifar-10', use_gpu=False, gpu_id="0"):
         self.model_file_name = model_file_name
         self.device = Runner.gpu_setup(use_gpu, gpu_id)
 
-        self.data_CIFAR10 = DataCIFAR10(train_batch=64, test_batch=32)
+        self.data_CIFAR10 = DataCIFAR10(train_batch=64, test_batch=32, data_root_path=data_root_path)
 
         self.model = model().to(self.device)
         self.model.load_state_dict(torch.load(self.model_file_name), strict=False)
@@ -776,11 +778,12 @@ class VisualEmbeddingVisualization(object):
 
 class VisualEmbedding(object):
 
-    def __init__(self, model_file_name, model=EmbeddingNetCIFAR, use_gpu=False, gpu_id="0"):
+    def __init__(self, model_file_name, model=EmbeddingNetCIFAR,
+                 data_root_path='/mnt/4T/Data/cifar/cifar-10', use_gpu=False, gpu_id="0"):
         self.model_file_name = model_file_name
         self.device = Runner.gpu_setup(use_gpu, gpu_id)
 
-        self.data_CIFAR10 = DataCIFAR10(train_batch=64, test_batch=32)
+        self.data_CIFAR10 = DataCIFAR10(train_batch=64, test_batch=32, data_root_path=data_root_path)
 
         self.model = model().to(self.device)
         self.model.load_state_dict(torch.load(self.model_file_name), strict=False)
@@ -829,17 +832,20 @@ class VisualEmbedding(object):
 
 if __name__ == '__main__':
     ############################################################################################
-    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\norm3"), model=EmbeddingNetCIFARSmallNorm3)
+    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\norm3"),
+    #                 data_root_path='D:\data\CIFAR', model=EmbeddingNetCIFARSmallNorm3)
+    runner = Runner(root_ckpt_dir=Tools.new_dir("./ckpt/norm3"),
+                    model=EmbeddingNetCIFARSmallNorm3, use_gpu=True, gpu_id="1")
     # runner.load_model("ckpt\\norm3\\epoch_1.pkl")
-    # runner.train(5)
+    runner.train(50)
     ############################################################################################
     # visual_embedding_visualization = VisualEmbeddingVisualization(
     #     model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding_visualization.show_train()
     ############################################################################################
-    visual_embedding_visualization = VisualEmbeddingVisualization(
-        model_file_name="ckpt\\norm3\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm3)
-    visual_embedding_visualization.reconstruct_image()
+    # visual_embedding_visualization = VisualEmbeddingVisualization(
+    #     model_file_name="ckpt\\norm3\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm3)
+    # visual_embedding_visualization.reconstruct_image()
     ############################################################################################
     # visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding.run()
