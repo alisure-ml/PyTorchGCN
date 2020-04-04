@@ -93,7 +93,7 @@ class MyDataset(Dataset):
 
             _size = now_sp["size"]
             _area = now_sp["area"]
-            _x = np.concatenate([now_sp["feature_shape"], now_sp["feature_texture"], _size], axis=0)
+            _x = np.concatenate([now_sp["feature_shape"], now_sp["feature_texture"], [_size]], axis=0)
 
             x.append(_x)
             size.append([_size])
@@ -105,15 +105,16 @@ class MyDataset(Dataset):
         edge_index, edge_w = [], []
         for edge_i in range(len(adjacency_info)):
             edge_index.append([adjacency_info[edge_i][0], adjacency_info[edge_i][1]])
-            edge_w.append([adjacency_info[edge_i][2], adjacency_info[edge_i][2]])
+            # edge_w.append([adjacency_info[edge_i][2], adjacency_info[edge_i][2]])
+            edge_w.append(adjacency_info[edge_i][2])
             pass
         edge_index = np.transpose(edge_index, axes=(1, 0))
 
         # Data for Batch: Data
-        g_data = Data(x=torch.from_numpy(np.asarray(x)), edge_index=torch.from_numpy(edge_index),
+        g_data = Data(x=torch.from_numpy(np.asarray(x)).float(), edge_index=torch.from_numpy(edge_index),
                       y=torch.tensor([target]), pos=torch.from_numpy(np.asarray(pos)),
                       area=torch.from_numpy(np.asarray(area)), size=torch.from_numpy(np.asarray(size)),
-                      edge_w=torch.from_numpy(np.asarray(edge_w)))
+                      edge_w=torch.from_numpy(np.asarray(edge_w)).float())
         return g_data
 
     @staticmethod
@@ -150,10 +151,10 @@ class GCN(torch.nn.Module):
     def forward(self, data):
         embedding_x = self.embedding_h(data.x)
 
-        gcn_conv1 = self.relu(self.conv1(embedding_x, data.edge_index, data.edge_w))
-        gcn_conv2 = self.relu(self.conv2(gcn_conv1, data.edge_index, data.edge_w))
-        gcn_conv3 = self.relu(self.conv3(gcn_conv2, data.edge_index, data.edge_w))
-        gcn_conv4 = self.relu(self.conv4(gcn_conv3, data.edge_index, data.edge_w))
+        gcn_conv1 = self.relu(self.conv1(embedding_x, data.edge_index))
+        gcn_conv2 = self.relu(self.conv2(gcn_conv1, data.edge_index))
+        gcn_conv3 = self.relu(self.conv3(gcn_conv2, data.edge_index))
+        gcn_conv4 = self.relu(self.conv4(gcn_conv3, data.edge_index))
 
         aggr_out = global_mean_pool(gcn_conv4, data.batch)
 
