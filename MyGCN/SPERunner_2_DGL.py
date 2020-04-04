@@ -226,6 +226,55 @@ class GCNNet(nn.Module):
     pass
 
 
+class MLPNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.L = 4
+        self.in_dim = 33
+        self.hidden_dim = 168
+        self.n_classes = 10
+        self.dropout = 0.0
+        self.in_feat_dropout = 0.0
+        self.gated = False
+
+        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
+
+        feat_mlp_modules = [nn.Linear(self.in_dim, self.hidden_dim, bias=True), nn.ReLU(), nn.Dropout(self.dropout)]
+        for _ in range(net_params.L - 1):  # L=4
+            feat_mlp_modules.append(nn.Linear(self.hidden_dim, self.hidden_dim, bias=True))
+            feat_mlp_modules.append(nn.ReLU())
+            feat_mlp_modules.append(nn.Dropout(self.dropout))  # 168, 168
+            pass
+        self.feat_mlp = nn.Sequential(*feat_mlp_modules)
+
+        if self.gated:
+            self.gates = nn.Linear(self.hidden_dim, self.hidden_dim, bias=True)  # 168, 168
+            pass
+
+        self.readout_mlp = MLPReadout(self.hidden_dim, self.n_classes)  # MLP: 3
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.in_feat_dropout(nodes_feat)
+        h = self.feat_mlp(h)
+
+        if self.gated:
+            h = torch.sigmoid(self.gates(h)) * h
+            graphs.ndata['h'] = h
+            hg = dgl.sum_nodes(graphs, 'h')
+        else:
+            graphs.ndata['h'] = h
+            hg = dgl.mean_nodes(graphs, 'h')
+            pass
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class RunnerSPE(object):
 
     def __init__(self):
@@ -303,8 +352,8 @@ class RunnerSPE(object):
             epoch_loss += loss.detach().item()
             epoch_train_acc += self.accuracy(batch_scores, batch_labels)
 
-            Tools.print("{}-{} loss={:4f}/{:4f}".format(
-                i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item()))
+            Tools.print("{}-{} loss={:4f}/{:4f} acc={:4.f}".format(
+                i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item()), epoch_train_acc/nb_data)
             pass
 
         epoch_train_acc /= nb_data
