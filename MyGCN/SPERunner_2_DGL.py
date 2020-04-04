@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from skimage import segmentation
 from alisuretool.Tools import Tools
 from layers.gcn_layer import GCNLayer
-import torch_geometric.transforms as T
 from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
@@ -34,7 +33,7 @@ def gpu_setup(use_gpu, gpu_id):
 
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True, device=None,
+    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True,
                  ve_model_file_name="ckpt\\norm3\\epoch_1.pkl", VEModel=EmbeddingNetCIFARSmallNorm3,
                  image_size=32, sp_size=4, sp_ve_size=6):
         super().__init__()
@@ -47,7 +46,7 @@ class MyDataset(Dataset):
         self.ve_data_set = MyCIFAR10(root=self.data_root_path, train=self.is_train, transform=self.ve_transform)
 
         # 2. Model
-        self.device = torch.device("cpu") if device is None else device
+        self.device = torch.device("cpu")
         self.ve_model_file_name = ve_model_file_name
         self.ve_model = VEModel(is_train=False).to(self.device)
         self.ve_model.load_state_dict(torch.load(self.ve_model_file_name), strict=False)
@@ -243,7 +242,7 @@ class MLPNet(nn.Module):
         self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
 
         feat_mlp_modules = [nn.Linear(self.in_dim, self.hidden_dim, bias=True), nn.ReLU(), nn.Dropout(self.dropout)]
-        for _ in range(net_params.L - 1):  # L=4
+        for _ in range(self.L - 1):  # L=4
             feat_mlp_modules.append(nn.Linear(self.hidden_dim, self.hidden_dim, bias=True))
             feat_mlp_modules.append(nn.ReLU())
             feat_mlp_modules.append(nn.Dropout(self.dropout))  # 168, 168
@@ -278,32 +277,33 @@ class MLPNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self):
-        self.device = gpu_setup(use_gpu=False, gpu_id="0")
-
-        _data_root_path = 'D:\data\CIFAR'
-        _ve_model_file_name = "ckpt\\norm3\\epoch_1.pkl"
-        _VEModel = EmbeddingNetCIFARSmallNorm3
+    def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10',
+                 ve_model_file_name="./ckpt/norm3/epoch_7.pkl",
+                 root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
+        self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         _image_size = 32
         _sp_size = 4
         _sp_ve_size = 6
-        self.root_ckpt_dir = Tools.new_dir("ckpt2\\norm3")
+        _VEModel = EmbeddingNetCIFARSmallNorm3
+        self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=_data_root_path, is_train=True, device=self.device,
-                                       ve_model_file_name=_ve_model_file_name, VEModel=_VEModel,
+        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True,
+                                       ve_model_file_name=ve_model_file_name, VEModel=_VEModel,
                                        image_size=_image_size, sp_size=_sp_size, sp_ve_size=_sp_ve_size)
-        self.test_dataset = MyDataset(data_root_path=_data_root_path, is_train=False, device=self.device,
-                                      ve_model_file_name=_ve_model_file_name, VEModel=_VEModel,
+        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False,
+                                      ve_model_file_name=ve_model_file_name, VEModel=_VEModel,
                                       image_size=_image_size, sp_size=_sp_size, sp_ve_size=_sp_ve_size)
 
         self.train_loader = DataLoader(self.train_dataset, batch_size=64, shuffle=True,
-                                       num_workers=2, collate_fn=self.train_dataset.collate_fn)
+                                       num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
         self.test_loader = DataLoader(self.test_dataset, batch_size=64, shuffle=False,
-                                      num_workers=2, collate_fn=self.test_dataset.collate_fn)
+                                      num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = GCNNet().to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
+        self.model = gcn_model().to(self.device)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
         self.loss = nn.CrossEntropyLoss().to(self.device)
+        # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
+        #                                                             factor=0.5, patience=5, verbose=True)
         pass
 
     def train(self, epochs):
@@ -311,9 +311,21 @@ class RunnerSPE(object):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
 
-            epoch_loss, epoch_train_acc = self.train_epoch(epoch)
+            if epoch == 30:
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = 0.0005
+                pass
+
+            if epoch == 60:
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = 0.0001
+                pass
+
+            epoch_loss, epoch_train_acc = self.train_epoch()
             self.save_checkpoint(self.model, self.root_ckpt_dir, epoch)
             epoch_test_loss, epoch_test_acc = self.test()
+
+            # self.scheduler.step(epoch_loss)
 
             Tools.print('Epoch: {:02d}, lr={:.4f}, Train: {:.4f}/{:.4f} Test: {:.4f}/{:.4f}'.format(
                 epoch, self.optimizer.param_groups[0]['lr'],
@@ -321,17 +333,7 @@ class RunnerSPE(object):
             pass
         pass
 
-    def train_epoch(self, epoch):
-        if epoch == 3:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.001
-            pass
-
-        if epoch == 6:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.0001
-            pass
-
+    def train_epoch(self, print_freq=100):
         self.model.train()
         epoch_loss, epoch_train_acc, nb_data = 0, 0, 0
         for i, (batch_graphs, batch_labels,
@@ -353,15 +355,17 @@ class RunnerSPE(object):
             epoch_loss += loss.detach().item()
             epoch_train_acc += self.accuracy(batch_scores, batch_labels)
 
-            Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
+            if i % print_freq == 0:
+                Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
+                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
+                pass
             pass
 
         epoch_train_acc /= nb_data
         epoch_loss /= (len(self.train_loader) + 1)
         return epoch_loss, epoch_train_acc
 
-    def test(self):
+    def test(self, print_freq=50):
         self.model.eval()
 
         Tools.print()
@@ -383,8 +387,10 @@ class RunnerSPE(object):
                 epoch_test_loss += loss.detach().item()
                 epoch_test_acc += self.accuracy(batch_scores, batch_labels)
 
-                Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                    i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(), epoch_test_acc/nb_data))
+                if i % print_freq == 0:
+                    Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
+                        i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(), epoch_test_acc/nb_data))
+                    pass
                 pass
             pass
 
@@ -422,11 +428,29 @@ class RunnerSPE(object):
 
 
 if __name__ == '__main__':
+    # _gcn_model = GCNNet
+    # _gcn_model = MLPNet
+    # _data_root_path = 'D:\data\CIFAR'
+    # _ve_model_file_name = "ckpt\\norm3\\epoch_1.pkl"
+    # _root_ckpt_dir = "ckpt2\\norm3\\{}".format(_gcn_model)
+    # _num_workers = 2
+    # _use_gpu = False
+    # _gpu_id = "1"
 
-    runner = RunnerSPE()
-    runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
-    _test_loss, _test_acc = runner.test()
-    Tools.print('Test: {:.4f}/{:.4f}'.format(_test_acc, _test_loss))
-    runner.train(10)
+    # _gcn_model = GCNNet
+    _gcn_model = MLPNet
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
+    _root_ckpt_dir = "./ckpt2/dgl/norm3/{}".format("MLPNet")
+    _num_workers = 8
+    _use_gpu = True
+    _gpu_id = "1"
+
+    runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, ve_model_file_name=_ve_model_file_name,
+                       root_ckpt_dir=_root_ckpt_dir, num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
+    # runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
+    # _test_loss, _test_acc = runner.test()
+    # Tools.print('Test: {:.4f}/{:.4f}'.format(_test_acc, _test_loss))
+    runner.train(100)
 
     pass
