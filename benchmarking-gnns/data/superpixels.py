@@ -9,6 +9,7 @@ from alisuretool.Tools import Tools
 from scipy.spatial.distance import cdist
 
 
+# 通过坐标和位置计算邻接矩阵：N*N
 def compute_adjacency_matrix_images(coord, feat, use_feat=True, kth=8):
 
     def sigma(dists, kth=8):
@@ -42,6 +43,7 @@ def compute_adjacency_matrix_images(coord, feat, use_feat=True, kth=8):
     return A
 
 
+# 通过邻接矩阵计算K近邻以及权重：N*N
 def compute_edges_list(A, kth=8 + 1):
     # Get k-similar neighbor indices for each node
     num_nodes = A.shape[0]

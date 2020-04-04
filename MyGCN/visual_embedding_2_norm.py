@@ -46,8 +46,7 @@ class DealSuperPixel(object):
             y_min, y_max = _now_where[:, 1].min(), _now_where[:, 1].max()
 
             # 大小
-            sp_i_size = len(_now_where) / (self.super_pixel_size * self.super_pixel_size)
-            assert sp_i_size > 0
+            sp_i_size = len(_now_where) / (self.super_pixel_size * self.super_pixel_size) - 1
             # 坐标
             super_pixel_area = (x_min, x_max, y_min, y_max)
             # 是否属于超像素
