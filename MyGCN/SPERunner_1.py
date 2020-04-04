@@ -38,6 +38,7 @@ class RunnerSPE(object):
 
         self.model = GCN().to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01)
+        self.loss = nn.CrossEntropyLoss().to(self.device)
         pass
 
     def train(self, epochs):
@@ -66,7 +67,8 @@ class RunnerSPE(object):
             data = data.to(self.device)
 
             self.optimizer.zero_grad()
-            loss = F.nll_loss(self.model(data), data.y)
+            read_out3 = self.model(data)
+            loss = self.loss(read_out3, data.y)
             loss.backward()
             self.optimizer.step()
 

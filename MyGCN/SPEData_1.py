@@ -75,7 +75,7 @@ class MyDataset(Dataset):
 
             _size = now_sp["size"]
             _area = now_sp["area"]
-            _x = np.concatenate([now_sp["feature_shape"], now_sp["feature_texture"]], axis=0)
+            _x = np.concatenate([now_sp["feature_shape"], now_sp["feature_texture"], _size], axis=0)
 
             x.append(_x)
             size.append([_size])
@@ -87,7 +87,7 @@ class MyDataset(Dataset):
         edge_index, edge_w = [], []
         for edge_i in range(len(adjacency_info)):
             edge_index.append([adjacency_info[edge_i][0], adjacency_info[edge_i][1]])
-            edge_w.append([adjacency_info[edge_i][2]])
+            edge_w.append([adjacency_info[edge_i][2], adjacency_info[edge_i][2]])
             pass
         edge_index = np.transpose(edge_index, axes=(1, 0))
 
