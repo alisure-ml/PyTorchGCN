@@ -29,7 +29,7 @@ class GATNet(nn.Module):
                                     net_params.out_dim, 1, net_params.dropout,
                                     net_params.graph_norm, net_params.batch_norm, net_params.residual))
 
-        self.MLP_layer = MLPReadout(net_params.out_dim, net_params.n_classes)
+        self.readout_mlp = MLPReadout(net_params.out_dim, net_params.n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):

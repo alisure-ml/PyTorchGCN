@@ -8,12 +8,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from skimage import segmentation
 from alisuretool.Tools import Tools
+from layers.gat_layer import GATLayer
 from layers.gcn_layer import GCNLayer
 from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from layers.mlp_readout_layer import MLPReadout
 from torch.utils.data import Dataset, DataLoader
+from layers.gated_gcn_layer import GatedGCNLayer
+from layers.graphsage_layer import GraphSageLayer
 from visual_embedding_2_norm import DealSuperPixel, MyCIFAR10, EmbeddingNetCIFARSmallNorm3
 
 
@@ -275,6 +278,172 @@ class MLPNet(nn.Module):
     pass
 
 
+class GraphSageNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.L = 4
+        self.out_dim = 108
+        self.residual = True
+        self.in_dim = 33
+        self.hidden_dim = 108
+        self.n_classes = 10
+        self.in_feat_dropout = 0.0
+        self.sage_aggregator = "meanpool"
+        self.readout = "mean"
+        self.dropout = 0.0
+
+        self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim)
+        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
+
+        self.layers = nn.ModuleList([GraphSageLayer(self.hidden_dim, self.hidden_dim, F.relu, self.dropout,
+                                                    self.sage_aggregator, self.residual) for _ in range(self.L - 1)])
+        self.layers.append(GraphSageLayer(self.hidden_dim, self.out_dim, F.relu,
+                                          self.dropout, self.sage_aggregator, self.residual))
+        self.readout_mlp = MLPReadout(self.out_dim, self.n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        h = self.in_feat_dropout(h)
+        for conv in self.layers:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = self.readout_fn(self.readout, graphs, 'h')
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    @staticmethod
+    def readout_fn(readout, graphs, h):
+        if readout == "sum":
+            hg = dgl.sum_nodes(graphs, h)
+        elif readout == "max":
+            hg = dgl.max_nodes(graphs, h)
+        elif readout == "mean":
+            hg = dgl.mean_nodes(graphs, h)
+        else:
+            hg = dgl.mean_nodes(graphs, h)  # default readout is mean nodes
+        return hg
+
+    pass
+
+
+class GATNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.L = 4
+        self.out_dim = 152
+        self.residual = True
+        self.readout = "mean"
+        self.in_dim = 33
+        self.hidden_dim = 19
+        self.n_heads = 8
+        self.n_classes = 10
+        self.in_feat_dropout = 0.0
+        self.dropout = 0.0
+        self.graph_norm = True
+        self.batch_norm = True
+
+        self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim * self.n_heads)
+        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
+
+        self.layers = nn.ModuleList([GATLayer(self.hidden_dim * self.n_heads, self.hidden_dim, self.n_heads,
+                                              self.dropout, self.graph_norm, self.batch_norm,
+                                              self.residual) for _ in range(self.L - 1)])
+        self.layers.append(GATLayer(self.hidden_dim * self.n_heads, self.out_dim, 1, self.dropout,
+                                    self.graph_norm, self.batch_norm, self.residual))
+
+        self.readout_mlp = MLPReadout(self.out_dim, self.n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        h = self.in_feat_dropout(h)
+        for conv in self.layers:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = self.readout_fn(self.readout, graphs, 'h')
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    @staticmethod
+    def readout_fn(readout, graphs, h):
+        if readout == "sum":
+            hg = dgl.sum_nodes(graphs, h)
+        elif readout == "max":
+            hg = dgl.max_nodes(graphs, h)
+        elif readout == "mean":
+            hg = dgl.mean_nodes(graphs, h)
+        else:
+            hg = dgl.mean_nodes(graphs, h)  # default readout is mean nodes
+        return hg
+
+    pass
+
+
+class GatedGCNNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.in_feat_dropout = 0.0
+        self.dropout = 0.0
+
+        self.L = 4
+        self.in_dim = 33
+        self.in_dim_edge = 1
+        self.out_dim = 70
+        self.residual = True
+        self.readout = "mean"
+        self.hidden_dim = 70
+        self.graph_norm = True
+        self.batch_norm = True
+        self.device = device
+
+        self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim)
+        self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dim)
+        self.layers = nn.ModuleList([GatedGCNLayer(self.hidden_dim, self.hidden_dim, self.dropout, self.graph_norm,
+                                                   self.batch_norm, self.residual) for _ in range(self.L - 1)])
+        self.layers.append(GatedGCNLayer(self.hidden_dim, self.out_dim, self.dropout,
+                                         self.graph_norm, self.batch_norm, self.residual))
+        self.readout_mlp = MLPReadout(self.out_dim, self.n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        # input embedding
+        h = self.embedding_h(nodes_feat)
+        e = self.embedding_e(edges_feat)
+
+        # convnets
+        for conv in self.layers:
+            h, e = conv(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
+            pass
+
+        graphs.ndata['h'] = h
+        hg = self.readout_fn(self.readout, graphs, 'h')
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    @staticmethod
+    def readout_fn(readout, graphs, h):
+        if readout == "sum":
+            hg = dgl.sum_nodes(graphs, h)
+        elif readout == "max":
+            hg = dgl.max_nodes(graphs, h)
+        elif readout == "mean":
+            hg = dgl.mean_nodes(graphs, h)
+        else:
+            hg = dgl.mean_nodes(graphs, h)  # default readout is mean nodes
+        return hg
+
+    pass
+
+
 class RunnerSPE(object):
 
     def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10',
@@ -302,8 +471,8 @@ class RunnerSPE(object):
         self.model = gcn_model().to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
         self.loss = nn.CrossEntropyLoss().to(self.device)
-        # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
-        #                                                             factor=0.5, patience=5, verbose=True)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
+                                                                    factor=0.5, patience=5, verbose=True)
         pass
 
     def train(self, epochs):
@@ -311,21 +480,21 @@ class RunnerSPE(object):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
 
-            if epoch == 30:
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = 0.0005
-                pass
-
-            if epoch == 60:
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = 0.0001
-                pass
+            # if epoch == 20:
+            #     for param_group in self.optimizer.param_groups:
+            #         param_group['lr'] = 0.0005
+            #     pass
+            #
+            # if epoch == 40:
+            #     for param_group in self.optimizer.param_groups:
+            #         param_group['lr'] = 0.0001
+            #     pass
 
             epoch_loss, epoch_train_acc = self.train_epoch()
             self.save_checkpoint(self.model, self.root_ckpt_dir, epoch)
             epoch_test_loss, epoch_test_acc = self.test()
 
-            # self.scheduler.step(epoch_loss)
+            self.scheduler.step(epoch_test_loss)
 
             Tools.print('Epoch: {:02d}, lr={:.4f}, Train: {:.4f}/{:.4f} Test: {:.4f}/{:.4f}'.format(
                 epoch, self.optimizer.param_groups[0]['lr'],
@@ -428,6 +597,11 @@ class RunnerSPE(object):
 
 
 if __name__ == '__main__':
+    """
+    GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
+    MLP          2020-04-05 05:41:29 Epoch: 97, lr=0.0001, Train: 0.5146/1.3433 Test: 0.5164/1.3514
+    GraphSageNet 2020-04-05 15:33:24 Epoch: 68, lr=0.0001, Train: 0.6811/0.8934 Test: 0.6585/0.9825
+    """
     # _gcn_model = GCNNet
     # _gcn_model = MLPNet
     # _data_root_path = 'D:\data\CIFAR'
@@ -438,10 +612,13 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = GCNNet
-    _gcn_model = MLPNet
+    # _gcn_model = MLPNet
+    # _gcn_model = GraphSageNet
+    # _gcn_model = GATNet
+    _gcn_model = GCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
-    _root_ckpt_dir = "./ckpt2/dgl/norm3/{}".format("MLPNet")
+    _root_ckpt_dir = "./ckpt2/dgl/norm3/{}2".format("GCNNet")
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
