@@ -621,7 +621,7 @@ class RunnerSPE(object):
             pass
         pass
 
-    def _train_epoch(self, print_freq=1):
+    def _train_epoch(self, print_freq=100):
         self.model.train()
         epoch_loss, epoch_loss_shape, epoch_loss_texture, epoch_loss_class, epoch_train_acc, nb_data = 0, 0, 0, 0, 0, 0
         for i, (batch_graphs, batch_imgs, batch_labels,
@@ -706,7 +706,9 @@ class RunnerSPE(object):
 
     def _loss_total(self, shape_out, texture_out, logits, batch_nodes_shape, batch_nodes_data, batch_labels):
         loss_shape = self.loss_shape(shape_out, batch_nodes_shape)
-        loss_texture = self.loss_texture(texture_out, batch_nodes_data)
+
+        _positions = batch_nodes_data >= 0
+        loss_texture = self.loss_texture(texture_out[_positions], batch_nodes_data[_positions])
         loss_class = self.loss_class(logits, batch_labels)
         loss_total = loss_shape + loss_texture + loss_class
         return loss_total, loss_shape, loss_texture, loss_class
@@ -806,24 +808,24 @@ if __name__ == '__main__':
     GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
     GraphSageNet 2020-04-05 15:33:24 Epoch: 68, lr=0.0001, Train: 0.6811/0.8934 Test: 0.6585/0.9825
     """
-    _gcn_model = GCNNet
-    _data_root_path = 'D:\data\CIFAR'
-    _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
-    _num_workers = 2
-    _use_gpu = False
-    _gpu_id = "1"
+    # _gcn_model = GCNNet
+    # _data_root_path = 'D:\data\CIFAR'
+    # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
+    # _num_workers = 2
+    # _use_gpu = False
+    # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    # _gcn_model = GCNNet
+    _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GCNNet
     # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _root_ckpt_dir = "./ckpt2/dgl/my/{}".format("GCNNet")
-    # _num_workers = 8
-    # _use_gpu = True
-    # _gpu_id = "1"
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _root_ckpt_dir = "./ckpt2/dgl/my/{}".format("GCNNet")
+    _num_workers = 8
+    _use_gpu = True
+    _gpu_id = "1"
 
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
