@@ -611,11 +611,12 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    # _gcn_model = GCNNet
     # _gcn_model = MLPNet
+
+    # _gcn_model = GCNNet
+    # _gcn_model = GATNet
     # _gcn_model = GCNNet
     # _gcn_model = GraphSageNet
-    # _gcn_model = GATNet
     _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
@@ -624,6 +625,7 @@ if __name__ == '__main__':
     _use_gpu = True
     _gpu_id = "1"
 
+    Tools.print(_gcn_model)
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, ve_model_file_name=_ve_model_file_name,
                        root_ckpt_dir=_root_ckpt_dir, num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
