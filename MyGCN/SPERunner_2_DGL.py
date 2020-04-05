@@ -174,6 +174,55 @@ class MyDataset(Dataset):
     pass
 
 
+class MLPNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+
+        self.L = 4
+        self.in_dim = 33
+        self.hidden_dim = 168
+        self.n_classes = 10
+        self.dropout = 0.0
+        self.in_feat_dropout = 0.0
+        self.gated = False
+
+        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
+
+        feat_mlp_modules = [nn.Linear(self.in_dim, self.hidden_dim, bias=True), nn.ReLU(), nn.Dropout(self.dropout)]
+        for _ in range(self.L - 1):  # L=4
+            feat_mlp_modules.append(nn.Linear(self.hidden_dim, self.hidden_dim, bias=True))
+            feat_mlp_modules.append(nn.ReLU())
+            feat_mlp_modules.append(nn.Dropout(self.dropout))  # 168, 168
+            pass
+        self.feat_mlp = nn.Sequential(*feat_mlp_modules)
+
+        if self.gated:
+            self.gates = nn.Linear(self.hidden_dim, self.hidden_dim, bias=True)  # 168, 168
+            pass
+
+        self.readout_mlp = MLPReadout(self.hidden_dim, self.n_classes)  # MLP: 3
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.in_feat_dropout(nodes_feat)
+        h = self.feat_mlp(h)
+
+        if self.gated:
+            h = torch.sigmoid(self.gates(h)) * h
+            graphs.ndata['h'] = h
+            hg = dgl.sum_nodes(graphs, 'h')
+        else:
+            graphs.ndata['h'] = h
+            hg = dgl.mean_nodes(graphs, 'h')
+            pass
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class GCNNet(nn.Module):
 
     def __init__(self):
@@ -225,55 +274,6 @@ class GCNNet(nn.Module):
         else:
             hg = dgl.mean_nodes(graphs, h)  # default readout is mean nodes
         return hg
-
-    pass
-
-
-class MLPNet(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-
-        self.L = 4
-        self.in_dim = 33
-        self.hidden_dim = 168
-        self.n_classes = 10
-        self.dropout = 0.0
-        self.in_feat_dropout = 0.0
-        self.gated = False
-
-        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
-
-        feat_mlp_modules = [nn.Linear(self.in_dim, self.hidden_dim, bias=True), nn.ReLU(), nn.Dropout(self.dropout)]
-        for _ in range(self.L - 1):  # L=4
-            feat_mlp_modules.append(nn.Linear(self.hidden_dim, self.hidden_dim, bias=True))
-            feat_mlp_modules.append(nn.ReLU())
-            feat_mlp_modules.append(nn.Dropout(self.dropout))  # 168, 168
-            pass
-        self.feat_mlp = nn.Sequential(*feat_mlp_modules)
-
-        if self.gated:
-            self.gates = nn.Linear(self.hidden_dim, self.hidden_dim, bias=True)  # 168, 168
-            pass
-
-        self.readout_mlp = MLPReadout(self.hidden_dim, self.n_classes)  # MLP: 3
-        pass
-
-    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        h = self.in_feat_dropout(nodes_feat)
-        h = self.feat_mlp(h)
-
-        if self.gated:
-            h = torch.sigmoid(self.gates(h)) * h
-            graphs.ndata['h'] = h
-            hg = dgl.sum_nodes(graphs, 'h')
-        else:
-            graphs.ndata['h'] = h
-            hg = dgl.mean_nodes(graphs, 'h')
-            pass
-
-        logits = self.readout_mlp(hg)
-        return logits
 
     pass
 
@@ -396,13 +396,13 @@ class GatedGCNNet(nn.Module):
         self.L = 4
         self.in_dim = 33
         self.in_dim_edge = 1
+        self.n_classes = 10
         self.out_dim = 70
         self.residual = True
         self.readout = "mean"
         self.hidden_dim = 70
         self.graph_norm = True
         self.batch_norm = True
-        self.device = device
 
         self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim)
         self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dim)
@@ -598,8 +598,8 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
     MLP          2020-04-05 05:41:29 Epoch: 97, lr=0.0001, Train: 0.5146/1.3433 Test: 0.5164/1.3514
+    GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
     GraphSageNet 2020-04-05 15:33:24 Epoch: 68, lr=0.0001, Train: 0.6811/0.8934 Test: 0.6585/0.9825
     """
     # _gcn_model = GCNNet
@@ -613,12 +613,13 @@ if __name__ == '__main__':
 
     # _gcn_model = GCNNet
     # _gcn_model = MLPNet
+    # _gcn_model = GCNNet
     # _gcn_model = GraphSageNet
     # _gcn_model = GATNet
-    _gcn_model = GCNNet
+    _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
-    _root_ckpt_dir = "./ckpt2/dgl/norm3/{}2".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/norm3/{}2".format("GatedGCNNet")
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
