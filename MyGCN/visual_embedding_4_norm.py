@@ -144,10 +144,10 @@ class DataCIFAR10(object):
         # transform_test = transforms.Compose([transforms.ToTensor()])
 
         train_set = MyCIFAR10(root=data_root_path, train=True, download=True, transform=transform_train)
-        self.train_loader = data.DataLoader(train_set, batch_size=train_batch, shuffle=True, num_workers=1)
+        self.train_loader = data.DataLoader(train_set, batch_size=train_batch, shuffle=True, num_workers=2)
 
         test_set = MyCIFAR10(root=data_root_path, train=False, download=False, transform=None)
-        self.test_loader = data.DataLoader(test_set, batch_size=test_batch, shuffle=False, num_workers=1)
+        self.test_loader = data.DataLoader(test_set, batch_size=test_batch, shuffle=False, num_workers=2)
         pass
 
     pass
@@ -517,13 +517,13 @@ class EmbeddingNetCIFARSmallNorm3(nn.Module):
         shape_d1 = self.shape_up1(self.shape_conv1(shape_norm))
         shape_d2 = self.shape_up2(self.shape_conv2(shape_d1))
         shape_out = self.shape_out(self.shape_conv3(shape_d2))
-        shape_out = self.sigmoid(shape_out)
+        # shape_out = self.sigmoid(shape_out)
 
         texture_d0 = torch.cat([texture_norm, shape_norm], dim=1)
         texture_d1 = self.texture_up1(self.texture_conv1(texture_d0))
         texture_d2 = self.texture_up2(self.texture_conv22(self.texture_conv21(texture_d1)))
         texture_out = self.texture_out(self.texture_conv32(self.texture_conv31(texture_d2)))
-        texture_out = self.sigmoid(texture_out)
+        # texture_out = self.sigmoid(texture_out)
 
         return shape_feature, texture_feature, shape_out, texture_out
 
@@ -603,9 +603,12 @@ class Runner(object):
             epoch_loss_shape += now_loss_shape
             epoch_loss_texture += now_loss_texture
 
-            Tools.print("{}-{} time:{:4f} {:4f}, loss={:4f}/{:4f} - {:4f}/{:4f} - {:4f}/{:4f}".format(
-                i, len(data_loader), super_pixel_time, net_time, now_loss, epoch_loss / (i+1),
-                now_loss_shape, epoch_loss_shape / (i+1), now_loss_texture, epoch_loss_texture / (i+1)))
+            if i % 100 == 0:
+                Tools.print("{}-{} time:{:4f} {:4f}, loss={:4f}/{:4f} - {:4f}/{:4f} - {:4f}/{:4f}".format(
+                    i, len(data_loader), super_pixel_time, net_time, now_loss, epoch_loss / (i+1),
+                    now_loss_shape, epoch_loss_shape / (i+1), now_loss_texture, epoch_loss_texture / (i+1)))
+                pass
+
             pass
 
         return epoch_loss/len(data_loader), epoch_loss_shape/len(data_loader), epoch_loss_texture/len(data_loader)
@@ -839,20 +842,20 @@ class VisualEmbedding(object):
 
 if __name__ == '__main__':
     ############################################################################################
-    runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\norm4_sigmoid"),
-                    data_root_path='D:\data\CIFAR', model=EmbeddingNetCIFARSmallNorm3)
-    # runner = Runner(root_ckpt_dir=Tools.new_dir("./ckpt/norm3"),
-    #                 model=EmbeddingNetCIFARSmallNorm3, use_gpu=True, gpu_id="1")
+    # runner = Runner(root_ckpt_dir=Tools.new_dir("ckpt\\norm4_sigmoid"),
+    #                 data_root_path='D:\data\CIFAR', model=EmbeddingNetCIFARSmallNorm3)
+    # runner = Runner(root_ckpt_dir=Tools.new_dir("./ckpt/norm4"),
+    #                 model=EmbeddingNetCIFARSmallNorm3, use_gpu=True, gpu_id="0")
     # runner.load_model("ckpt\\norm3\\epoch_1.pkl")
-    runner.train(50)
+    # runner.train(50)
     ############################################################################################
     # visual_embedding_visualization = VisualEmbeddingVisualization(
     #     model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding_visualization.show_train()
     ############################################################################################
-    # visual_embedding_visualization = VisualEmbeddingVisualization(
-    #     model_file_name="ckpt\\norm3\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm3)
-    # visual_embedding_visualization.reconstruct_image()
+    visual_embedding_visualization = VisualEmbeddingVisualization(
+        model_file_name="./ckpt/norm4/epoch_7.pkl", model=EmbeddingNetCIFARSmallNorm3)
+    visual_embedding_visualization.reconstruct_image()
     ############################################################################################
     # visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding.run()

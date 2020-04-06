@@ -459,9 +459,10 @@ class ConvBlock(nn.Module):
 
 class EmbeddingNetCIFARSmallNorm(nn.Module):
 
-    def __init__(self, is_train=True):
+    def __init__(self, has_sigmoid=True, is_train=True):
         super().__init__()
         self.is_train = is_train
+        self.has_sigmoid = has_sigmoid
 
         self.input_size = 6
         self.embedding_size = 16
@@ -514,12 +515,14 @@ class EmbeddingNetCIFARSmallNorm(nn.Module):
 
         shape_d1 = self.shape_up1(self.shape_conv1(shape_norm))
         shape_d2 = self.shape_up2(self.shape_conv2(shape_d1))
-        shape_out = self.sigmoid(self.shape_out(self.shape_conv3(shape_d2)))
+        shape_out = self.shape_out(self.shape_conv3(shape_d2))
+        shape_out = self.sigmoid(shape_out) if self.has_sigmoid else shape_out
 
         texture_d0 = torch.cat([texture_norm, shape_norm], dim=1)
         texture_d1 = self.texture_up1(self.texture_conv1(texture_d0))
         texture_d2 = self.texture_up2(self.texture_conv22(self.texture_conv21(texture_d1)))
-        texture_out = self.sigmoid(self.texture_out(self.texture_conv32(self.texture_conv31(texture_d2))))
+        texture_out = self.texture_out(self.texture_conv32(self.texture_conv31(texture_d2)))
+        texture_out = self.sigmoid(texture_out) if self.has_sigmoid else texture_out
 
         return shape_feature, texture_feature, shape_out, texture_out
 
@@ -539,10 +542,10 @@ class EmbeddingNetCIFARSmallNorm(nn.Module):
 
 class MyGCNNet(nn.Module):
 
-    def __init__(self, gcn_model):
+    def __init__(self, gcn_model, has_sigmoid):
         super().__init__()
         self.gcn_model = gcn_model()
-        self.ve_model = EmbeddingNetCIFARSmallNorm()
+        self.ve_model = EmbeddingNetCIFARSmallNorm(has_sigmoid=has_sigmoid)
         pass
 
     def forward(self, graphs, nodes_data, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -559,13 +562,15 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
+    def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10', has_sigmoid=True,
+                 is_mse_loss=True, root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
-        _image_size = 32
+        self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
+        self.is_mse_loss = is_mse_loss
+
         _sp_size = 4
         _sp_ve_size = 6
-        self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
+        _image_size = 32
 
         self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True,
                                        image_size=_image_size, sp_size=_sp_size, sp_ve_size=_sp_ve_size)
@@ -577,14 +582,19 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=64, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet(gcn_model).to(self.device)
+        self.model = MyGCNNet(gcn_model, has_sigmoid=has_sigmoid).to(self.device)
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
                                                                     factor=0.5, patience=5, verbose=True)
 
-        self.loss_shape = nn.BCELoss().to(self.device)
-        self.loss_texture = nn.BCELoss().to(self.device)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
+        if self.is_mse_loss:
+            self.loss_shape = nn.MSELoss().to(self.device)
+            self.loss_texture = nn.MSELoss().to(self.device)
+        else:
+            self.loss_shape = nn.BCELoss().to(self.device)
+            self.loss_texture = nn.BCELoss().to(self.device)
+            pass
 
         Tools.print("Total param: {} gcn_model: {}".format(self._view_model_param(self.model), gcn_model))
         pass
@@ -804,9 +814,8 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    MLP          2020-04-05 05:41:29 Epoch: 97, lr=0.0001, Train: 0.5146/1.3433 Test: 0.5164/1.3514
-    GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
-    GraphSageNet 2020-04-05 15:33:24 Epoch: 68, lr=0.0001, Train: 0.6811/0.8934 Test: 0.6585/0.9825
+    GCN          2020-04-06 12:37:34 Epoch: 93, lr=0.0000, Train: 0.5122/1.9613 Test: 0.5472/1.8905
+    # GCN          2020-04-06 12:37:34 Epoch: 93, lr=0.0000, Train: 0.5122/1.9613 Test: 0.5472/1.8905
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
@@ -816,18 +825,21 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    _gcn_model = GCNNet
+    # _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GCNNet
-    # _gcn_model = GraphSageNet
+    _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/my/{}".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/my/{}2".format("GraphSageNet")
+    _has_sigmoid = False
+    _is_mse_loss = True
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
 
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
+                       is_mse_loss=_is_mse_loss, has_sigmoid=_has_sigmoid,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
     # _test_loss, _test_acc = runner.test()

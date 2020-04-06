@@ -605,6 +605,12 @@ if __name__ == '__main__':
     MLP          2020-04-05 05:41:29 Epoch: 97, lr=0.0001, Train: 0.5146/1.3433 Test: 0.5164/1.3514
     GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
     GraphSageNet 2020-04-05 15:33:24 Epoch: 68, lr=0.0001, Train: 0.6811/0.8934 Test: 0.6585/0.9825
+    GATNet       2020-04-06 11:54:13 Epoch: 81, lr=0.0001, Train: 0.6658/0.9397 Test: 0.6364/1.0312
+    
+    GCN          2020-04-06 00:53:18 Epoch: 86, lr=0.0000, Train: 0.5341/1.2947 Test: 0.5356/1.3101
+    GraphSageNet 2020-04-06 02:22:24 Epoch: 99, lr=0.0000, Train: 0.6928/0.8661 Test: 0.6627/0.9783
+    MLP          2020-04-06 01:21:17 Epoch: 86, lr=0.0003, Train: 0.5370/1.2852 Test: 0.5340/1.3088
+    GatedGCNNet  2020-04-06 00:43:27 Epoch: 77, lr=0.0001, Train: 0.7000/0.8437 Test: 0.6719/0.9420
     """
     # _gcn_model = GCNNet
     # _gcn_model = MLPNet
@@ -617,17 +623,17 @@ if __name__ == '__main__':
 
     # _gcn_model = MLPNet
 
-    # _gcn_model = GCNNet
+    _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GCNNet
     # _gcn_model = GraphSageNet
-    _gcn_model = GatedGCNNet
+    # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
-    _root_ckpt_dir = "./ckpt2/dgl/norm3/{}2".format("GatedGCNNet")
+    _ve_model_file_name = "./ckpt/norm4/epoch_10.pkl"
+    _root_ckpt_dir = "./ckpt2/dgl/norm4/{}2".format("GCNNet")
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "1"
+    _gpu_id = "0"
 
     Tools.print(_gcn_model)
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, ve_model_file_name=_ve_model_file_name,
