@@ -88,10 +88,10 @@ class MyDataset(Dataset):
 
         # 4. Visual Embedding
         shape_feature, texture_feature = self.ve_model.forward(torch.from_numpy(net_data).float().to(self.device))
-        shape_feature, texture_feature = shape_feature.detach().numpy(), texture_feature.detach().numpy()
+        _shape_feature, _texture_feature = shape_feature.detach().numpy(), texture_feature.detach().numpy()
         for sp_i in range(len(super_pixel_info)):
-            super_pixel_info[sp_i]["feature_shape"] = shape_feature[sp_i]
-            super_pixel_info[sp_i]["feature_texture"] = texture_feature[sp_i]
+            super_pixel_info[sp_i]["feature_shape"] = _shape_feature[sp_i]
+            super_pixel_info[sp_i]["feature_texture"] = _texture_feature[sp_i]
             pass
 
         #Graph
@@ -121,20 +121,42 @@ class MyDataset(Dataset):
         graph.ndata['feat'] = torch.from_numpy(x).half()
 
         # Edge
-        edge_index, edge_w = [], []
+        dis_edge_index, dis_edge_w = [], []
         for edge_i in range(len(adjacency_info)):
-            edge_index.append([adjacency_info[edge_i][0], adjacency_info[edge_i][1]])
-            edge_w.append(adjacency_info[edge_i][2])
+            dis_edge_index.append([adjacency_info[edge_i][0], adjacency_info[edge_i][1]])
+            dis_edge_w.append(adjacency_info[edge_i][2])
+            pass
+        dis_edge_index = np.asarray(dis_edge_index)
+        dis_edge_w = np.asarray(dis_edge_w)
+
+        # New Edge
+        cos_sim_th = 0.5
+        edge_index, edge_w = [], []
+        for sp_i in range(len(super_pixel_info)):
+            _adj = np.asarray(super_pixel_info[sp_i]["adj"])
+            cos_sim = torch.cosine_similarity(shape_feature[sp_i:sp_i + 1, :], shape_feature[_adj]).detach().numpy()
+            now_adj = _adj[cos_sim > cos_sim_th]
+            now_w = cos_sim[cos_sim > cos_sim_th]
+            edge_index.extend([[sp_i, now_adj_one] for now_adj_one in now_adj])
+            edge_w.extend(now_w)
             pass
         edge_index = np.asarray(edge_index)
         edge_w = np.asarray(edge_w)
 
         # Edge Add
-        graph.add_edges(edge_index[:, 0], edge_index[:, 1])
-        graph.edata['feat'] = torch.from_numpy(edge_w).unsqueeze(1).half()
+        if not is_add_self:
+            graph.add_edges(edge_index[:, 0], edge_index[:, 1])
+            graph.edata['feat'] = torch.from_numpy(edge_w).unsqueeze(1).float()
+        else:
+            non_self_edges_idx = edge_index[:, 0] != edge_index[:, 1]
+            graph.add_edges(edge_index[:, 0][non_self_edges_idx], edge_index[:, 1][non_self_edges_idx])
+            edge_w_new = list(edge_w[non_self_edges_idx])
 
-        if is_add_self:
-            graph = self.self_loop(graph)
+            _nodes = np.arange(graph.number_of_nodes())
+            graph.add_edges(_nodes, _nodes)
+            edge_w_new.extend([1.0] * graph.number_of_nodes())
+            edge_w = np.asarray(edge_w_new)
+            graph.edata['feat'] = torch.from_numpy(edge_w).unsqueeze(1).float()
             pass
 
         return graph, target
@@ -158,22 +180,6 @@ class MyDataset(Dataset):
 
         batched_graph = dgl.batch(graphs)
         return batched_graph, labels, nodes_num_norm_sqrt, edges_num_norm_sqrt
-
-    @staticmethod
-    def self_loop(g):
-        new_g = dgl.DGLGraph()
-        new_g.add_nodes(g.number_of_nodes())
-        new_g.ndata['feat'] = g.ndata['feat']
-
-        src, dst = g.all_edges(order="eid")
-        src = dgl.backend.zerocopy_to_numpy(src)
-        dst = dgl.backend.zerocopy_to_numpy(dst)
-        non_self_edges_idx = src != dst
-        nodes = np.arange(g.number_of_nodes())
-        new_g.add_edges(src[non_self_edges_idx], dst[non_self_edges_idx])
-        new_g.add_edges(nodes, nodes)
-        new_g.edata['feat'] = torch.zeros(new_g.number_of_edges())
-        return new_g
 
     pass
 
@@ -604,36 +610,36 @@ if __name__ == '__main__':
     """
     MLP          2020-04-05 05:41:29 Epoch: 97, lr=0.0001, Train: 0.5146/1.3433 Test: 0.5164/1.3514
     GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
-    GATNet       2020-04-06 11:54:13 Epoch: 81, lr=0.0001, Train: 0.6658/0.9397 Test: 0.6364/1.0312
     GraphSageNet 2020-04-05 15:33:24 Epoch: 68, lr=0.0001, Train: 0.6811/0.8934 Test: 0.6585/0.9825
+    GATNet       2020-04-06 11:54:13 Epoch: 81, lr=0.0001, Train: 0.6658/0.9397 Test: 0.6364/1.0312
     
     MLP          2020-04-06 01:21:17 Epoch: 86, lr=0.0003, Train: 0.5370/1.2852 Test: 0.5340/1.3088
     GCN          2020-04-06 00:53:18 Epoch: 86, lr=0.0000, Train: 0.5341/1.2947 Test: 0.5356/1.3101
     GraphSageNet 2020-04-06 02:22:24 Epoch: 99, lr=0.0000, Train: 0.6928/0.8661 Test: 0.6627/0.9783
     GatedGCNNet  2020-04-06 00:43:27 Epoch: 77, lr=0.0001, Train: 0.7000/0.8437 Test: 0.6719/0.9420
     """
-    # _gcn_model = GCNNet
-    # _gcn_model = MLPNet
-    # _data_root_path = 'D:\data\CIFAR'
-    # _ve_model_file_name = "ckpt\\norm3\\epoch_1.pkl"
-    # _root_ckpt_dir = "ckpt2\\dgl\\norm3\\{}".format(_gcn_model)
-    # _num_workers = 2
-    # _use_gpu = False
-    # _gpu_id = "1"
-
-    # _gcn_model = MLPNet
-
     _gcn_model = GCNNet
+    # _gcn_model = MLPNet
+    _data_root_path = 'D:\data\CIFAR'
+    _ve_model_file_name = "ckpt\\norm3\\epoch_1.pkl"
+    _root_ckpt_dir = "ckpt2\\dgl\\norm3\\{}".format(_gcn_model)
+    _num_workers = 2
+    _use_gpu = False
+    _gpu_id = "1"
+
+    # _gcn_model = MLPNet
+
+    # _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GCNNet
     # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _ve_model_file_name = "./ckpt/norm4/epoch_10.pkl"
-    _root_ckpt_dir = "./ckpt2/dgl/norm4/{}2".format("GCNNet")
-    _num_workers = 8
-    _use_gpu = True
-    _gpu_id = "0"
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # _ve_model_file_name = "./ckpt/norm4/epoch_10.pkl"
+    # _root_ckpt_dir = "./ckpt2/dgl/norm4/{}2".format("GCNNet")
+    # _num_workers = 8
+    # _use_gpu = True
+    # _gpu_id = "0"
 
     Tools.print("ckpt:{}, workers:{}, gpu:{}, model:{}, ".format(_root_ckpt_dir,
                                                                  _num_workers, _gpu_id, _gcn_model))
