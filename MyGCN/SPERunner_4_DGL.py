@@ -830,18 +830,21 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    # _gcn_model = GCNNet
+    _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GCNNet
-    _gcn_model = GraphSageNet
+    # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/my/{}2".format("GraphSageNet")
+    _root_ckpt_dir = "./ckpt2/dgl/my8/{}2".format("GCNNet")
     _has_sigmoid = False
     _is_mse_loss = True
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
+
+    Tools.print("ckpt:{}, sigmoi:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
+        _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _num_workers, _gpu_id, _gcn_model))
 
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        is_mse_loss=_is_mse_loss, has_sigmoid=_has_sigmoid,

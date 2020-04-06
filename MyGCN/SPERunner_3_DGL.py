@@ -838,6 +838,9 @@ if __name__ == '__main__':
     _use_gpu = True
     _gpu_id = "1"
 
+    Tools.print("ckpt:{}, sigmoi:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
+        _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _num_workers, _gpu_id, _gcn_model))
+
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        is_mse_loss=_is_mse_loss, has_sigmoid=_has_sigmoid,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
