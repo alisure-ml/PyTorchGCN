@@ -629,8 +629,8 @@ if __name__ == '__main__':
     # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _ve_model_file_name = "./ckpt/norm4/epoch_10.pkl"
-    _root_ckpt_dir = "./ckpt2/dgl/norm4/{}2".format("GCNNet")
+    _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
+    _root_ckpt_dir = "./ckpt2/dgl/norm3/{}2".format("GCNNet")
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "0"

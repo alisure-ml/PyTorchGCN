@@ -23,7 +23,7 @@ from visual_embedding_2_norm import DealSuperPixel, MyCIFAR10, EmbeddingNetCIFAR
 def gpu_setup(use_gpu, gpu_id):
     if torch.cuda.is_available() and use_gpu:
         Tools.print()
-        Tools.print('Cuda available with GPU: {}'.format(torch.cuda.get_device_name(0)))
+        Tools.print('Cuda available with GPU: {} {}'.format(torch.cuda.get_device_name(0), str(gpu_id)))
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
         device = torch.device("cuda:{}".format(gpu_id))
@@ -38,17 +38,15 @@ class MyDataset(Dataset):
 
     def __init__(self, data_root_path='D:\data\CIFAR', is_train=True,
                  ve_model_file_name="ckpt\\norm3\\epoch_1.pkl", VEModel=EmbeddingNetCIFARSmallNorm3,
-                 image_size=32, sp_size=4, sp_ve_size=6):
+                 image_size=32, sp_size=4, sp_ve_size=6, cos_sim_th=0.5):
         super().__init__()
+
+        self.cos_sim_th = cos_sim_th
 
         # 1. Data
         self.is_train = is_train
         self.data_root_path = data_root_path
-        # self.ve_transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
-        #                                         transforms.RandomHorizontalFlip()]) if self.is_train else None
-        self.ve_transform = transforms.Compose([transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
-                                                transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-                                                transforms.RandomGrayscale(p=0.2),
+        self.ve_transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
                                                 transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.ve_data_set = MyCIFAR10(root=self.data_root_path, train=self.is_train, transform=self.ve_transform)
 
@@ -130,13 +128,12 @@ class MyDataset(Dataset):
         dis_edge_w = np.asarray(dis_edge_w)
 
         # New Edge
-        cos_sim_th = 0.5
         edge_index, edge_w = [], []
         for sp_i in range(len(super_pixel_info)):
             _adj = np.asarray(super_pixel_info[sp_i]["adj"])
             cos_sim = torch.cosine_similarity(shape_feature[sp_i:sp_i + 1, :], shape_feature[_adj]).detach().numpy()
-            now_adj = _adj[cos_sim > cos_sim_th]
-            now_w = cos_sim[cos_sim > cos_sim_th]
+            now_adj = _adj[cos_sim > self.cos_sim_th]
+            now_w = cos_sim[cos_sim > self.cos_sim_th]
             edge_index.extend([[sp_i, now_adj_one] for now_adj_one in now_adj])
             edge_w.extend(now_w)
             pass
@@ -457,19 +454,20 @@ class GatedGCNNet(nn.Module):
 class RunnerSPE(object):
 
     def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 ve_model_file_name="./ckpt/norm3/epoch_7.pkl",
+                 ve_model_file_name="./ckpt/norm3/epoch_7.pkl", cos_sim_th=0.5,
                  root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         _image_size = 32
         _sp_size = 4
         _sp_ve_size = 6
+        _cos_sim_th = cos_sim_th
         _VEModel = EmbeddingNetCIFARSmallNorm3
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True,
+        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True, cos_sim_th=_cos_sim_th,
                                        ve_model_file_name=ve_model_file_name, VEModel=_VEModel,
                                        image_size=_image_size, sp_size=_sp_size, sp_ve_size=_sp_ve_size)
-        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False,
+        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False, cos_sim_th=_cos_sim_th,
                                       ve_model_file_name=ve_model_file_name, VEModel=_VEModel,
                                       image_size=_image_size, sp_size=_sp_size, sp_ve_size=_sp_ve_size)
 
@@ -479,10 +477,8 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = gcn_model().to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=0.0)
         self.loss = nn.CrossEntropyLoss().to(self.device)
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
-                                                                    factor=0.5, patience=5, verbose=True)
         pass
 
     def train(self, epochs):
@@ -490,21 +486,10 @@ class RunnerSPE(object):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
 
-            # if epoch == 20:
-            #     for param_group in self.optimizer.param_groups:
-            #         param_group['lr'] = 0.0005
-            #     pass
-            #
-            # if epoch == 40:
-            #     for param_group in self.optimizer.param_groups:
-            #         param_group['lr'] = 0.0001
-            #     pass
-
+            self._lr(epoch)
             epoch_loss, epoch_train_acc = self.train_epoch()
-            self.save_checkpoint(self.model, self.root_ckpt_dir, epoch)
+            self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
             epoch_test_loss, epoch_test_acc = self.test()
-
-            self.scheduler.step(epoch_test_loss)
 
             Tools.print('Epoch: {:02d}, lr={:.4f}, Train: {:.4f}/{:.4f} Test: {:.4f}/{:.4f}'.format(
                 epoch, self.optimizer.param_groups[0]['lr'],
@@ -532,7 +517,7 @@ class RunnerSPE(object):
 
             nb_data += batch_labels.size(0)
             epoch_loss += loss.detach().item()
-            epoch_train_acc += self.accuracy(batch_scores, batch_labels)
+            epoch_train_acc += self._accuracy(batch_scores, batch_labels)
 
             if i % print_freq == 0:
                 Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
@@ -564,7 +549,7 @@ class RunnerSPE(object):
 
                 nb_data += batch_labels.size(0)
                 epoch_test_loss += loss.detach().item()
-                epoch_test_acc += self.accuracy(batch_scores, batch_labels)
+                epoch_test_acc += self._accuracy(batch_scores, batch_labels)
 
                 if i % print_freq == 0:
                     Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
@@ -582,8 +567,25 @@ class RunnerSPE(object):
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
 
+    def _lr(self, epoch):
+        if epoch == 25:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = 0.001
+            pass
+
+        if epoch == 50:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = 0.0005
+            pass
+
+        if epoch == 75:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = 0.0001
+            pass
+        pass
+
     @staticmethod
-    def save_checkpoint(model, root_ckpt_dir, epoch):
+    def _save_checkpoint(model, root_ckpt_dir, epoch):
         torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
         for file in glob.glob(root_ckpt_dir + '/*.pkl'):
             if int(file.split('_')[-1].split('.')[0]) < epoch - 1:
@@ -593,7 +595,7 @@ class RunnerSPE(object):
         pass
 
     @staticmethod
-    def accuracy(scores, targets):
+    def _accuracy(scores, targets):
         return (scores.detach().argmax(dim=1) == targets).float().sum().item()
 
     @staticmethod
@@ -618,34 +620,34 @@ if __name__ == '__main__':
     GraphSageNet 2020-04-06 02:22:24 Epoch: 99, lr=0.0000, Train: 0.6928/0.8661 Test: 0.6627/0.9783
     GatedGCNNet  2020-04-06 00:43:27 Epoch: 77, lr=0.0001, Train: 0.7000/0.8437 Test: 0.6719/0.9420
     """
+    # _gcn_model = GCNNet
+    # _gcn_model = MLPNet
+    # _data_root_path = 'D:\data\CIFAR'
+    # _ve_model_file_name = "ckpt\\norm3\\epoch_1.pkl"
+    # _root_ckpt_dir = "ckpt2\\dgl\\norm3\\{}".format(_gcn_model)
+    # _num_workers = 2
+    # _use_gpu = False
+    # _gpu_id = "1"
+
+    # _gcn_model = MLPNet
     _gcn_model = GCNNet
-    # _gcn_model = MLPNet
-    _data_root_path = 'D:\data\CIFAR'
-    _ve_model_file_name = "ckpt\\norm3\\epoch_1.pkl"
-    _root_ckpt_dir = "ckpt2\\dgl\\norm3\\{}".format(_gcn_model)
-    _num_workers = 2
-    _use_gpu = False
-    _gpu_id = "1"
-
-    # _gcn_model = MLPNet
-
-    # _gcn_model = GCNNet
     # _gcn_model = GATNet
-    # _gcn_model = GCNNet
     # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _ve_model_file_name = "./ckpt/norm4/epoch_10.pkl"
-    # _root_ckpt_dir = "./ckpt2/dgl/norm4/{}2".format("GCNNet")
-    # _num_workers = 8
-    # _use_gpu = True
-    # _gpu_id = "0"
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
+    _root_ckpt_dir = "./ckpt2/dgl/norm3/2_adj/{}-0d5".format("GCNNet")
+    _num_workers = 8
+    _cos_sim_th = 0.5
+    _use_gpu = True
+    _gpu_id = "0"
 
-    Tools.print("ckpt:{}, workers:{}, gpu:{}, model:{}, ".format(_root_ckpt_dir,
-                                                                 _num_workers, _gpu_id, _gcn_model))
+    Tools.print("ckpt:{}, workers:{}, gpu:{}, cos_sim_th:{}, model:{}, ".format(
+        _root_ckpt_dir, _num_workers, _gpu_id, _cos_sim_th, _gcn_model))
 
-    runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, ve_model_file_name=_ve_model_file_name,
-                       root_ckpt_dir=_root_ckpt_dir, num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
+    runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, cos_sim_th=_cos_sim_th,
+                       ve_model_file_name=_ve_model_file_name, root_ckpt_dir=_root_ckpt_dir,
+                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
     # _test_loss, _test_acc = runner.test()
     # Tools.print('Test: {:.4f}/{:.4f}'.format(_test_acc, _test_loss))
