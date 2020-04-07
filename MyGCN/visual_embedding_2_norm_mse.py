@@ -8,12 +8,12 @@ import time
 import glob
 import torch
 import numpy as np
-from PIL import Image
 import torch.nn as nn
 from skimage import io
 import torch.optim as optim
 import torch.utils.data as data
 import matplotlib.pyplot as plt
+from PIL import Image, ImageDraw
 from skimage import segmentation
 from alisuretool.Tools import Tools
 import torchvision.datasets as datasets
@@ -783,6 +783,127 @@ class VisualEmbeddingVisualization(object):
 
         pass
 
+    def reconstruct_image_adj_texture_feature(self):
+        self.model.eval()
+
+        for i, (img, target) in enumerate(self.data_CIFAR10.test_loader):
+            img = img.detach().numpy()
+
+            # 超像素+特征
+            net_input, sp_info = Runner.get_super_pixel(img)
+            batch_img = torch.from_numpy(net_input["data"]).float().to(self.device)
+            shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
+
+            node_num = 0
+            times = 10
+            sp_node = sp_info["node"]
+            segments = sp_info["segment"]
+            for img_i in range(len(img)):
+                now_node = sp_node[img_i]
+                now_img = img[img_i]
+
+                # Image and Super Pixel
+                large_img = Image.fromarray(now_img).resize((len(now_img[0]) * times, len(now_img) * times))
+                segment = Image.fromarray(np.asarray(
+                    segments[img_i], dtype=np.uint8)).resize((len(now_img[0]) * times, len(now_img) * times))
+                result = segmentation.mark_boundaries(np.asarray(large_img), np.asarray(segment))
+                large_img = Image.fromarray(np.asarray(result * 255, dtype=np.uint8))
+
+                # 相似度
+                now_texture_feature = texture_feature[node_num: node_num + len(now_node)]
+                node_len = now_texture_feature.size(0)
+                node_index_array = np.asarray([[i] * node_len for i in range(node_len)])
+                node_index_array_1 = node_index_array.reshape(node_len * node_len)
+                node_index_array_2 = node_index_array.T.reshape(node_len * node_len)
+                cos_sim = torch.cosine_similarity(now_texture_feature[node_index_array_1],
+                                                  now_texture_feature[node_index_array_2])
+                cos_sim = cos_sim.reshape((node_len, node_len))
+
+                # 超像素中点
+                _area = [now_node[node]["area"] for node in now_node]
+                center_point = [[(a[3] + a[2] + 1) * times // 2, (a[1] + a[0] + 1) * times // 2] for a in _area]
+
+                # 画线：对比
+                large_img_1 = large_img.copy()
+                draw = ImageDraw.Draw(large_img_1)
+                _adj = [now_node[node]["adj"] for node in now_node]
+                for _adj_index, _adj_one in enumerate(_adj):
+                    for _adj_one_one in _adj_one:
+                        now_cos_sim = cos_sim[_adj_index, _adj_one_one]
+                        color = (0, 0, 0) if now_cos_sim > 0.95 else (255, 0, 0)
+                        draw.line((*center_point[_adj_index], *center_point[_adj_one_one]), fill=color, width=1)
+                        pass
+                    pass
+                large_img_1.show()
+
+                node_num += len(now_node)
+                pass
+
+            pass
+
+        pass
+
+    def reconstruct_image_adj_texture_out(self):
+        self.model.eval()
+
+        for i, (img, target) in enumerate(self.data_CIFAR10.test_loader):
+            img = img.detach().numpy()
+
+            # 超像素+特征
+            net_input, sp_info = Runner.get_super_pixel(img)
+            batch_img = torch.from_numpy(net_input["data"]).float().to(self.device)
+            shape_feature, texture_feature, shape_out, texture_out = self.model.forward(batch_img)
+            _texture_out = texture_out.view(texture_out.size(0), -1)
+
+            node_num = 0
+            times = 10
+            sp_node = sp_info["node"]
+            segments = sp_info["segment"]
+            for img_i in range(len(img)):
+                now_node = sp_node[img_i]
+                now_img = img[img_i]
+
+                # Image and Super Pixel
+                large_img = Image.fromarray(now_img).resize((len(now_img[0]) * times, len(now_img) * times))
+                segment = Image.fromarray(np.asarray(
+                    segments[img_i], dtype=np.uint8)).resize((len(now_img[0]) * times, len(now_img) * times))
+                result = segmentation.mark_boundaries(np.asarray(large_img), np.asarray(segment))
+                large_img = Image.fromarray(np.asarray(result * 255, dtype=np.uint8))
+
+                # 相似度
+                now_texture_feature = _texture_out[node_num: node_num + len(now_node)]
+                node_len = now_texture_feature.size(0)
+                node_index_array = np.asarray([[i] * node_len for i in range(node_len)])
+                node_index_array_1 = node_index_array.reshape(node_len * node_len)
+                node_index_array_2 = node_index_array.T.reshape(node_len * node_len)
+                cos_sim = torch.cosine_similarity(now_texture_feature[node_index_array_1],
+                                                  now_texture_feature[node_index_array_2])
+                cos_sim = cos_sim.reshape((node_len, node_len))
+
+                # 超像素中点
+                _area = [now_node[node]["area"] for node in now_node]
+                center_point = [[(a[3] + a[2] + 1) * times // 2, (a[1] + a[0] + 1) * times // 2] for a in _area]
+
+                # 画线：对比
+                large_img_1 = large_img.copy()
+                draw = ImageDraw.Draw(large_img_1)
+                _adj = [now_node[node]["adj"] for node in now_node]
+                for _adj_index, _adj_one in enumerate(_adj):
+                    for _adj_one_one in _adj_one:
+                        now_cos_sim = cos_sim[_adj_index, _adj_one_one]
+                        color = (0, 0, 0) if now_cos_sim > 0.8 else (255, 0, 0)
+                        draw.line((*center_point[_adj_index], *center_point[_adj_one_one]), fill=color, width=1)
+                        pass
+                    pass
+                large_img_1.show()
+
+                node_num += len(now_node)
+                pass
+
+            pass
+
+        pass
+
     pass
 
 
@@ -854,8 +975,9 @@ if __name__ == '__main__':
     # visual_embedding_visualization.show_train()
     ############################################################################################
     visual_embedding_visualization = VisualEmbeddingVisualization(
-        model_file_name="./ckpt/norm4/epoch_7.pkl", model=EmbeddingNetCIFARSmallNorm3)
-    visual_embedding_visualization.reconstruct_image()
+        model_file_name="ckpt\\norm4\\epoch_1.pkl",
+        model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
+    visual_embedding_visualization.reconstruct_image_adj_texture_feature()
     ############################################################################################
     # visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding.run()
