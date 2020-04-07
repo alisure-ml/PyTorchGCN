@@ -43,10 +43,12 @@ class MyDataset(Dataset):
         # 1. Data
         self.is_train = is_train
         self.data_root_path = data_root_path
-        self.transform = transforms.Compose([transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
-                                                transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-                                                transforms.RandomGrayscale(p=0.2),
-                                                transforms.RandomHorizontalFlip()]) if self.is_train else None
+        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
+        #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
+        #                                      transforms.RandomGrayscale(p=0.2),
+        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
+        self.transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
+                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
 
         # 3. Super Pixel
@@ -583,9 +585,7 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(gcn_model, has_sigmoid=has_sigmoid).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, mode='min',
-                                                                    factor=0.5, patience=5, verbose=True)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
         if self.is_mse_loss:
@@ -609,21 +609,10 @@ class RunnerSPE(object):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
 
-            # if epoch == 20:
-            #     for param_group in self.optimizer.param_groups:
-            #         param_group['lr'] = 0.0005
-            #     pass
-            #
-            # if epoch == 40:
-            #     for param_group in self.optimizer.param_groups:
-            #         param_group['lr'] = 0.0001
-            #     pass
-
+            self._lr(epoch)
             epoch_loss, epoch_train_acc = self._train_epoch()
             self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
             epoch_test_loss, epoch_test_acc = self.test()
-
-            self.scheduler.step(epoch_test_loss)
 
             Tools.print('Epoch: {:02d}, lr={:.4f}, Train: {:.4f}/{:.4f} Test: {:.4f}/{:.4f}'.format(
                 epoch, self.optimizer.param_groups[0]['lr'],
@@ -723,6 +712,23 @@ class RunnerSPE(object):
         loss_total = loss_shape + loss_texture + loss_class
         return loss_total, loss_shape, loss_texture, loss_class
 
+    def _lr(self, epoch):
+        if epoch == 25:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = 0.001
+            pass
+
+        if epoch == 50:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = 0.0005
+            pass
+
+        if epoch == 75:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = 0.0001
+            pass
+        pass
+
     @staticmethod
     def _save_checkpoint(model, root_ckpt_dir, epoch):
         torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
@@ -814,8 +820,9 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCN          2020-04-06 12:37:34 Epoch: 93, lr=0.0000, Train: 0.5122/1.9613 Test: 0.5472/1.8905
-    # GCN          2020-04-06 12:37:34 Epoch: 93, lr=0.0000, Train: 0.5122/1.9613 Test: 0.5472/1.8905
+    # 强数据增强+LR。不确定以下两个哪个带Sigmoid
+    GCN  No Sigmoid 2020-04-07 02:50:57 Epoch: 75, lr=0.0000, Train: 0.5148/1.4100 Test: 0.5559/1.3145
+    GCN Has Sigmoid 2020-04-07 07:35:40 Epoch: 72, lr=0.0000, Train: 0.5354/1.3428 Test: 0.5759/1.2394
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
@@ -825,20 +832,20 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    # _gcn_model = GCNNet
+    _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GCNNet
-    _gcn_model = GraphSageNet
+    # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/my/{}2".format("GraphSageNet")
+    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E/{}-wa-lr".format("GCNNet")
     _has_sigmoid = False
     _is_mse_loss = True
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
 
-    Tools.print("ckpt:{}, sigmoi:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
+    Tools.print("ckpt:{}, sigmoid:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
         _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _num_workers, _gpu_id, _gcn_model))
 
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,

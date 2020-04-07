@@ -610,15 +610,21 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
+    # 原始
     MLP          2020-04-05 05:41:29 Epoch: 97, lr=0.0001, Train: 0.5146/1.3433 Test: 0.5164/1.3514
     GCN          2020-04-05 06:37:08 Epoch: 98, lr=0.0001, Train: 0.5485/1.2599 Test: 0.5418/1.2920
     GraphSageNet 2020-04-05 15:33:24 Epoch: 68, lr=0.0001, Train: 0.6811/0.8934 Test: 0.6585/0.9825
     GATNet       2020-04-06 11:54:13 Epoch: 81, lr=0.0001, Train: 0.6658/0.9397 Test: 0.6364/1.0312
     
+    # 强数据增强+LR
     MLP          2020-04-06 01:21:17 Epoch: 86, lr=0.0003, Train: 0.5370/1.2852 Test: 0.5340/1.3088
     GCN          2020-04-06 00:53:18 Epoch: 86, lr=0.0000, Train: 0.5341/1.2947 Test: 0.5356/1.3101
     GraphSageNet 2020-04-06 02:22:24 Epoch: 99, lr=0.0000, Train: 0.6928/0.8661 Test: 0.6627/0.9783
     GatedGCNNet  2020-04-06 00:43:27 Epoch: 77, lr=0.0001, Train: 0.7000/0.8437 Test: 0.6719/0.9420
+    
+    # 原始 + Adj
+    GCN   0.5    2020-04-07 06:43:16 Epoch: 92, lr=0.0001, Train: 0.5489/1.2604 Test: 0.5491/1.2795
+    GCN   0.7    
     """
     # _gcn_model = GCNNet
     # _gcn_model = MLPNet
@@ -636,11 +642,11 @@ if __name__ == '__main__':
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
-    _root_ckpt_dir = "./ckpt2/dgl/norm3/2_adj/{}-0d5".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/norm3/2_adj/{}-0d7".format("GCNNet")
     _num_workers = 8
-    _cos_sim_th = 0.5
+    _cos_sim_th = 0.7
     _use_gpu = True
-    _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{}, workers:{}, gpu:{}, cos_sim_th:{}, model:{}, ".format(
         _root_ckpt_dir, _num_workers, _gpu_id, _cos_sim_th, _gcn_model))

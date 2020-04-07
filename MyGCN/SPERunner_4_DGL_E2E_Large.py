@@ -817,8 +817,8 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCN          2020-04-06 12:37:34 Epoch: 93, lr=0.0000, Train: 0.5122/1.9613 Test: 0.5472/1.8905
-    # GCN          2020-04-06 12:37:34 Epoch: 93, lr=0.0000, Train: 0.5122/1.9613 Test: 0.5472/1.8905
+    GCN          2020-04-07 03:48:18 Epoch: 83, lr=0.0000, Train: 0.4966/1.4732 Test: 0.5500/1.3415
+    GCN          2020-04-07 05:33:18 Epoch: 98, lr=0.0000, Train: 0.5028/1.4658 Test: 0.5433/1.3598
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
