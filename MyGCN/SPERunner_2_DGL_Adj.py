@@ -624,7 +624,7 @@ if __name__ == '__main__':
     
     # 原始 + Adj
     GCN   0.5    2020-04-07 06:43:16 Epoch: 92, lr=0.0001, Train: 0.5489/1.2604 Test: 0.5491/1.2795
-    GCN   0.7    
+    GCN   0.7    2020-04-07 17:09:35 Epoch: 95, lr=0.0001, Train: 0.5255/1.3213 Test: 0.5293/1.3290
     """
     # _gcn_model = GCNNet
     # _gcn_model = MLPNet
@@ -642,9 +642,9 @@ if __name__ == '__main__':
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _ve_model_file_name = "./ckpt/norm3/epoch_7.pkl"
-    _root_ckpt_dir = "./ckpt2/dgl/norm3/2_adj/{}-0d7".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/norm3/2_adj/{}-0d5".format("GCNNet")
     _num_workers = 8
-    _cos_sim_th = 0.7
+    _cos_sim_th = 0.5
     _use_gpu = True
     _gpu_id = "1"
 

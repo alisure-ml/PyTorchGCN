@@ -585,7 +585,7 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(gcn_model, has_sigmoid=has_sigmoid).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=0.0)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
         if self.is_mse_loss:
@@ -823,6 +823,13 @@ if __name__ == '__main__':
     # 强数据增强+LR。不确定以下两个哪个带Sigmoid
     GCN  No Sigmoid 2020-04-07 02:50:57 Epoch: 75, lr=0.0000, Train: 0.5148/1.4100 Test: 0.5559/1.3145
     GCN Has Sigmoid 2020-04-07 07:35:40 Epoch: 72, lr=0.0000, Train: 0.5354/1.3428 Test: 0.5759/1.2394
+    GCN  No Sigmoid 2020-04-08 06:36:51 Epoch: 70, lr=0.0000, Train: 0.5099/1.4281 Test: 0.5505/1.3224
+    GCN Has Sigmoid 2020-04-08 07:24:54 Epoch: 73, lr=0.0001, Train: 0.5471/1.3164 Test: 0.5874/1.2138
+    
+    # 原始:数据增强+LR
+    GCN           No Sigmoid 2020-04-08 06:24:55 Epoch: 98, lr=0.0001, Train: 0.6696/0.9954 Test: 0.6563/1.0695
+    GCN          Has Sigmoid 2020-04-08 15:41:33 Epoch: 97, lr=0.0001, Train: 0.7781/0.6535 Test: 0.7399/0.8137
+    GraphSageNet Has Sigmoid 
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
@@ -832,18 +839,17 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    _gcn_model = GCNNet
-    # _gcn_model = GATNet
     # _gcn_model = GCNNet
-    # _gcn_model = GraphSageNet
+    # _gcn_model = GATNet
+    _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E/{}-wa-lr".format("GCNNet")
-    _has_sigmoid = False
+    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E/{}-wa-lr-sigmoid".format("GraphSageNet")
+    _has_sigmoid = True
     _is_mse_loss = True
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "1"
+    _gpu_id = "0"
 
     Tools.print("ckpt:{}, sigmoid:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
         _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _num_workers, _gpu_id, _gcn_model))
