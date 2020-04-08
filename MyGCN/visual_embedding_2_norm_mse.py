@@ -7,6 +7,7 @@ import cv2
 import time
 import glob
 import torch
+import skimage
 import numpy as np
 import torch.nn as nn
 from skimage import io
@@ -59,6 +60,19 @@ class DealSuperPixel(object):
             super_pixel_data2 = np.array(super_pixel_data, dtype=np.int)
             super_pixel_data2[_super_pixel_label_3==0] = -255
 
+            # 灰度图：纹理
+            super_pixel_gray = cv2.cvtColor(super_pixel_data, cv2.COLOR_RGB2GRAY)
+            # 质心
+            # skimage.measure.regionprops(np.squeeze(super_pixel_label))
+            # 计算颜色矩
+            r = super_pixel_data[:, :, 0:1][super_pixel_label > 0] / 255
+            g = super_pixel_data[:, :, 1:2][super_pixel_label > 0] / 255
+            b = super_pixel_data[:, :, 2:3][super_pixel_label > 0] / 255
+            r_1, g_1, b_1 = r.mean(), g.mean(), b.mean()
+            r_2, g_2, b_2 = r.std(), g.std(), b.std()
+            r_3, g_3, b_3 = self._moments_3(r), self._moments_3(g), self._moments_3(b)
+            color = [r_1, g_1, b_1, r_2, g_2, b_2, r_3, g_3, b_3]
+
             # 计算邻接矩阵
             _x_min_a = x_min - (1 if x_min > 0 else 0)
             _y_min_a = y_min - (1 if y_min > 0 else 0)
@@ -70,6 +84,7 @@ class DealSuperPixel(object):
 
             # 结果
             super_pixel_info[i] = {"size": sp_i_size, "area": super_pixel_area,
+                                   "color": color, "texture": super_pixel_gray,
                                    "label": super_pixel_label, "data": super_pixel_data,
                                    "data2": super_pixel_data2, "adj": super_pixel_adjacency}
             pass
@@ -108,6 +123,11 @@ class DealSuperPixel(object):
         distance = np.sum(distance) / distance
         exp_distance= np.exp(distance)
         return exp_distance / np.sum(exp_distance, axis=0)
+
+    @staticmethod
+    def _moments_3(x=None):
+        mid = np.mean(((x - x.mean()) ** 3))
+        return np.sign(mid) * abs(mid) ** (1 / 3)
 
     @staticmethod
     def demo():
@@ -615,22 +635,28 @@ class Runner(object):
 
     @staticmethod
     def get_super_pixel(batch_img, ds_image_size=32, super_pixel_size=4, super_pixel_data_size=6):
-        now_data_list, now_shape_list = [], []
+        now_data_list, now_shape_list, now_texture_list = [], [], []
         now_segment_list, now_super_pixel_info_list, now_adjacency_info_list = [], [], []
         for img in batch_img:
             deal_super_pixel = DealSuperPixel(image_data=img,
                                               ds_image_size=ds_image_size, super_pixel_size=super_pixel_size)
             now_segment, now_super_pixel_info, now_adjacency_info = deal_super_pixel.run()
             for key in now_super_pixel_info:
-                now_data = now_super_pixel_info[key]["data2"] / 255
+                now_data = np.asarray(now_super_pixel_info[key]["data2"] / 255, np.float32)
                 now_data = cv2.resize(now_data, (super_pixel_data_size,
                                                  super_pixel_data_size), interpolation=cv2.INTER_NEAREST)
-                now_shape = now_super_pixel_info[key]["label"] / 1
+
+                now_texture = np.asarray(now_super_pixel_info[key]["texture"] / 255, np.float32)
+                now_texture = np.expand_dims(now_texture, axis=-1)
+
+                now_shape = np.asarray(now_super_pixel_info[key]["label"], np.float32)
                 now_shape = cv2.resize(now_shape, (super_pixel_data_size,
                                                    super_pixel_data_size), interpolation=cv2.INTER_NEAREST)
                 now_shape = np.expand_dims(now_shape, axis=-1)
+
                 now_data_list.append(now_data)
                 now_shape_list.append(now_shape)
+                now_texture_list.append(now_texture)
                 pass
 
             now_segment_list.append(now_segment)
@@ -639,7 +665,8 @@ class Runner(object):
             pass
 
         net_input = {"data": np.transpose(now_data_list, axes=(0, 3, 1, 2)),
-                     "shape": np.transpose(now_shape_list, axes=(0, 3, 1, 2))}
+                     "shape": np.transpose(now_shape_list, axes=(0, 3, 1, 2)),
+                     "texture": np.transpose(now_texture_list, axes=(0, 3, 1, 2))}
         sp_info = {"segment": now_segment_list, "node": now_super_pixel_info_list, "edge": now_adjacency_info_list}
         return net_input, sp_info
 
@@ -974,12 +1001,13 @@ if __name__ == '__main__':
     #     model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding_visualization.show_train()
     ############################################################################################
-    visual_embedding_visualization = VisualEmbeddingVisualization(
-        model_file_name="ckpt\\norm4\\epoch_1.pkl",
-        model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
-    visual_embedding_visualization.reconstruct_image_adj_texture_feature()
+    # visual_embedding_visualization = VisualEmbeddingVisualization(
+    #     model_file_name="ckpt\\norm4\\epoch_1.pkl",
+    #     model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
+    # visual_embedding_visualization.reconstruct_image_adj_texture_feature()
     ############################################################################################
-    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
-    # visual_embedding.run()
+    visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm4\\epoch_1.pkl",
+                                       model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
+    visual_embedding.run()
     ############################################################################################
     pass
