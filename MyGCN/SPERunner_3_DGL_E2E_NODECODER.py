@@ -43,10 +43,6 @@ class MyDataset(Dataset):
         # 1. Data
         self.is_train = is_train
         self.data_root_path = data_root_path
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=32, scale=(0.2, 1.)),
-        #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
@@ -71,39 +67,18 @@ class MyDataset(Dataset):
         deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=self.image_size, super_pixel_size=self.sp_size)
         _, super_pixel_info, adjacency_info = deal_super_pixel.run()
 
+        #Graph
+        graph = dgl.DGLGraph()
+
+        # Node
         # Resize Super Pixel
         _now_data_list = [cv2.resize(super_pixel_info[key]["data2"] / 255, (self.sp_ve_size, self.sp_ve_size),
                                      interpolation=cv2.INTER_NEAREST) for key in super_pixel_info]
-        _now_shape_list = [np.expand_dims(cv2.resize(
-            super_pixel_info[key]["label"] / 1, (self.sp_ve_size, self.sp_ve_size),
-            interpolation=cv2.INTER_NEAREST), axis=-1) for key in super_pixel_info]
         net_data = np.transpose(_now_data_list, axes=(0, 3, 1, 2))
-        net_shape = np.transpose(_now_shape_list, axes=(0, 3, 1, 2))
-
-        # Node
-        pos, area, size = [], [], []
-        for sp_i in range(len(super_pixel_info)):
-            _size = super_pixel_info[sp_i]["size"]
-            _area = super_pixel_info[sp_i]["area"]
-
-            size.append([_size])
-            area.append(_area)
-            pos.append([_area[1] - _area[0], _area[3] - _area[2]])
-            pass
-        pos = np.asarray(pos)
-        size = np.asarray(size)
-        area = np.asarray(area)
-
-        #Graph
-        graph = dgl.DGLGraph()
 
         # Node Add
         graph.add_nodes(net_data.shape[0])
         graph.ndata['data'] = torch.from_numpy(net_data).float()
-        graph.ndata['shape'] = torch.from_numpy(net_shape).float()
-        graph.ndata['pos'] = torch.from_numpy(pos).float()
-        graph.ndata['size'] = torch.from_numpy(size).float()
-        graph.ndata['area'] = torch.from_numpy(area).float()
 
         # Edge
         edge_index, edge_w = [], []
@@ -461,10 +436,8 @@ class ConvBlock(nn.Module):
 
 class EmbeddingNetCIFARSmallNorm(nn.Module):
 
-    def __init__(self, has_sigmoid=True, is_train=True):
+    def __init__(self):
         super().__init__()
-        self.is_train = is_train
-        self.has_sigmoid = has_sigmoid
 
         self.input_size = 6
         self.embedding_size = 16
@@ -482,53 +455,10 @@ class EmbeddingNetCIFARSmallNorm(nn.Module):
         self.conv_texture1 = ConvBlock(128, 128, padding=0, has_bn=self.has_bn, bias=self.has_bn)
         self.conv_texture2 = ConvBlock(128, self.embedding_size, padding=0, ks=1, has_bn=self.has_bn, bias=False)
 
-        self.shape_conv1 = ConvBlock(self.embedding_size, 32, padding=0, ks=1, has_bn=self.has_bn)  # 3
-        self.shape_up1 = nn.UpsamplingBilinear2d(scale_factor=3)  # 3
-        self.shape_conv2 = ConvBlock(32, 32, has_bn=self.has_bn)  # 3
-        self.shape_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
-        self.shape_conv3 = ConvBlock(32, 32, has_bn=self.has_bn)  # 6
-        self.shape_out = ConvBlock(32, 1, has_relu=False, has_bn=self.has_bn)  # 6
-
-        self.texture_conv1 = ConvBlock(self.embedding_size * 2, 128, padding=0, ks=1, has_bn=self.has_bn)  # 3
-        self.texture_up1 = nn.UpsamplingBilinear2d(scale_factor=3) # 3
-        self.texture_conv21 = ConvBlock(128, 128, has_bn=self.has_bn)  # 3
-        self.texture_conv22 = ConvBlock(128, 128, has_bn=self.has_bn)  # 3
-        self.texture_up2 = nn.UpsamplingBilinear2d(scale_factor=2)  # 6
-        self.texture_conv31 = ConvBlock(128, 64, has_bn=self.has_bn)  # 6
-        self.texture_conv32 = ConvBlock(64, 64, has_bn=self.has_bn)  # 6
-        self.texture_out = ConvBlock(64, 3, has_relu=False, has_bn=self.has_bn)  # 6
-
         self.norm = Normalize()
-        self.sigmoid = nn.Sigmoid()
         pass
 
     def forward(self, x):
-        return self.forward_train(x) if self.is_train else self.forward_inference(x)
-
-    def forward_train(self, x):
-        e1 = self.pool1(self.conv12(self.conv11(x)))
-        e2 = self.conv22(self.conv21(e1))
-
-        shape_norm = self.norm(self.conv_shape2(self.conv_shape1(e2)))
-        texture_norm = self.norm(self.conv_texture2(self.conv_texture1(e2)))
-
-        shape_feature = shape_norm.view(shape_norm.size()[0], -1)
-        texture_feature = texture_norm.view(texture_norm.size()[0], -1)
-
-        shape_d1 = self.shape_up1(self.shape_conv1(shape_norm))
-        shape_d2 = self.shape_up2(self.shape_conv2(shape_d1))
-        shape_out = self.shape_out(self.shape_conv3(shape_d2))
-        shape_out = self.sigmoid(shape_out) if self.has_sigmoid else shape_out
-
-        texture_d0 = torch.cat([texture_norm, shape_norm], dim=1)
-        texture_d1 = self.texture_up1(self.texture_conv1(texture_d0))
-        texture_d2 = self.texture_up2(self.texture_conv22(self.texture_conv21(texture_d1)))
-        texture_out = self.texture_out(self.texture_conv32(self.texture_conv31(texture_d2)))
-        texture_out = self.sigmoid(texture_out) if self.has_sigmoid else texture_out
-
-        return shape_feature, texture_feature, shape_out, texture_out
-
-    def forward_inference(self, x):
         e1 = self.pool1(self.conv12(self.conv11(x)))
         e2 = self.conv22(self.conv21(e1))
 
@@ -544,31 +474,30 @@ class EmbeddingNetCIFARSmallNorm(nn.Module):
 
 class MyGCNNet(nn.Module):
 
-    def __init__(self, gcn_model, has_sigmoid):
+    def __init__(self, gcn_model):
         super().__init__()
         self.gcn_model = gcn_model()
-        self.ve_model = EmbeddingNetCIFARSmallNorm(has_sigmoid=has_sigmoid)
+        self.ve_model = EmbeddingNetCIFARSmallNorm()
         pass
 
     def forward(self, graphs, nodes_data, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        shape_feature, texture_feature, shape_out, texture_out = self.ve_model.forward(nodes_data)
+        shape_feature, texture_feature = self.ve_model.forward(nodes_data)
 
         nodes_feat = torch.cat([shape_feature, texture_feature], dim=1)
         graphs.ndata['feat'] = nodes_feat
 
         logits = self.gcn_model.forward(graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        return shape_out, texture_out, logits
+        return logits
 
     pass
 
 
 class RunnerSPE(object):
 
-    def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10', has_sigmoid=True,
-                 is_mse_loss=True, root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
+    def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10',
+                 root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
-        self.is_mse_loss = is_mse_loss
 
         _sp_size = 4
         _sp_ve_size = 6
@@ -584,17 +513,10 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=64, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet(gcn_model, has_sigmoid=has_sigmoid).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
+        self.model = MyGCNNet(gcn_model).to(self.device)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
-        if self.is_mse_loss:
-            self.loss_shape = nn.MSELoss().to(self.device)
-            self.loss_texture = nn.MSELoss().to(self.device)
-        else:
-            self.loss_shape = nn.BCELoss().to(self.device)
-            self.loss_texture = nn.BCELoss().to(self.device)
-            pass
 
         Tools.print("Total param: {} gcn_model: {}".format(self._view_model_param(self.model), gcn_model))
         pass
@@ -622,37 +544,29 @@ class RunnerSPE(object):
 
     def _train_epoch(self, print_freq=100):
         self.model.train()
-        epoch_loss, epoch_loss_shape, epoch_loss_texture, epoch_loss_class, epoch_train_acc, nb_data = 0, 0, 0, 0, 0, 0
+        epoch_loss, epoch_train_acc, nb_data = 0, 0, 0
         for i, (batch_graphs, batch_imgs, batch_labels,
                 batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(self.train_loader):
             batch_nodes_data = batch_graphs.ndata['data'].to(self.device)  # num x feat
-            batch_nodes_shape = batch_graphs.ndata['shape'].to(self.device)  # num x feat
             batch_edges_feat = batch_graphs.edata['feat'].to(self.device)
             batch_labels = batch_labels.long().to(self.device)
             batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.device)  # num x 1
             batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.device)
 
             self.optimizer.zero_grad()
-            shape_out, texture_out, logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
-                                                                batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
-            loss, loss_shape, loss_texture, loss_class = self._loss_total(
-                shape_out, texture_out, logits, batch_nodes_shape, batch_nodes_data, batch_labels)
+            logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
+                                        batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
+            loss = self._loss_total(logits, batch_labels)
             loss.backward()
             self.optimizer.step()
 
             nb_data += batch_labels.size(0)
             epoch_loss += loss.detach().item()
-            epoch_loss_shape += loss_shape.detach().item()
-            epoch_loss_texture += loss_texture.detach().item()
-            epoch_loss_class += loss_class.detach().item()
             epoch_train_acc += self._accuracy(logits, batch_labels)
 
             if i % print_freq == 0:
-                Tools.print("{}-{} loss={:4f}/{:4f} shape={:4f}/{:4f} "
-                            "texture={:4f}/{:4f} class={:4f}/{:4f} acc={:4f}".format(
-                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_loss_shape/(i+1),
-                    loss_shape.detach().item(), epoch_loss_texture/(i+1), loss_texture.detach().item(),
-                    epoch_loss_class / (i + 1), loss_class.detach().item(),  epoch_train_acc/nb_data))
+                Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
+                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
                 pass
             pass
 
@@ -665,36 +579,27 @@ class RunnerSPE(object):
 
         Tools.print()
         epoch_test_acc, nb_data = 0, 0
-        epoch_test_loss, epoch_test_loss_shape, epoch_test_loss_texture, epoch_test_loss_class = 0, 0, 0, 0
+        epoch_test_loss = 0
         with torch.no_grad():
             for i, (batch_graphs, batch_imgs, batch_labels,
                     batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(self.test_loader):
                 batch_nodes_data = batch_graphs.ndata['data'].to(self.device)  # num x feat
-                batch_nodes_shape = batch_graphs.ndata['shape'].to(self.device)  # num x feat
                 batch_edges_feat = batch_graphs.edata['feat'].to(self.device)
                 batch_labels = batch_labels.long().to(self.device)
                 batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.device)
                 batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.device)
 
-                shape_o, texture_o, logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
-                                                                batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
-                loss, loss_shape, loss_texture, loss_class = self._loss_total(
-                    shape_o, texture_o, logits, batch_nodes_shape, batch_nodes_data, batch_labels)
+                logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
+                                            batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
+                loss = self._loss_total(logits, batch_labels)
 
                 nb_data += batch_labels.size(0)
                 epoch_test_loss += loss.detach().item()
-                epoch_test_loss_shape += loss_shape.detach().item()
-                epoch_test_loss_texture += loss_texture.detach().item()
-                epoch_test_loss_class += loss_class.detach().item()
                 epoch_test_acc += self._accuracy(logits, batch_labels)
 
                 if i % print_freq == 0:
-                    Tools.print("{}-{} loss={:4f}/{:4f} shape={:4f}/{:4f} "
-                                "texture={:4f}/{:4f} class={:4f}/{:4f} acc={:4f}".format(
-                        i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(),
-                        epoch_test_loss_shape/(i+1), loss_shape.detach().item(),
-                        epoch_test_loss_texture/(i+1), loss_texture.detach().item(),
-                        epoch_test_loss_class/(i+1), loss_class.detach().item(), epoch_test_acc/nb_data))
+                    Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
+                        i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(), epoch_test_acc/nb_data))
                     pass
                 pass
             pass
@@ -703,14 +608,9 @@ class RunnerSPE(object):
         epoch_test_acc /= nb_data
         return epoch_test_loss, epoch_test_acc
 
-    def _loss_total(self, shape_out, texture_out, logits, batch_nodes_shape, batch_nodes_data, batch_labels):
-        loss_shape = self.loss_shape(shape_out, batch_nodes_shape)
-
-        _positions = batch_nodes_data >= 0
-        loss_texture = self.loss_texture(texture_out[_positions], batch_nodes_data[_positions])
+    def _loss_total(self, logits, batch_labels):
         loss_class = self.loss_class(logits, batch_labels)
-        loss_total = loss_shape + loss_texture + loss_class
-        return loss_total, loss_shape, loss_texture, loss_class
+        return loss_class
 
     def _lr(self, epoch):
         if epoch == 25:
@@ -750,71 +650,6 @@ class RunnerSPE(object):
             total_param += np.prod(list(param.data.size()))
         return total_param
 
-    # 需在调试状态下执行
-    def reconstruct_image(self):
-        self.model.eval()
-
-        with torch.no_grad():
-            for i, (batch_graphs, batch_imgs, batch_labels,
-                    batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(self.test_loader):
-                # Input
-                batch_nodes_data = batch_graphs.ndata['data'].to(self.device)  # num x feat
-                batch_nodes_shape = batch_graphs.ndata['shape'].to(self.device)  # num x feat
-                batch_edges_feat = batch_graphs.edata['feat'].to(self.device)
-                batch_labels = batch_labels.long().to(self.device)
-                batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.device)
-                batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.device)
-
-                # Forward
-                shape_o, texture_o, logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
-                                                                batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
-                shape_out = shape_o.detach().numpy()
-                texture_out = texture_o.detach().numpy()
-
-                node_start_num = 0
-                for img_i in range(len(batch_imgs)):
-                    # 当前图片的数据
-                    now_img = batch_imgs[img_i]
-                    node_num = batch_graphs.batch_num_nodes[img_i]
-                    now_texture = np.transpose(texture_out[node_start_num: node_start_num+node_num], axes=(0, 2, 3, 1))
-                    now_shape = np.transpose(shape_out[node_start_num: node_start_num + node_num], axes=(0, 2, 3, 1))
-                    now_area = batch_graphs.ndata["area"][node_start_num: node_start_num + node_num]
-                    node_start_num += node_num
-
-                    # 重构
-                    now_result = np.zeros_like(now_img, dtype=np.float)
-                    for sp_i in range(len(now_texture)):
-                        now_area_sp_i = np.asarray(now_area[sp_i], dtype=np.int)
-                        # 形状
-                        # now_shape_sp_i = np.squeeze(now_node[sp_i]["label"], axis=-1)
-                        now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
-                                                                               now_area_sp_i[1] - now_area_sp_i[0] + 1),
-                                                    interpolation=cv2.INTER_NEAREST)
-                        now_shape_sp_i[now_shape_sp_i < 0.2] = 0
-
-                        # 纹理
-                        now_texture_sp_i = cv2.resize(now_texture[sp_i], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
-                                                                          now_area_sp_i[1] - now_area_sp_i[0] + 1),
-                                                      interpolation=cv2.INTER_NEAREST)
-                        now_texture_sp_i[now_texture_sp_i > 1] = 1
-                        now_texture_sp_i[now_texture_sp_i < 0] = 0
-
-                        # 填充
-                        _result_area = now_result[now_area_sp_i[0]: now_area_sp_i[1] + 1,
-                                       now_area_sp_i[2]: now_area_sp_i[3] + 1, :]
-                        _result_area[now_shape_sp_i > 0] = now_texture_sp_i[now_shape_sp_i > 0]
-                        pass
-
-                    # 展示
-                    Image.fromarray(np.asarray(now_img, dtype=np.uint8)).show()
-                    Image.fromarray(np.asarray(now_result * 255, dtype=np.uint8)).show()
-                    pass
-
-                pass
-            pass
-
-        pass
-
     pass
 
 
@@ -842,21 +677,17 @@ if __name__ == '__main__':
     # _gcn_model = MLPNet
     # _gcn_model = GCNNet
     # _gcn_model = GATNet
-    # _gcn_model = GraphSageNet
-    _gcn_model = GatedGCNNet
+    _gcn_model = GraphSageNet
+    # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E/{}-wa-lr-sigmoid".format("GatedGCNNet")
-    _has_sigmoid = True
-    _is_mse_loss = True
+    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E_NODECODER/{}-wa-lr".format("GraphSageNet")
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
 
-    Tools.print("ckpt:{}, sigmoid:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
-        _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _num_workers, _gpu_id, _gcn_model))
+    Tools.print("ckpt:{}, workers:{}, gpu:{}, model:{}, ".format(_root_ckpt_dir, _num_workers, _gpu_id, _gcn_model))
 
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
-                       is_mse_loss=_is_mse_loss, has_sigmoid=_has_sigmoid,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
     # _test_loss, _test_acc = runner.test()

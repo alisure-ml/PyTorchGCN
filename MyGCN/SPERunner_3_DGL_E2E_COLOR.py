@@ -834,16 +834,10 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    # 强数据增强+LR。不确定以下两个哪个带Sigmoid
-    GCN  No Sigmoid 2020-04-07 02:50:57 Epoch: 75, lr=0.0000, Train: 0.5148/1.4100 Test: 0.5559/1.3145
-    GCN Has Sigmoid 2020-04-07 07:35:40 Epoch: 72, lr=0.0000, Train: 0.5354/1.3428 Test: 0.5759/1.2394
-    GCN  No Sigmoid 2020-04-08 06:36:51 Epoch: 70, lr=0.0000, Train: 0.5099/1.4281 Test: 0.5505/1.3224
-    GCN Has Sigmoid 2020-04-08 07:24:54 Epoch: 73, lr=0.0001, Train: 0.5471/1.3164 Test: 0.5874/1.2138
-    
     # 原始:数据增强+LR
-    GCN           No Sigmoid 2020-04-08 06:24:55 Epoch: 98, lr=0.0001, Train: 0.6696/0.9954 Test: 0.6563/1.0695
-    GCN          Has Sigmoid 2020-04-08 15:41:33 Epoch: 97, lr=0.0001, Train: 0.7781/0.6535 Test: 0.7399/0.8137
-    GraphSageNet Has Sigmoid 
+    GCN          Has Sigmoid 2020-04-09 13:52:48 Epoch: 93, lr=0.0001, Train: 0.7769/0.6522 Test: 0.7240/0.8347
+    GraphSageNet Has Sigmoid 2020-04-09 12:52:56 Epoch: 91, lr=0.0001, Train: 0.8301/0.5132 Test: 0.7714/0.7224
+    GatedGCNNet  Has Sigmoid 2020-04-10 09:59:49 Epoch: 96, lr=0.0001, Train: 0.8555/0.4345 Test: 0.7992/0.6506
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
@@ -855,12 +849,12 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    _gcn_model = GCNNet
+    # _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GraphSageNet
-    # _gcn_model = GatedGCNNet
+    _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E/{}-wa-lr-sigmoid".format("GraphSageNet")
+    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E_COLOR/{}-wa-lr-sigmoid".format("GatedGCNNet")
     _has_sigmoid = True
     _is_mse_loss = True
     _num_workers = 8
