@@ -647,6 +647,8 @@ class Runner(object):
                                                  super_pixel_data_size), interpolation=cv2.INTER_NEAREST)
 
                 now_texture = np.asarray(now_super_pixel_info[key]["texture"] / 255, np.float32)
+                now_texture = cv2.resize(now_texture, (super_pixel_data_size,
+                                                       super_pixel_data_size), interpolation=cv2.INTER_NEAREST)
                 now_texture = np.expand_dims(now_texture, axis=-1)
 
                 now_shape = np.asarray(now_super_pixel_info[key]["label"], np.float32)
@@ -857,6 +859,7 @@ class VisualEmbeddingVisualization(object):
                 for _adj_index, _adj_one in enumerate(_adj):
                     for _adj_one_one in _adj_one:
                         now_cos_sim = cos_sim[_adj_index, _adj_one_one]
+                        # now_cos_sim = 0.0
                         color = (0, 0, 0) if now_cos_sim > 0.95 else (255, 0, 0)
                         draw.line((*center_point[_adj_index], *center_point[_adj_one_one]), fill=color, width=1)
                         pass
@@ -1001,13 +1004,13 @@ if __name__ == '__main__':
     #     model_file_name="ckpt\\norm\\epoch_1.pkl", model=EmbeddingNetCIFARSmallNorm)
     # visual_embedding_visualization.show_train()
     ############################################################################################
-    # visual_embedding_visualization = VisualEmbeddingVisualization(
-    #     model_file_name="ckpt\\norm4\\epoch_1.pkl",
-    #     model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
-    # visual_embedding_visualization.reconstruct_image_adj_texture_feature()
+    visual_embedding_visualization = VisualEmbeddingVisualization(
+        model_file_name="ckpt\\norm4\\epoch_1.pkl",
+        model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
+    visual_embedding_visualization.reconstruct_image_adj_texture_feature()
     ############################################################################################
-    visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm4\\epoch_1.pkl",
-                                       model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
-    visual_embedding.run()
+    # visual_embedding = VisualEmbedding(model_file_name="ckpt\\norm4\\epoch_1.pkl",
+    #                                    model=EmbeddingNetCIFARSmallNorm3, data_root_path='D:\data\CIFAR')
+    # visual_embedding.run()
     ############################################################################################
     pass
