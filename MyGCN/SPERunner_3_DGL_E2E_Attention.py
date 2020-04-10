@@ -236,8 +236,8 @@ class GCNNet(nn.Module):
             h = conv(graphs, h, nodes_num_norm_sqrt)
             pass
 
-        nodes_attention = 2 * F.sigmoid(self.attention(h)) - 1
-        h = h * nodes_attention
+        nodes_attention = 2 * torch.sigmoid(self.attention(h)) - 1
+        h = h + h * nodes_attention
 
         graphs.ndata['h'] = h
         hg = self.readout_fn(self.readout, graphs, 'h')
@@ -292,8 +292,8 @@ class GraphSageNet(nn.Module):
         for conv in self.layers:
             h = conv(graphs, h, nodes_num_norm_sqrt)
 
-        nodes_attention = 2 * F.sigmoid(self.attention(h)) - 1
-        h = h * nodes_attention
+        nodes_attention = 2 * torch.sigmoid(self.attention(h)) - 1
+        h = h + h * nodes_attention
 
         graphs.ndata['h'] = h
         hg = self.readout_fn(self.readout, graphs, 'h')
@@ -353,8 +353,8 @@ class GATNet(nn.Module):
         for conv in self.layers:
             h = conv(graphs, h, nodes_num_norm_sqrt)
 
-        nodes_attention = 2 * F.sigmoid(self.attention(h)) - 1
-        h = h * nodes_attention
+        nodes_attention = 2 * torch.sigmoid(self.attention(h)) - 1
+        h = h + h * nodes_attention
 
         graphs.ndata['h'] = h
         hg = self.readout_fn(self.readout, graphs, 'h')
@@ -416,8 +416,8 @@ class GatedGCNNet(nn.Module):
             h, e = conv(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
             pass
 
-        nodes_attention = 2 * F.sigmoid(self.attention(h)) - 1
-        h = h * nodes_attention
+        nodes_attention = 2 * torch.sigmoid(self.attention(h)) - 1
+        h = h + h * nodes_attention
 
         graphs.ndata['h'] = h
         hg = self.readout_fn(self.readout, graphs, 'h')
@@ -871,7 +871,7 @@ if __name__ == '__main__':
     _is_mse_loss = True
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "1"
+    _gpu_id = "0"
 
     Tools.print("ckpt:{}, sigmoid:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
         _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _num_workers, _gpu_id, _gcn_model))
