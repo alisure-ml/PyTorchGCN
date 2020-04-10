@@ -655,17 +655,9 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    # 强数据增强+LR。不确定以下两个哪个带Sigmoid
-    GCN  No Sigmoid 2020-04-07 02:50:57 Epoch: 75, lr=0.0000, Train: 0.5148/1.4100 Test: 0.5559/1.3145
-    GCN Has Sigmoid 2020-04-07 07:35:40 Epoch: 72, lr=0.0000, Train: 0.5354/1.3428 Test: 0.5759/1.2394
-    GCN  No Sigmoid 2020-04-08 06:36:51 Epoch: 70, lr=0.0000, Train: 0.5099/1.4281 Test: 0.5505/1.3224
-    GCN Has Sigmoid 2020-04-08 07:24:54 Epoch: 73, lr=0.0001, Train: 0.5471/1.3164 Test: 0.5874/1.2138
-    
     # 原始:数据增强+LR
-    GCN           No Sigmoid 2020-04-08 06:24:55 Epoch: 98, lr=0.0001, Train: 0.6696/0.9954 Test: 0.6563/1.0695
-    GCN          Has Sigmoid 2020-04-08 15:41:33 Epoch: 97, lr=0.0001, Train: 0.7781/0.6535 Test: 0.7399/0.8137
-    GraphSageNet Has Sigmoid 2020-04-08 23:31:25 Epoch: 88, lr=0.0001, Train: 0.8074/0.5703 Test: 0.7612/0.7322
-    GatedGCNNet  Has Sigmoid 2020-04-10 03:55:12 Epoch: 92, lr=0.0001, Train: 0.8401/0.4779 Test: 0.7889/0.6741
+    GCN          
+    GraphSageNet 
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
