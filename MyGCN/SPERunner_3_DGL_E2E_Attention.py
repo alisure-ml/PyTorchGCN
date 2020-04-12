@@ -225,7 +225,8 @@ class GCNNet(nn.Module):
         self.layers.append(GCNLayer(self.hidden_dim, self.out_dim, F.relu, self.dropout,
                                     self.graph_norm, self.batch_norm, self.residual))
 
-        self.attention = nn.Linear(self.out_dim, 1)
+        self.attention1 = nn.Linear(self.out_dim, self.out_dim // 2)
+        self.attention2 = nn.Linear(self.out_dim // 2, 1)
         self.readout_mlp = MLPReadout(self.out_dim, self.n_classes)
         pass
 
@@ -236,10 +237,10 @@ class GCNNet(nn.Module):
             h = conv(graphs, h, nodes_num_norm_sqrt)
             pass
 
-        nodes_attention = 2 * torch.sigmoid(self.attention(h)) - 1
-        h = h + h * nodes_attention
+        nodes_attention = 2 * torch.sigmoid(self.attention2(torch.relu(self.attention1(h)))) - 1
+        h_a = h + h * nodes_attention
 
-        graphs.ndata['h'] = h
+        graphs.ndata['h'] = h_a
         hg = self.readout_fn(self.readout, graphs, 'h')
 
         logits = self.readout_mlp(hg)
@@ -256,6 +257,166 @@ class GCNNet(nn.Module):
         else:
             hg = dgl.mean_nodes(graphs, h)  # default readout is mean nodes
         return hg
+
+    pass
+
+
+class GCNNet2(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.L = 4
+        self.readout = "mean"
+        self.in_dim = 32
+        self.hidden_dim = 146
+        self.out_dim = 146
+        self.n_classes = 10
+        self.in_feat_dropout = 0.0
+        self.dropout = 0.0
+        self.graph_norm = True
+        self.batch_norm = True
+        self.residual = True
+
+        self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim)
+        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
+
+        self.layers = nn.ModuleList([GCNLayer(self.hidden_dim, self.hidden_dim, F.relu, self.dropout, self.graph_norm,
+                                              self.batch_norm, self.residual) for _ in range(self.L - 1)])
+
+        self.layers.append(GCNLayer(self.hidden_dim, self.out_dim, F.relu, self.dropout,
+                                    self.graph_norm, self.batch_norm, self.residual))
+
+        self.attention1 = nn.Linear(self.out_dim, self.out_dim // 2)
+        self.attention2 = nn.Linear(self.out_dim // 2, 1)
+        self.readout_mlp = MLPReadout(self.out_dim * 2, self.n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        h = self.in_feat_dropout(h)
+        for conv in self.layers:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+            pass
+
+        nodes_attention = 2 * torch.sigmoid(self.attention2(torch.relu(self.attention1(h)))) - 1
+        h = h + h * nodes_attention
+
+        graphs.ndata['h'] = h
+        hg = self.readout_fn(graphs, 'h')
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    @staticmethod
+    def readout_fn(graphs, h):
+        hg_max = dgl.max_nodes(graphs, h)
+        hg_mean = dgl.mean_nodes(graphs, h)
+        hg = torch.cat([hg_max, hg_mean], dim=-1)
+        return hg
+
+    pass
+
+
+class GCNNet3(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.L = 4
+        self.readout = "mean"
+        self.in_dim = 32
+        self.hidden_dim = 146
+        self.out_dim = 146
+        self.n_classes = 10
+        self.in_feat_dropout = 0.0
+        self.dropout = 0.0
+        self.graph_norm = True
+        self.batch_norm = True
+        self.residual = True
+
+        self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim)
+        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
+
+        self.layers = nn.ModuleList([GCNLayer(self.hidden_dim, self.hidden_dim, F.relu, self.dropout, self.graph_norm,
+                                              self.batch_norm, self.residual) for _ in range(self.L - 1)])
+
+        self.layers.append(GCNLayer(self.hidden_dim, self.out_dim, F.relu, self.dropout,
+                                    self.graph_norm, self.batch_norm, self.residual))
+
+        self.readout_mlp = MLPReadout(self.out_dim * 2, self.n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        h = self.in_feat_dropout(h)
+        for conv in self.layers:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+            pass
+
+        graphs.ndata['h'] = h
+        hg = self.readout_fn(graphs, 'h')
+
+        logits = self.readout_mlp(hg)
+        return logits
+
+    @staticmethod
+    def readout_fn(graphs, h):
+        hg_max = dgl.max_nodes(graphs, h)
+        hg_mean = dgl.mean_nodes(graphs, h)
+        hg = torch.cat([hg_max, hg_mean], dim=-1)
+        return hg
+
+    pass
+
+
+class GCNNet4(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.L = 4
+        self.readout = "mean"
+        self.in_dim = 32
+        self.hidden_dim = 146
+        self.out_dim = 146
+        self.n_classes = 10
+        self.in_feat_dropout = 0.0
+        self.dropout = 0.0
+        self.graph_norm = True
+        self.batch_norm = True
+        self.residual = True
+
+        self.embedding_h = nn.Linear(self.in_dim, self.hidden_dim)
+        self.in_feat_dropout = nn.Dropout(self.in_feat_dropout)
+
+        self.layers = nn.ModuleList([GCNLayer(self.hidden_dim, self.hidden_dim, F.relu, self.dropout, self.graph_norm,
+                                              self.batch_norm, self.residual) for _ in range(self.L - 1)])
+
+        self.layers.append(GCNLayer(self.hidden_dim, self.out_dim, F.relu, self.dropout,
+                                    self.graph_norm, self.batch_norm, self.residual))
+
+        self.attention1 = nn.Linear(self.out_dim * 2, self.out_dim)
+        self.attention2 = nn.Linear(self.out_dim, 1)
+        self.readout_mlp = MLPReadout(self.out_dim, self.n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        h = self.in_feat_dropout(h)
+        for conv in self.layers:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+            pass
+
+        graphs.ndata['h'] = h
+        h_mean = dgl.mean_nodes(graphs, 'h')
+        h_mean = dgl.broadcast_nodes(graphs, h_mean)
+        h_mean_and_h = torch.cat([h, h_mean], dim=-1)
+
+        nodes_attention = 2 * torch.sigmoid(self.attention2(torch.relu(self.attention1(h_mean_and_h)))) - 1
+        h = h + h * nodes_attention
+        graphs.ndata['h'] = h
+        hg = dgl.mean_nodes(graphs, 'h')
+
+        logits = self.readout_mlp(hg)
+        return logits
 
     pass
 
@@ -732,19 +893,14 @@ class RunnerSPE(object):
         return loss_total, loss_shape, loss_texture, loss_class
 
     def _lr(self, epoch):
-        if epoch == 25:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.001
-            pass
-
-        if epoch == 50:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.0005
-            pass
-
-        if epoch == 75:
+        if epoch == 33:
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = 0.0001
+            pass
+
+        if epoch == 67:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = 0.00001
             pass
         pass
 
@@ -839,17 +995,9 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    # 强数据增强+LR。不确定以下两个哪个带Sigmoid
-    GCN  No Sigmoid 2020-04-07 02:50:57 Epoch: 75, lr=0.0000, Train: 0.5148/1.4100 Test: 0.5559/1.3145
-    GCN Has Sigmoid 2020-04-07 07:35:40 Epoch: 72, lr=0.0000, Train: 0.5354/1.3428 Test: 0.5759/1.2394
-    GCN  No Sigmoid 2020-04-08 06:36:51 Epoch: 70, lr=0.0000, Train: 0.5099/1.4281 Test: 0.5505/1.3224
-    GCN Has Sigmoid 2020-04-08 07:24:54 Epoch: 73, lr=0.0001, Train: 0.5471/1.3164 Test: 0.5874/1.2138
-    
-    # 原始:数据增强+LR
-    GCN           No Sigmoid 2020-04-08 06:24:55 Epoch: 98, lr=0.0001, Train: 0.6696/0.9954 Test: 0.6563/1.0695
-    GCN          Has Sigmoid 2020-04-08 15:41:33 Epoch: 97, lr=0.0001, Train: 0.7781/0.6535 Test: 0.7399/0.8137
-    GraphSageNet Has Sigmoid 2020-04-08 23:31:25 Epoch: 88, lr=0.0001, Train: 0.8074/0.5703 Test: 0.7612/0.7322
-    GatedGCNNet  Has Sigmoid 2020-04-10 03:55:12 Epoch: 92, lr=0.0001, Train: 0.8401/0.4779 Test: 0.7889/0.6741
+    # Attention
+    GCN          Has Sigmoid 2020-04-11 11:59:26 Epoch: 96, lr=0.0001, Train: 0.7420/0.7754 Test: 0.7048/0.9064
+    GraphSageNet Has Sigmoid 2020-04-11 18:13:33 Epoch: 97, lr=0.0001, Train: 0.8033/0.5883 Test: 0.7532/0.7561
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
@@ -861,17 +1009,17 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    _gcn_model = GCNNet
+    _gcn_model = GCNNet4
     # _gcn_model = GATNet
     # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E_Attention/{}-wa-lr-sigmoid".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E_Attention/{}-wa-lr-sigmoid".format("GCNNet4")
     _has_sigmoid = True
     _is_mse_loss = True
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{}, sigmoid:{}, mse:{}, workers:{}, gpu:{}, model:{}, ".format(
         _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _num_workers, _gpu_id, _gcn_model))

@@ -564,30 +564,26 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 layer=4, in_dim=32, residual=True, has_sigmoid=True,
+    def __init__(self, gcn_model=GCNNet, data_root_path='/mnt/4T/Data/cifar/cifar-10', batch_size=64,
+                 layer=4, in_dim=32, residual=True, has_sigmoid=True, sp_size=4, sp_ve_size=6, image_size=32,
                  is_mse_loss=True, root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
         self.is_mse_loss = is_mse_loss
 
-        _sp_size = 4
-        _sp_ve_size = 6
-        _image_size = 32
-
         self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True,
-                                       image_size=_image_size, sp_size=_sp_size, sp_ve_size=_sp_ve_size)
+                                       image_size=image_size, sp_size=sp_size, sp_ve_size=sp_ve_size)
         self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False,
-                                      image_size=_image_size, sp_size=_sp_size, sp_ve_size=_sp_ve_size)
+                                      image_size=image_size, sp_size=sp_size, sp_ve_size=sp_ve_size)
 
-        self.train_loader = DataLoader(self.train_dataset, batch_size=64, shuffle=True,
+        self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
                                        num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
-        self.test_loader = DataLoader(self.test_dataset, batch_size=64, shuffle=False,
+        self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(gcn_model, layer=layer, in_dim=in_dim,
                               residual=residual, has_sigmoid=has_sigmoid).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
         if self.is_mse_loss:
@@ -825,17 +821,25 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
+    # layer, size, size, image size, batch size
     # 强数据增强+LR。不确定以下两个哪个带Sigmoid
-    GCN  No Sigmoid 2020-04-07 02:50:57 Epoch: 75, lr=0.0000, Train: 0.5148/1.4100 Test: 0.5559/1.3145
-    GCN Has Sigmoid 2020-04-07 07:35:40 Epoch: 72, lr=0.0000, Train: 0.5354/1.3428 Test: 0.5759/1.2394
-    GCN  No Sigmoid 2020-04-08 06:36:51 Epoch: 70, lr=0.0000, Train: 0.5099/1.4281 Test: 0.5505/1.3224
-    GCN Has Sigmoid 2020-04-08 07:24:54 Epoch: 73, lr=0.0001, Train: 0.5471/1.3164 Test: 0.5874/1.2138
+    GCN  No Sigmoid 4 4 6 32 64 2020-04-07 02:50:57 Epoch: 75, lr=0.0000, Train: 0.5148/1.4100 Test: 0.5559/1.3145
+    GCN Has Sigmoid 4 4 6 32 64 2020-04-07 07:35:40 Epoch: 72, lr=0.0000, Train: 0.5354/1.3428 Test: 0.5759/1.2394
+    GCN  No Sigmoid 4 4 6 32 64 2020-04-08 06:36:51 Epoch: 70, lr=0.0000, Train: 0.5099/1.4281 Test: 0.5505/1.3224
+    GCN Has Sigmoid 4 4 6 32 64 2020-04-08 07:24:54 Epoch: 73, lr=0.0001, Train: 0.5471/1.3164 Test: 0.5874/1.2138
 
     # 原始:数据增强+LR
-    GCN           No Sigmoid 2020-04-08 06:24:55 Epoch: 98, lr=0.0001, Train: 0.6696/0.9954 Test: 0.6563/1.0695
-    GCN          Has Sigmoid 2020-04-08 15:41:33 Epoch: 97, lr=0.0001, Train: 0.7781/0.6535 Test: 0.7399/0.8137
-    GraphSageNet Has Sigmoid 2020-04-08 23:31:25 Epoch: 88, lr=0.0001, Train: 0.8074/0.5703 Test: 0.7612/0.7322
-    GatedGCNNet  Has Sigmoid 2020-04-10 03:55:12 Epoch: 92, lr=0.0001, Train: 0.8401/0.4779 Test: 0.7889/0.6741
+    GCN           No Sigmoid 4 4 6 32 64 2020-04-08 06:24:55 Epoch: 98, lr=0.0001, Train: 0.6696/0.9954 Test: 0.6563/1.0695
+    GCN          Has Sigmoid 4 4 6 32 64 2020-04-08 15:41:33 Epoch: 97, lr=0.0001, Train: 0.7781/0.6535 Test: 0.7399/0.8137
+    GraphSageNet Has Sigmoid 4 4 6 32 64 2020-04-08 23:31:25 Epoch: 88, lr=0.0001, Train: 0.8074/0.5703 Test: 0.7612/0.7322
+    GatedGCNNet  Has Sigmoid 4 4 6 32 64 2020-04-10 03:55:12 Epoch: 92, lr=0.0001, Train: 0.8401/0.4779 Test: 0.7889/0.6741
+    
+    # 原始:数据增强+LR
+    GCN          Has Sigmoid 3 4 6 32 64 2020-04-11 21:20:56 Epoch: 94, lr=0.0001, Train: 0.7638/0.6942 Test: 0.7256/0.8472
+    GCN          Has Sigmoid 5 4 6 32 64 2020-04-11 21:59:27 Epoch: 99, lr=0.0001, Train: 0.7523/0.7447 Test: 0.7180/0.8634
+    GCN          Has Sigmoid 4 3 6 32 64 2020-04-12 21:31:36 Epoch: 78, lr=0.0001, Train: 0.7042/0.8552 Test: 0.6743/0.9571
+    GCN          Has Sigmoid 3 6 6 32 64 2020-04-12 09:37:31 Epoch: 84, lr=0.0001, Train: 0.6293/1.0990 Test: 0.6210/1.1393
+    GCN          Has Sigmoid 4 6 6 32 64 2020-04-12 04:10:02 Epoch: 93, lr=0.0001, Train: 0.6244/1.1293 Test: 0.6168/1.1562
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'
@@ -850,19 +854,27 @@ if __name__ == '__main__':
     # _gcn_model = GraphSageNet
     # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E_Layer/{}-wa-lr-sigmoid".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E_Layer_Size/{}-wa-lr-sigmoid".format("GCNNet")
     _has_sigmoid = True
     _is_mse_loss = True
+    _batch_size = 64
+    # _sp_size = 4
+    _sp_size = 6
+    _sp_ve_size = 6
+    _image_size = 32
     _layer = 3
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
 
-    Tools.print("ckpt:{}, sigmoid:{}, mse:{}, layer:{}, workers:{}, gpu:{}, model:{}, ".format(
-        _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _layer, _num_workers, _gpu_id, _gcn_model))
+    Tools.print("ckpt:{}, sigmoid:{}, mse:{}, layer:{}, workers:{}, gpu:{}, model:{}, "
+                "sp size:{}, sp ve size:{}, image size:{}, batch size:{}".format(
+        _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _layer, _num_workers,
+        _gpu_id, _gcn_model, _sp_size, _sp_ve_size, _image_size, _batch_size))
 
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
-                       is_mse_loss=_is_mse_loss, has_sigmoid=_has_sigmoid, layer=_layer,
+                       is_mse_loss=_is_mse_loss, has_sigmoid=_has_sigmoid, layer=_layer, batch_size=_batch_size,
+                       sp_size=_sp_size, sp_ve_size=_sp_ve_size, image_size=_image_size,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
     # _test_loss, _test_acc = runner.test()
