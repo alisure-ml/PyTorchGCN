@@ -998,6 +998,11 @@ if __name__ == '__main__':
     # Attention
     GCN          Has Sigmoid 2020-04-11 11:59:26 Epoch: 96, lr=0.0001, Train: 0.7420/0.7754 Test: 0.7048/0.9064
     GraphSageNet Has Sigmoid 2020-04-11 18:13:33 Epoch: 97, lr=0.0001, Train: 0.8033/0.5883 Test: 0.7532/0.7561
+    
+    GCN1         Has Sigmoid 2020-04-13 06:37:18 Epoch: 71, lr=0.0000, Train: 0.7229/0.8226 Test: 0.6927/0.9164
+    GCN2         Has Sigmoid 2020-04-13 11:12:45 Epoch: 86, lr=0.0000, Train: 0.7326/0.7942 Test: 0.7055/0.8954
+    GCN3         Has Sigmoid 2020-04-13 22:21:23 Epoch: 85, lr=0.0000, Train: 0.7375/0.7716 Test: 0.7114/0.8622
+    GCN4         Has Sigmoid 2020-04-13 22:22:29 Epoch: 81, lr=0.0000, Train: 0.7309/0.7956 Test: 0.7005/0.8850
     """
     # _gcn_model = GCNNet
     # _data_root_path = 'D:\data\CIFAR'

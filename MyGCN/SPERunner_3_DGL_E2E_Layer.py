@@ -90,7 +90,7 @@ class MyDataset(Dataset):
             area.append(_area)
             pos.append([_area[1] - _area[0], _area[3] - _area[2]])
             pass
-        pos = np.asarray(pos)
+        pos = np.asarray(pos) / self.image_size
         size = np.asarray(size)
         area = np.asarray(area)
 
@@ -546,14 +546,19 @@ class MyGCNNet(nn.Module):
 
     def __init__(self, gcn_model, layer=4, in_dim=32, residual=True, has_sigmoid=True):
         super().__init__()
-        self.gcn_model = gcn_model(layer=layer, in_dim=in_dim, residual=residual)
+        self.in_dim = in_dim
         self.ve_model = EmbeddingNetCIFARSmallNorm(has_sigmoid=has_sigmoid)
+        self.gcn_model = gcn_model(layer=layer, in_dim=self.in_dim, residual=residual)
         pass
 
-    def forward(self, graphs, nodes_data, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+    def forward(self, graphs, nodes_data, nodes_pos, nodes_size, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
         shape_feature, texture_feature, shape_out, texture_out = self.ve_model.forward(nodes_data)
 
-        nodes_feat = torch.cat([shape_feature, texture_feature], dim=1)
+        if self.in_dim == 32:
+            nodes_feat = torch.cat([shape_feature, texture_feature], dim=1)
+        else:
+            nodes_feat = torch.cat([shape_feature, texture_feature, nodes_pos, nodes_size], dim=1)
+
         graphs.ndata['feat'] = nodes_feat
 
         logits = self.gcn_model.forward(graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt)
@@ -625,14 +630,17 @@ class RunnerSPE(object):
                 batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(self.train_loader):
             batch_nodes_data = batch_graphs.ndata['data'].to(self.device)  # num x feat
             batch_nodes_shape = batch_graphs.ndata['shape'].to(self.device)  # num x feat
+            batch_nodes_pos = batch_graphs.ndata['pos'].to(self.device)
+            batch_nodes_size = batch_graphs.ndata['size'].to(self.device)
             batch_edges_feat = batch_graphs.edata['feat'].to(self.device)
             batch_labels = batch_labels.long().to(self.device)
             batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.device)  # num x 1
             batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.device)
 
             self.optimizer.zero_grad()
-            shape_out, texture_out, logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
-                                                                batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
+            shape_out, texture_out, logits = self.model.forward(
+                batch_graphs, batch_nodes_data, batch_nodes_pos, batch_nodes_size,
+                batch_edges_feat, batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
             loss, loss_shape, loss_texture, loss_class = self._loss_total(
                 shape_out, texture_out, logits, batch_nodes_shape, batch_nodes_data, batch_labels)
             loss.backward()
@@ -670,13 +678,16 @@ class RunnerSPE(object):
                     batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(self.test_loader):
                 batch_nodes_data = batch_graphs.ndata['data'].to(self.device)  # num x feat
                 batch_nodes_shape = batch_graphs.ndata['shape'].to(self.device)  # num x feat
+                batch_nodes_pos = batch_graphs.ndata['pos'].to(self.device)
+                batch_nodes_size = batch_graphs.ndata['size'].to(self.device)
                 batch_edges_feat = batch_graphs.edata['feat'].to(self.device)
                 batch_labels = batch_labels.long().to(self.device)
                 batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.device)
                 batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.device)
 
-                shape_o, texture_o, logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
-                                                                batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
+                shape_o, texture_o, logits = self.model.forward(
+                    batch_graphs, batch_nodes_data, batch_nodes_pos, batch_nodes_size,
+                    batch_edges_feat, batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
                 loss, loss_shape, loss_texture, loss_class = self._loss_total(
                     shape_o, texture_o, logits, batch_nodes_shape, batch_nodes_data, batch_labels)
 
@@ -750,72 +761,6 @@ class RunnerSPE(object):
             total_param += np.prod(list(param.data.size()))
         return total_param
 
-    # 需在调试状态下执行
-    def reconstruct_image(self):
-        self.model.eval()
-
-        with torch.no_grad():
-            for i, (batch_graphs, batch_imgs, batch_labels,
-                    batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt) in enumerate(self.test_loader):
-                # Input
-                batch_nodes_data = batch_graphs.ndata['data'].to(self.device)  # num x feat
-                batch_nodes_shape = batch_graphs.ndata['shape'].to(self.device)  # num x feat
-                batch_edges_feat = batch_graphs.edata['feat'].to(self.device)
-                batch_labels = batch_labels.long().to(self.device)
-                batch_nodes_num_norm_sqrt = batch_nodes_num_norm_sqrt.to(self.device)
-                batch_edges_num_norm_sqrt = batch_edges_num_norm_sqrt.to(self.device)
-
-                # Forward
-                shape_o, texture_o, logits = self.model.forward(batch_graphs, batch_nodes_data, batch_edges_feat,
-                                                                batch_nodes_num_norm_sqrt, batch_edges_num_norm_sqrt)
-                shape_out = shape_o.detach().numpy()
-                texture_out = texture_o.detach().numpy()
-
-                node_start_num = 0
-                for img_i in range(len(batch_imgs)):
-                    # 当前图片的数据
-                    now_img = batch_imgs[img_i]
-                    node_num = batch_graphs.batch_num_nodes[img_i]
-                    now_texture = np.transpose(texture_out[node_start_num: node_start_num + node_num],
-                                               axes=(0, 2, 3, 1))
-                    now_shape = np.transpose(shape_out[node_start_num: node_start_num + node_num], axes=(0, 2, 3, 1))
-                    now_area = batch_graphs.ndata["area"][node_start_num: node_start_num + node_num]
-                    node_start_num += node_num
-
-                    # 重构
-                    now_result = np.zeros_like(now_img, dtype=np.float)
-                    for sp_i in range(len(now_texture)):
-                        now_area_sp_i = np.asarray(now_area[sp_i], dtype=np.int)
-                        # 形状
-                        # now_shape_sp_i = np.squeeze(now_node[sp_i]["label"], axis=-1)
-                        now_shape_sp_i = cv2.resize(now_shape[sp_i][:, :, 0], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
-                                                                               now_area_sp_i[1] - now_area_sp_i[0] + 1),
-                                                    interpolation=cv2.INTER_NEAREST)
-                        now_shape_sp_i[now_shape_sp_i < 0.2] = 0
-
-                        # 纹理
-                        now_texture_sp_i = cv2.resize(now_texture[sp_i], (now_area_sp_i[3] - now_area_sp_i[2] + 1,
-                                                                          now_area_sp_i[1] - now_area_sp_i[0] + 1),
-                                                      interpolation=cv2.INTER_NEAREST)
-                        now_texture_sp_i[now_texture_sp_i > 1] = 1
-                        now_texture_sp_i[now_texture_sp_i < 0] = 0
-
-                        # 填充
-                        _result_area = now_result[now_area_sp_i[0]: now_area_sp_i[1] + 1,
-                                       now_area_sp_i[2]: now_area_sp_i[3] + 1, :]
-                        _result_area[now_shape_sp_i > 0] = now_texture_sp_i[now_shape_sp_i > 0]
-                        pass
-
-                    # 展示
-                    Image.fromarray(np.asarray(now_img, dtype=np.uint8)).show()
-                    Image.fromarray(np.asarray(now_result * 255, dtype=np.uint8)).show()
-                    pass
-
-                pass
-            pass
-
-        pass
-
     pass
 
 
@@ -858,27 +803,24 @@ if __name__ == '__main__':
     _has_sigmoid = True
     _is_mse_loss = True
     _batch_size = 64
-    # _sp_size = 4
-    _sp_size = 6
+    # _in_dim = 32
+    _in_dim = 32 + 3
+    _sp_size = 4
     _sp_ve_size = 6
     _image_size = 32
-    _layer = 3
+    _layer = 4
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "1"
 
     Tools.print("ckpt:{}, sigmoid:{}, mse:{}, layer:{}, workers:{}, gpu:{}, model:{}, "
-                "sp size:{}, sp ve size:{}, image size:{}, batch size:{}".format(
+                "sp size:{}, sp ve size:{}, image size:{}, batch size:{}, in dim:{}".format(
         _root_ckpt_dir, _has_sigmoid, _is_mse_loss, _layer, _num_workers,
-        _gpu_id, _gcn_model, _sp_size, _sp_ve_size, _image_size, _batch_size))
+        _gpu_id, _gcn_model, _sp_size, _sp_ve_size, _image_size, _batch_size, _in_dim))
 
     runner = RunnerSPE(gcn_model=_gcn_model, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        is_mse_loss=_is_mse_loss, has_sigmoid=_has_sigmoid, layer=_layer, batch_size=_batch_size,
-                       sp_size=_sp_size, sp_ve_size=_sp_ve_size, image_size=_image_size,
+                       sp_size=_sp_size, sp_ve_size=_sp_ve_size, image_size=_image_size, in_dim=_in_dim,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    # runner.load_model("ckpt2\\norm3\\epoch_0.pkl")
-    # _test_loss, _test_acc = runner.test()
-    # Tools.print('Test: {:.4f}/{:.4f}'.format(_test_acc, _test_loss))
     runner.train(100)
-
     pass
