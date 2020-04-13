@@ -83,5 +83,5 @@ if __name__ == '__main__':
     # demo_multi(image_name="input\\11.jpg", n_segments=[2 ** (i + 1) for i in range(8)])
     # demo(image_name="input\\11.jpg", n_segment=128, sigma=2, max_iter=10)
     # demo2(image_name="input\\1.jpg", image_size=224, pixel_size=14, sigma=1, max_iter=2)
-    demo2(image_name="input\\2.jpg", image_size=224, pixel_size=14, sigma=1, max_iter=5)
+    demo2(image_name="input\\6.png", image_size=32, pixel_size=6, sigma=1, max_iter=5)
     pass
