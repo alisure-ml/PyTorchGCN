@@ -840,12 +840,12 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     # _gcn_model = MLPNet
-    # _gcn_model = GCNNet
+    _gcn_model = GCNNet
     # _gcn_model = GATNet
     # _gcn_model = GraphSageNet
-    _gcn_model = GatedGCNNet
+    # _gcn_model = GatedGCNNet
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E/{}-wa-lr-sigmoid".format("GatedGCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/3_DGL_E2E/{}-wa-lr-sigmoid".format("GCNNet")
     _has_sigmoid = True
     _is_mse_loss = True
     _num_workers = 8

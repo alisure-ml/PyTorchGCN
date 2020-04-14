@@ -588,7 +588,7 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet(gcn_model, layer=layer, in_dim=in_dim,
                               residual=residual, has_sigmoid=has_sigmoid).to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.005, weight_decay=0.0)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
         if self.is_mse_loss:
@@ -811,7 +811,7 @@ if __name__ == '__main__':
     _layer = 4
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "1"
+    _gpu_id = "0"
 
     Tools.print("ckpt:{}, sigmoid:{}, mse:{}, layer:{}, workers:{}, gpu:{}, model:{}, "
                 "sp size:{}, sp ve size:{}, image size:{}, batch size:{}, in dim:{}".format(

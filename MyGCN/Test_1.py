@@ -162,50 +162,113 @@ class CNNNet2(nn.Module):
         conv_stride = 4
         avg_range = 3
 
-        self.conv0 = ConvBlock(3, 64, stride=conv_stride, ks=conv_stride, has_bn=self.has_bn)
+        self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv02 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv03 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv04 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv05 = ConvBlock(64, 64, stride=conv_stride, padding=0, ks=conv_stride, has_bn=self.has_bn)
 
-        self.conv1 = ConvBlock(64, 128, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv1 = ConvBlock(64, 128, padding=0, ks=1, has_bn=self.has_bn)
         self.pool1 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
-        self.conv2 = ConvBlock(128, 128, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
         self.pool2 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.pool_m1 = nn.MaxPool2d(2, 2, padding=0)
 
-        self.conv3 = ConvBlock(128, 128, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv3 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
         self.pool3 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
-        self.conv4 = ConvBlock(128, 128, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv4 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
         self.pool4 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.pool_m2 = nn.MaxPool2d(2, 2, padding=0)
 
-        self.conv5 = ConvBlock(128, 128, padding=1, ks=3, has_bn=self.has_bn)
-        self.pool5 = nn.AvgPool2d(3, 1, padding=1)
-        self.conv6 = ConvBlock(128, 128, padding=1, ks=3, has_bn=self.has_bn)
-        self.pool6 = nn.AvgPool2d(3, 1, padding=1)
-        self.pool_m3 = nn.MaxPool2d(2, 2, padding=0)
+        # self.conv5 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
+        # self.pool5 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        # self.conv6 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
+        # self.pool6 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        # self.pool_m3 = nn.MaxPool2d(2, 2, padding=0)
 
         self.avg = nn.AdaptiveAvgPool2d(1)
         self.readout_mlp = MLPReadout(128, 10)
         pass
 
     def forward(self, x):
-        e = self.conv0(x)
+        e = self.conv01(x)
+        e = self.conv02(e)
+        e = self.conv03(e)
+        e = self.conv04(e)
+        e = self.conv05(e)
 
         e = self.conv1(e)
-        # e = self.pool1(e)
+        e = self.pool1(e)
         e = self.conv2(e)
-        # e = self.pool2(e)
+        e = self.pool2(e)
         e = self.pool_m1(e)
 
         e = self.conv3(e)
-        # e = self.pool3(e)
+        e = self.pool3(e)
         e = self.conv4(e)
-        # e = self.pool4(e)
+        e = self.pool4(e)
         e = self.pool_m2(e)
 
-        e = self.conv5(e)
+        # e = self.conv5(e)
         # e = self.pool5(e)
-        e = self.conv6(e)
+        # e = self.conv6(e)
         # e = self.pool6(e)
-        e = self.pool_m3(e)
+        # e = self.pool_m3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet3(nn.Module):
+
+    def __init__(self, is_train=True):
+        super().__init__()
+        self.is_train = is_train
+        self.has_bn = False
+
+        self.conv11 = ConvBlock(3, 64, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv12 = ConvBlock(64, 64, padding=1, ks=3, has_bn=self.has_bn)
+        self.pool1 = nn.MaxPool2d(2, 2, padding=0)  # 16
+
+        self.conv21 = ConvBlock(64, 128, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv22 = ConvBlock(128, 128, padding=1, ks=3, has_bn=self.has_bn)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)  # 8
+
+        self.conv31 = ConvBlock(128, 256, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv32 = ConvBlock(256, 256, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv33 = ConvBlock(256, 256, padding=1, ks=3, has_bn=self.has_bn)
+        self.pool3 = nn.MaxPool2d(2, 2, padding=0)  # 4
+
+        self.conv41 = ConvBlock(256, 512, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv42 = ConvBlock(512, 512, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv43 = ConvBlock(512, 512, padding=1, ks=3, has_bn=self.has_bn)
+        self.pool4 = nn.MaxPool2d(2, 2, padding=0)  # 2
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(512, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv11(x)
+        e = self.conv12(e)
+        e = self.pool1(e)
+
+        e = self.conv21(e)
+        e = self.conv22(e)
+        e = self.pool2(e)
+
+        e = self.conv31(e)
+        e = self.conv32(e)
+        e = self.conv33(e)
+        e = self.pool3(e)
+
+        e = self.conv41(e)
+        e = self.conv42(e)
+        e = self.conv43(e)
+        e = self.pool4(e)
 
         e = self.avg(e).squeeze()
         out = self.readout_mlp(e)
@@ -407,6 +470,29 @@ if __name__ == '__main__':
     CNNNet 4x4 3x3 4layer  3x3  2020-04-13 20:44:20 Epoch: 94, lr=0.0001, Train: 0.8873/0.3205 Test: 0.8177/0.6267
     CNNNet 4x4 3x3 6layer  3x3  2020-04-13 21:28:28 Epoch: 97, lr=0.0001, Train: 0.8710/0.3698 Test: 0.8059/0.6274
     
+    CNNNet 4x4 3x3 4layer   4   2020-04-13 13:35:02 Epoch: 99, lr=0.0001, Train: 0.7597/0.6751 Test: 0.7239/0.8237
+    CNNNet 4x4 3x3 4layer  2,4  2020-04-14 13:04:28 Epoch: 97, lr=0.0001, Train: 0.7817/0.6075 Test: 0.7349/0.8027
+    CNNNet 4x4 3x3 4layer 12,34 2020-04-14 13:11:27 Epoch: 96, lr=0.0001, Train: 0.7869/0.5908 Test: 0.7287/0.8226
+    """
+    """
+    CNNNet 4x4 3x3 4layer 1111 pool 2020-04-14 16:03:04 Epoch: 99, lr=0.0001, Train: 0.7604/0.6727 Test: 0.7221/0.8298
+    CNNNet 4x4 3x3 4layer 3111 pool 2020-04-14 16:30:18 Epoch: 87, lr=0.0001, Train: 0.8586/0.4000 Test: 0.7951/0.6443
+    CNNNet 4x4 3x3 4layer 3311 pool 2020-04-14 16:35:09 Epoch: 95, lr=0.0001, Train: 0.8744/0.3517 Test: 0.8155/0.6207
+    CNNNet 4x4 3x3 4layer 1133 pool 2020-04-14 17:11:43 Epoch: 96, lr=0.0001, Train: 0.8203/0.5004 Test: 0.7798/0.6776
+    CNNNet 4x4 3x3 4layer 3333 pool 2020-04-14 16:46:42 Epoch: 99, lr=0.0001, Train: 0.8999/0.2810 Test: 0.8268/0.6054
+    
+    CNNNet 2x2 3x3 4layer 1111 pool 2020-04-14 20:12:28 Epoch: 92, lr=0.0001, Train: 0.9064/0.2621 Test: 0.8252/0.6181
+    CNNNet 2x2 3x3 6layer 1111 pool 2020-04-14 21:05:32 Epoch: 91, lr=0.0001, Train: 0.8955/0.2918 Test: 0.8123/0.6613
+    
+    # + Conv
+    CNNNet 4x4 3x3 4layer 1111 pool 2020-04-14 18:09:44 Epoch: 97, lr=0.0001, Train: 0.8851/0.3217 Test: 0.8185/0.6179
+    CNNNet 4x4 3x3 6layer 1111 pool 2020-04-14 19:26:49 Epoch: 99, lr=0.0001, Train: 0.8823/0.3221 Test: 0.8095/0.6584
+    CNNNet 4x4 3x3 6layer 1111 pool 2020-04-14 21:03:49 Epoch: 93, lr=0.0001, Train: 0.8558/0.4000 Test: 0.7925/0.6916
+    CNNNet 4x4 5x5 4layer 1111 pool 2020-04-14 19:30:13 Epoch: 94, lr=0.0001, Train: 0.8643/0.3786 Test: 0.8011/0.6882
+    CNNNet 4x4 5x5 6layer 1111 pool 2020-04-14 19:38:09 Epoch: 99, lr=0.0001, Train: 0.8648/0.3780 Test: 0.8028/0.6647
+    
+    CNNNet 4x4 3x3 4layer 1111 pool 2020-04-14 18:09:44 Epoch: 97, lr=0.0001, Train: 0.8851/0.3217 Test: 0.8185/0.6179
+    CNNNet 4x4 3x3 4layer 1111 pool moreconv 2020-04-14 23:34:24 Epoch: 96, lr=0.0001, Train: 0.9130/0.2456 Test: 0.8292/0.6251
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("CNNNet")
@@ -418,11 +504,11 @@ if __name__ == '__main__':
     _root_ckpt_dir = "./ckpt2/dgl/Test_1/{}".format("CNNNet")
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{}, workers:{}, gpu:{}".format(_root_ckpt_dir, _num_workers, _gpu_id))
 
-    runner = RunnerSPE(model=CNNNet2, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
+    runner = RunnerSPE(model=CNNNet3, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     runner.train(100)
 
