@@ -43,9 +43,17 @@ class MyDataset(Dataset):
         # 1. Data
         self.is_train = is_train
         self.data_root_path = data_root_path
-        self.transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
-                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
-        self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
+        # self.transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
+        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
+
+        self.tran_train = transforms.Compose([transforms.RandomCrop(32, padding=4),
+                                              transforms.RandomHorizontalFlip(), transforms.ToTensor(),
+                                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+        self.tran_test = transforms.Compose([transforms.ToTensor(),
+                                             transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+
+        self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train,
+                                         transform=self.tran_train if self.is_train else self.tran_test)
 
         # 3. Super Pixel
         self.image_size = image_size
@@ -55,16 +63,7 @@ class MyDataset(Dataset):
         return len(self.data_set)
 
     def __getitem__(self, idx):
-        img, target = self.data_set.__getitem__(idx)
-        img = np.asarray(img)
-        return img, target
-
-    @staticmethod
-    def collate_fn(samples):
-        imgs, labels = map(list, zip(*samples))
-        imgs = torch.tensor(np.transpose(imgs, axes=(0, 3, 1, 2)))
-        labels = torch.tensor(np.array(labels))
-        return imgs, labels
+        return self.data_set.__getitem__(idx)
 
     pass
 
@@ -104,15 +103,15 @@ class CNNNet(nn.Module):
         self.conv0 = ConvBlock(3, 64, stride=conv_stride, ks=conv_stride, has_bn=self.has_bn)
 
         self.conv1 = ConvBlock(64, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool1 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool1 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.conv2 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool2 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool2 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.pool_m1 = nn.MaxPool2d(2, 2, padding=0)
 
         self.conv3 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool3 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool3 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.conv4 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool4 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool4 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.pool_m2 = nn.MaxPool2d(2, 2, padding=0)
 
         # self.conv5 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
@@ -158,26 +157,26 @@ class CNNNet2(nn.Module):
     def __init__(self, is_train=True):
         super().__init__()
         self.is_train = is_train
-        self.has_bn = False
-        conv_stride = 4
+        self.has_bn = True
+        conv_stride = 2
         avg_range = 3
 
         self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
         self.conv02 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
-        self.conv03 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
-        self.conv04 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        # self.conv03 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        # self.conv04 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
         self.conv05 = ConvBlock(64, 64, stride=conv_stride, padding=0, ks=conv_stride, has_bn=self.has_bn)
 
         self.conv1 = ConvBlock(64, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool1 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool1 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.conv2 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool2 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool2 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.pool_m1 = nn.MaxPool2d(2, 2, padding=0)
 
         self.conv3 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool3 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool3 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.conv4 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
-        self.pool4 = nn.AvgPool2d(avg_range, 1, padding=avg_range // 2)
+        self.pool4 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
         self.pool_m2 = nn.MaxPool2d(2, 2, padding=0)
 
         # self.conv5 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
@@ -193,8 +192,77 @@ class CNNNet2(nn.Module):
     def forward(self, x):
         e = self.conv01(x)
         e = self.conv02(e)
-        e = self.conv03(e)
-        e = self.conv04(e)
+        # e = self.conv03(e)
+        # e = self.conv04(e)
+        e = self.conv05(e)
+
+        e = self.conv1(e)
+        e = self.pool1(e)
+        e = self.conv2(e)
+        e = self.pool2(e)
+        e = self.pool_m1(e)
+
+        e = self.conv3(e)
+        e = self.pool3(e)
+        e = self.conv4(e)
+        e = self.pool4(e)
+        e = self.pool_m2(e)
+
+        # e = self.conv5(e)
+        # e = self.pool5(e)
+        # e = self.conv6(e)
+        # e = self.pool6(e)
+        # e = self.pool_m3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet22(nn.Module):
+
+    def __init__(self, is_train=True):
+        super().__init__()
+        self.is_train = is_train
+        self.has_bn = True
+        conv_stride = 4
+        avg_range = 3
+
+        self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv02 = ConvBlock(64, 128, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        # self.conv03 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        # self.conv04 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv05 = ConvBlock(128, 128, stride=conv_stride, padding=0, ks=conv_stride, has_bn=self.has_bn)
+
+        self.conv1 = ConvBlock(128, 256, padding=0, ks=1, has_bn=self.has_bn)
+        self.pool1 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        self.conv2 = ConvBlock(256, 256, padding=0, ks=1, has_bn=self.has_bn)
+        self.pool2 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        self.pool_m1 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv3 = ConvBlock(256, 512, padding=0, ks=1, has_bn=self.has_bn)
+        self.pool3 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        self.conv4 = ConvBlock(512, 512, padding=0, ks=1, has_bn=self.has_bn)
+        self.pool4 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        self.pool_m2 = nn.MaxPool2d(2, 2, padding=0)
+
+        # self.conv5 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
+        # self.pool5 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        # self.conv6 = ConvBlock(128, 128, padding=0, ks=1, has_bn=self.has_bn)
+        # self.pool6 = nn.AvgPool2d(avg_range, 1, padding=avg_range//2)
+        # self.pool_m3 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(512, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv01(x)
+        e = self.conv02(e)
+        # e = self.conv03(e)
+        # e = self.conv04(e)
         e = self.conv05(e)
 
         e = self.conv1(e)
@@ -284,18 +352,15 @@ class RunnerSPE(object):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        _image_size = 32
+        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True, image_size=32)
+        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False, image_size=32)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True, image_size=_image_size)
-        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False, image_size=_image_size)
-
-        self.train_loader = DataLoader(self.train_dataset, batch_size=64, shuffle=True,
-                                       num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
-        self.test_loader = DataLoader(self.test_dataset, batch_size=64, shuffle=False,
-                                      num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
+        self.train_loader = DataLoader(self.train_dataset, batch_size=128, shuffle=True, num_workers=num_workers)
+        self.test_loader = DataLoader(self.test_dataset, batch_size=128, shuffle=False, num_workers=num_workers)
 
         self.model = model().to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.01, weight_decay=0.0)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -342,7 +407,7 @@ class RunnerSPE(object):
 
             if i % print_freq == 0:
                 Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                    i, len(self.train_loader), epoch_loss / (i + 1), loss.detach().item(), epoch_train_acc / nb_data))
+                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
                 pass
             pass
 
@@ -369,8 +434,7 @@ class RunnerSPE(object):
 
                 if i % print_freq == 0:
                     Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                        i, len(self.test_loader), epoch_test_loss / (i + 1), loss.detach().item(),
-                                                  epoch_test_acc / nb_data))
+                        i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(), epoch_test_acc/nb_data))
                     pass
                 pass
             pass
@@ -384,17 +448,12 @@ class RunnerSPE(object):
         return loss_class
 
     def _lr(self, epoch):
-        if epoch == 25:
+        if epoch == 33:
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = 0.001
             pass
 
-        if epoch == 50:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.0005
-            pass
-
-        if epoch == 75:
+        if epoch == 67:
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = 0.0001
             pass
@@ -442,19 +501,19 @@ if __name__ == '__main__':
     CNNNet 2x2 3x3 4layer       2020-04-13 15:18:12 Epoch: 96, lr=0.0001, Train: 0.8049/0.5423 Test: 0.7505/0.7542
     CNNNet 4x4 3x3 4layer       2020-04-13 13:35:02 Epoch: 99, lr=0.0001, Train: 0.7597/0.6751 Test: 0.7239/0.8237
     CNNNet 6x6 3x3 4layer       2020-04-13 16:18:59 Epoch: 98, lr=0.0001, Train: 0.6807/0.8896 Test: 0.6581/0.9817
-
+    
     CNNNet 4x4 3x3 5layer       2020-04-13 14:28:55 Epoch: 98, lr=0.0001, Train: 0.7594/0.6753 Test: 0.7224/0.8188
     CNNNet 4x4 3x3 4layer       2020-04-13 13:35:02 Epoch: 99, lr=0.0001, Train: 0.7597/0.6751 Test: 0.7239/0.8237
     CNNNet 4x4 3x3 3layer       2020-04-13 14:33:04 Epoch: 95, lr=0.0001, Train: 0.7515/0.6934 Test: 0.7223/0.8088
-
+    
     CNNNet 4x4 3x3 4layer + add 2020-04-13 14:11:01 Epoch: 99, lr=0.0001, Train: 0.7632/0.6645 Test: 0.7285/0.8094
-
+    
     CNNNet 2x2 3x3 5layer       2020-04-13 15:12:25 Epoch: 85, lr=0.0001, Train: 0.8131/0.5320 Test: 0.7515/0.7446
     CNNNet 1x1 3x3 6layer       2020-04-13 16:51:52 Epoch: 97, lr=0.0001, Train: 0.6310/1.0423 Test: 0.5493/1.3548
     CNNNet 2x2 3x3 6layer       2020-04-13 15:29:08 Epoch: 84, lr=0.0001, Train: 0.8114/0.5296 Test: 0.7536/0.7498
-
+    
     CNNNet 4x4 5x5 4layer       2020-04-13 16:22:10 Epoch: 98, lr=0.0001, Train: 0.7357/0.7381 Test: 0.6981/0.8875
-
+    
     CNNNet 2x2 3x3 4layer 2pool 2020-04-13 17:09:29 Epoch: 90, lr=0.0001, Train: 0.8121/0.5278 Test: 0.7654/0.7248
     CNNNet 4x4 3x3 4layer 2pool 2020-04-13 16:49:49 Epoch: 97, lr=0.0001, Train: 0.7588/0.6757 Test: 0.7210/0.8182
     CNNNet 1x1 3x3 4layer 2pool 2020-04-13 19:08:47 Epoch: 77, lr=0.0001, Train: 0.6196/1.0698 Test: 0.5481/1.3280
@@ -463,14 +522,14 @@ if __name__ == '__main__':
     CNNNet 1x1 3x3 6layer 3pool 2020-04-13 19:27:36 Epoch: 97, lr=0.0001, Train: 0.6668/0.9343 Test: 0.5684/1.3213
     CNNNet 2x2 3x3 6layer 3pool 2020-04-13 18:40:26 Epoch: 96, lr=0.0001, Train: 0.8274/0.4786 Test: 0.7625/0.7672
     CNNNet 4x4 3x3 6layer 3pool 2020-04-13 18:36:38 Epoch: 96, lr=0.0001, Train: 0.7562/0.6835 Test: 0.7123/0.8373
-
+    
     CNNNet 1x1 3x3 4layer  3x3  2020-04-13 21:12:20 Epoch: 98, lr=0.0001, Train: 0.9783/0.0610 Test: 0.8743/0.6718
     CNNNet 1x1 3x3 6layer  3x3  2020-04-13 21:11:06 Epoch: 99, lr=0.0001, Train: 0.9713/0.0822 Test: 0.8507/0.7306
     CNNNet 2x2 3x3 4layer  3x3  2020-04-13 19:44:08 Epoch: 96, lr=0.0001, Train: 0.9515/0.1366 Test: 0.8501/0.6302
     CNNNet 2x2 3x3 6layer  3x3  2020-04-13 19:40:44 Epoch: 82, lr=0.0001, Train: 0.9227/0.2124 Test: 0.8353/0.6319
     CNNNet 4x4 3x3 4layer  3x3  2020-04-13 20:44:20 Epoch: 94, lr=0.0001, Train: 0.8873/0.3205 Test: 0.8177/0.6267
     CNNNet 4x4 3x3 6layer  3x3  2020-04-13 21:28:28 Epoch: 97, lr=0.0001, Train: 0.8710/0.3698 Test: 0.8059/0.6274
-
+    
     CNNNet 4x4 3x3 4layer   4   2020-04-13 13:35:02 Epoch: 99, lr=0.0001, Train: 0.7597/0.6751 Test: 0.7239/0.8237
     CNNNet 4x4 3x3 4layer  2,4  2020-04-14 13:04:28 Epoch: 97, lr=0.0001, Train: 0.7817/0.6075 Test: 0.7349/0.8027
     CNNNet 4x4 3x3 4layer 12,34 2020-04-14 13:11:27 Epoch: 96, lr=0.0001, Train: 0.7869/0.5908 Test: 0.7287/0.8226
@@ -481,21 +540,28 @@ if __name__ == '__main__':
     CNNNet 4x4 3x3 4layer 3311 pool 2020-04-14 16:35:09 Epoch: 95, lr=0.0001, Train: 0.8744/0.3517 Test: 0.8155/0.6207
     CNNNet 4x4 3x3 4layer 1133 pool 2020-04-14 17:11:43 Epoch: 96, lr=0.0001, Train: 0.8203/0.5004 Test: 0.7798/0.6776
     CNNNet 4x4 3x3 4layer 3333 pool 2020-04-14 16:46:42 Epoch: 99, lr=0.0001, Train: 0.8999/0.2810 Test: 0.8268/0.6054
-
+    
     CNNNet 2x2 3x3 4layer 1111 pool 2020-04-14 20:12:28 Epoch: 92, lr=0.0001, Train: 0.9064/0.2621 Test: 0.8252/0.6181
     CNNNet 2x2 3x3 6layer 1111 pool 2020-04-14 21:05:32 Epoch: 91, lr=0.0001, Train: 0.8955/0.2918 Test: 0.8123/0.6613
-
+    """
+    """
     # + Conv
     CNNNet 4x4 3x3 4layer 1111 pool 2020-04-14 18:09:44 Epoch: 97, lr=0.0001, Train: 0.8851/0.3217 Test: 0.8185/0.6179
     CNNNet 4x4 3x3 6layer 1111 pool 2020-04-14 19:26:49 Epoch: 99, lr=0.0001, Train: 0.8823/0.3221 Test: 0.8095/0.6584
     CNNNet 4x4 3x3 6layer 1111 pool 2020-04-14 21:03:49 Epoch: 93, lr=0.0001, Train: 0.8558/0.4000 Test: 0.7925/0.6916
     CNNNet 4x4 5x5 4layer 1111 pool 2020-04-14 19:30:13 Epoch: 94, lr=0.0001, Train: 0.8643/0.3786 Test: 0.8011/0.6882
     CNNNet 4x4 5x5 6layer 1111 pool 2020-04-14 19:38:09 Epoch: 99, lr=0.0001, Train: 0.8648/0.3780 Test: 0.8028/0.6647
-
+    
     CNNNet 4x4 3x3 4layer 1111 pool 2020-04-14 18:09:44 Epoch: 97, lr=0.0001, Train: 0.8851/0.3217 Test: 0.8185/0.6179
     CNNNet 4x4 3x3 4layer 1111 pool moreconv 2020-04-14 23:34:24 Epoch: 96, lr=0.0001, Train: 0.9130/0.2456 Test: 0.8292/0.6251
+    """
+
+    """
+    BN 2x2 4layer 1111 pool 3conv 2020-04-15 00:50:46 Epoch: 72, lr=0.0001, Train: 0.9391/0.1809 Test: 0.8712/0.4178
+    BN 4x4 4layer 1111 pool 3conv 2020-04-15 00:34:39 Epoch: 97, lr=0.0001, Train: 0.9166/0.2327 Test: 0.8572/0.4632
     
-    CNNNet3 2020-04-15 00:14:53 Epoch: 91, lr=0.0001, Train: 0.9651/0.1039 Test: 0.8786/0.6147
+    BN 2x2 4layer 1111 pool 3conv large 2020-04-15 01:44:01 Epoch: 88, lr=0.0001, Train: 0.9876/0.0460 Test: 0.8937/0.4051
+    BN 4x4 4layer 1111 pool 3conv large 2020-04-15 01:37:42 Epoch: 94, lr=0.0001, Train: 0.9776/0.0686 Test: 0.8821/0.4486
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("CNNNet")
@@ -511,7 +577,7 @@ if __name__ == '__main__':
 
     Tools.print("ckpt:{}, workers:{}, gpu:{}".format(_root_ckpt_dir, _num_workers, _gpu_id))
 
-    runner = RunnerSPE(model=CNNNet3, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
+    runner = RunnerSPE(model=CNNNet22, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     runner.train(100)
 

@@ -8,6 +8,59 @@ import torch.backends.cudnn as cudnn
 import torchvision.transforms as transforms
 
 
+class CNNNet(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        # size = [3, 64, 128, 256, 512]
+        size = [3, 64, 128, 128, 128]
+        kernel_size = 1
+        padding = 0
+        self.layers = []
+        self.layers.extend([nn.Conv2d(size[0], size[1], kernel_size=3, padding=1, stride=1),
+                            nn.BatchNorm2d(size[1]), nn.ReLU(inplace=True)])
+        self.layers.extend([nn.Conv2d(size[1], size[1], kernel_size=3, padding=1, stride=1),
+                            nn.BatchNorm2d(size[1]), nn.ReLU(inplace=True)])
+        self.layers.extend([nn.Conv2d(size[1], size[1], kernel_size=4, padding=0, stride=4),
+                            nn.BatchNorm2d(size[1]), nn.ReLU(inplace=True)])
+
+        self.layers.extend([nn.Conv2d(size[1], size[2], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[2]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.Conv2d(size[2], size[2], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[2]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.MaxPool2d(2, 2, padding=0)])
+
+        self.layers.extend([nn.Conv2d(size[2], size[3], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[3]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.Conv2d(size[3], size[3], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[3]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.Conv2d(size[3], size[3], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[3]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.MaxPool2d(2, 2, padding=0)])
+
+        self.layers.extend([nn.Conv2d(size[3], size[4], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[4]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.Conv2d(size[4], size[4], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[4]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.Conv2d(size[4], size[4], kernel_size=kernel_size, padding=padding, stride=1),
+                            nn.BatchNorm2d(size[4]), nn.ReLU(inplace=True), nn.AvgPool2d(3, 1, padding=1)])
+        self.layers.extend([nn.MaxPool2d(2, 2, padding=0)])
+
+        self.layers.extend([nn.AdaptiveAvgPool2d(1)])
+
+        self.features = nn.Sequential(*self.layers)
+        self.readout_mlp = nn.Linear(size[4], 10)
+        pass
+
+    def forward(self, x):
+        out = self.features(x)
+        out = out.view(out.size(0), -1)
+        out = self.readout_mlp(out)
+        return out
+
+    pass
+
+
 class VGG(nn.Module):
 
     def __init__(self):
@@ -43,7 +96,7 @@ class VGG(nn.Module):
 
 class Runner(object):
 
-    def __init__(self, root_path='/home/ubuntu/data1.5TB/cifar', batch_size=128, lr=0.1):
+    def __init__(self, root_path='/mnt/4T/Data/cifar/cifar-10', batch_size=128, lr=0.1):
         self.root_path = root_path
         self.batch_size = batch_size
         self.lr = lr
@@ -54,7 +107,7 @@ class Runner(object):
         self.best_acc = 0
         self.start_epoch = 0
 
-        self.net = VGG().to(self.device)
+        self.net = CNNNet().to(self.device)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
 
@@ -94,7 +147,7 @@ class Runner(object):
         pass
 
     def info(self):
-        Tools.print("model={} batch size={} lr={}".format(str(self.model), self.batch_size, self.lr))
+        Tools.print("batch size={} lr={}".format(self.batch_size, self.lr))
         pass
 
     def train(self, epoch, change_lr=False):
@@ -145,24 +198,17 @@ class Runner(object):
 
         Tools.print('Loss: %.3f | Acc: %.3f%% (%d/%d)'
                    % (test_loss / len(self.test_loader), 100. * correct / total, correct, total))
-
-        # Save checkpoint.
-        acc = 100. * correct / total
-        if acc > self.best_acc:
-            Tools.print('Saving..')
-            state = {'net': self.net.state_dict(), 'acc': acc, 'epoch': epoch}
-            if not os.path.isdir(self.checkpoint_path):
-                os.mkdir(self.checkpoint_path)
-            torch.save(state, '{}/ckpt.t7'.format(self.checkpoint_path))
-            self.best_acc = acc
-            pass
-        Tools.print("best_acc={} acc={}".format(self.best_acc, acc))
+        Tools.print("best_acc={} acc={}".format(self.best_acc, 100. * correct / total))
         pass
 
     pass
 
 
 if __name__ == '__main__':
+    """
+    Ha Pool 86.70
+    No Pool 86.31
+    """
 
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # 1
 
