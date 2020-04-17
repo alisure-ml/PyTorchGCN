@@ -574,18 +574,18 @@ if __name__ == '__main__':
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GCNNet")
     _batch_size = 64
     _image_size = 32
-    # _sp_size = 4
+    _sp_size = 4
     # _sp_size = 6
     # _sp_size = 2
-    _sp_size = 8
+    # _sp_size = 8
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "1"
-    # _gpu_id = "0"
-    # _gpu_id = "0"
     _gpu_id = "1"
+    # _gpu_id = "0"
+    # _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
