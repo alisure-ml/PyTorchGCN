@@ -411,8 +411,6 @@ class RunnerSPE(object):
                 Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
                     i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
                 pass
-            Tools.print()
-            Tools.print("Data Begin")
             pass
 
         epoch_train_acc /= nb_data
@@ -504,27 +502,31 @@ if __name__ == '__main__':
     """
     GCN  Has Sigmoid 2020-04-08 15:41:33 Epoch: 97, lr=0.0001, Train: 0.7781/0.6535 Test: 0.7399/0.8137
     """
-    _data_root_path = 'D:\data\CIFAR'
-    _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
-    _batch_size = 64
-    _image_size = 32
-    _sp_size = 4
-    _train_print_freq = 1
-    _test_print_freq = 1
-    _num_workers = 1
-    _use_gpu = False
-    _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GCNNet")
+    # _data_root_path = 'D:\data\CIFAR'
+    # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
     # _batch_size = 64
     # _image_size = 32
     # _sp_size = 4
-    # _train_print_freq = 100
-    # _test_print_freq = 50
-    # _num_workers = 8
-    # _use_gpu = True
+    # _train_print_freq = 1
+    # _test_print_freq = 1
+    # _num_workers = 1
+    # _use_gpu = False
     # _gpu_id = "1"
+
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GCNNet")
+    _batch_size = 64
+    _image_size = 32
+    # _sp_size = 4
+    # _sp_size = 2
+    _sp_size = 6
+    _train_print_freq = 100
+    _test_print_freq = 50
+    _num_workers = 8
+    _use_gpu = True
+    # _gpu_id = "0"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
