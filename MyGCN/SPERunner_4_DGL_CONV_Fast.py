@@ -63,8 +63,8 @@ class DealSuperPixel(object):
             for sp_id in np.unique(self.segment[_now_adj]):
                 if sp_id != i:
                     edge_index.append([i, sp_id])
-                    _adj_dis.append(1/np.sqrt((self.region_props[i][0][0] - self.region_props[sp_id][0][0]) ** 2 +
-                                              (self.region_props[i][0][1] - self.region_props[sp_id][0][1]) ** 2))
+                    _adj_dis.append(1/(np.sqrt((self.region_props[i][0][0] - self.region_props[sp_id][0][0]) ** 2 +
+                                               (self.region_props[i][0][1] - self.region_props[sp_id][0][1]) ** 2) + 1))
                 pass
             edge_w.extend(_adj_dis / np.sum(_adj_dis, axis=0))
 
@@ -82,24 +82,6 @@ class DealSuperPixel(object):
 
         sp_adj = [np.asarray(edge_index), np.asarray(edge_w)]
         return self.segment, sp_adj, pixel_adj
-
-    def show(self, segment):
-        result = segmentation.mark_boundaries(self.image_data, segment)
-        fig = plt.figure("{}".format(self.super_pixel_num))
-        ax = fig.add_subplot(1, 1, 1)
-        ax.imshow(result)
-        plt.axis("off")
-        plt.show()
-        pass
-
-    @staticmethod
-    def demo():
-        now_image_name = "data\\input\\1.jpg"
-        now_image_data = io.imread(now_image_name)
-        deal_super_pixel = DealSuperPixel(image_data=now_image_data, ds_image_size=224)
-        segment, sp_adj, pixel_adj = deal_super_pixel.run()
-        deal_super_pixel.show(segment)
-        pass
 
     pass
 
@@ -218,17 +200,24 @@ class CONVNet(nn.Module):
     def __init__(self, in_dim=3, hidden_dims=[64, 64], out_dim=64, has_bn=True):
         super().__init__()
         self.hidden_dims = hidden_dims
-        assert 2 <= len(self.hidden_dims) <= 3
-        self.conv_1 = ConvBlock(in_dim, self.hidden_dims[0], stride=1, padding=1, ks=3, has_bn=has_bn)
+        assert 0 <= len(self.hidden_dims) <= 3
+        if len(self.hidden_dims) >= 1:
+            self.conv_1 = ConvBlock(in_dim, self.hidden_dims[0], stride=1, padding=1, ks=3, has_bn=has_bn)
         if len(self.hidden_dims) >= 2:
             self.conv_2 = ConvBlock(self.hidden_dims[0], self.hidden_dims[1], stride=1, padding=1, ks=3, has_bn=has_bn)
         if len(self.hidden_dims) >= 3:
             self.conv_3 = ConvBlock(self.hidden_dims[1], self.hidden_dims[2], stride=1, padding=1, ks=3, has_bn=has_bn)
-        self.conv_o = ConvBlock(self.hidden_dims[-1], out_dim, stride=1, padding=1, ks=3, has_bn=has_bn)
+
+        if not self.hidden_dims and len(self.hidden_dims) == 0:
+            self.conv_o = ConvBlock(in_dim, out_dim, stride=1, padding=1, ks=3, has_bn=has_bn)
+        else:
+            self.conv_o = ConvBlock(self.hidden_dims[-1], out_dim, stride=1, padding=1, ks=3, has_bn=has_bn)
         pass
 
     def forward(self, x):
-        e = self.conv_1(x)
+        e = x
+        if len(self.hidden_dims) >= 1:
+            e = self.conv_1(e)
         if len(self.hidden_dims) >= 2:
             e = self.conv_2(e)
         if len(self.hidden_dims) >= 3:
@@ -529,15 +518,31 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
         # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
-        self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
-        self.model_gnn2 = GatedGCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[108, 108], out_dim=108)
+        # self.model_gnn2 = GraphSageNet2(in_dim=108, hidden_dims=[108, 108, 108, 108], out_dim=108, n_classes=10)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
+        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[], out_dim=64)
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
+
+        # self.model_conv = None
+        # self.model_gnn1 = GCNNet1(in_dim=3, hidden_dims=[146, 146], out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
                 batched_pixel_graph, pixel_edges_feat, pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt):
         # model 1
-        conv_feature = self.model_conv(images)
+        conv_feature = self.model_conv(images) if self.model_conv else images
 
         # model 2
         pixel_nodes_feat = conv_feature[pixel_data_where[:, 0], :, pixel_data_where[:, 1], pixel_data_where[:, 2]]
@@ -728,11 +733,19 @@ class RunnerSPE(object):
 if __name__ == '__main__':
     """
     GCN       Baseline Has Sigmoid             2020-04-08 15:41:33 Epoch: 97, Train: 0.7781/0.6535 Test: 0.7399/0.8137
-    GCN       251273 2Conv 2GCN1 4GCN2 4spsize 2020-04-18 12:37:39 Epoch: 93, Train: 0.9585/0.1166 Test: 0.8750/0.4803
-    GCN       251273 2Conv 2GCN1 4GCN2 6spsize 2020-04-18 10:01:07 Epoch: 97, Train: 0.9502/0.1414 Test: 0.8678/0.4937
-    GCN      1187018 2Conv 2GCN1 4GCN2 4spsize 2020-04-18 22:27:57 Epoch: 79, Train: 0.9656/0.0958 Test: 0.8795/0.4865
-    SageNet  2006218 2Conv 2GCN1 4GCN2 4spsize 2020-04-18 22:28:47 Epoch: 59, Train: 0.9885/0.0337 Test: 0.8953/0.5025
-    GatedGCN 4478410 2Conv 2GCN1 4GCN2 4spsize 
+    
+    GCN       251273 3Conv 2GCN1 4GCN2 4spsize 2020-04-18 12:37:39 Epoch: 93, Train: 0.9585/0.1166 Test: 0.8750/0.4803
+    GCN       251273 3Conv 2GCN1 4GCN2 6spsize 2020-04-18 10:01:07 Epoch: 97, Train: 0.9502/0.1414 Test: 0.8678/0.4937
+    GCN      1187018 3Conv 2GCN1 4GCN2 4spsize 2020-04-18 22:27:57 Epoch: 79, Train: 0.9656/0.0958 Test: 0.8795/0.4865
+    
+    SageNet  2006218 3Conv 2GCN1 4GCN2 4spsize 2020-04-19 00:34:45 Epoch: 75, Train: 0.9940/0.0175 Test: 0.8988/0.5567
+    SageNet   244387 3Conv 2GCN1 4GCN2 4spsize 2020-04-19 12:38:14 Epoch: 79, lr=0.0000, Train: 0.9754/0.0685 Test: 0.8867/0.4702
+    
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize 
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize 
+    
+    GCN       177161 1Conv 2GCN1 4GCN2 4spsize 
+    GCN       166335 0Conv 2GCN1 4GCN2 4spsize 
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -754,8 +767,8 @@ if __name__ == '__main__':
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
