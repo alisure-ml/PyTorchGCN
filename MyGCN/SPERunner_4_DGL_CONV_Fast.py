@@ -97,7 +97,6 @@ class MyDataset(Dataset):
 
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
-
         # da
         # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
         #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
@@ -128,6 +127,8 @@ class MyDataset(Dataset):
         img, target = self.data_set.__getitem__(idx)
         img = np.asarray(img)
         graph, pixel_graph = self.get_sp_info(img)
+        img = transforms.Compose([transforms.ToTensor(), transforms.Normalize(
+            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])(img).unsqueeze(dim=0)
         return graph, pixel_graph, img, target
 
     def get_sp_info(self, img):
@@ -160,7 +161,7 @@ class MyDataset(Dataset):
     @staticmethod
     def collate_fn(samples):
         graphs, pixel_graphs, images, labels = map(list, zip(*samples))
-        images = torch.tensor(np.transpose(images, axes=(0, 3, 1, 2)))
+        images = torch.cat(images)
         labels = torch.tensor(np.array(labels))
 
         # 超像素图
@@ -430,7 +431,7 @@ class GatedGCNNet1(nn.Module):
         self.hidden_dims = hidden_dims
         assert 2 <= len(self.hidden_dims) <= 3
         self.in_dim_edge = 1
-        self.dropout = 0.5
+        self.dropout = 0.0
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
@@ -471,7 +472,7 @@ class GatedGCNNet2(nn.Module):
         self.hidden_dims = hidden_dims
         assert 3 <= len(self.hidden_dims) <= 6
         self.in_dim_edge = 1
-        self.dropout = 0.5
+        self.dropout = 0.0
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
@@ -523,9 +524,9 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)  # 2, 3
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)  # 2, 3
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)  # 2, 3
+        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)  # 2, 3
+        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
 
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
         # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
@@ -543,9 +544,9 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
         # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
-        self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
-        self.model_gnn2 = GatedGCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
 
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[], out_dim=64)
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
@@ -771,8 +772,8 @@ if __name__ == '__main__':
     GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize da4 2020-04-22 12:0 Epoch: 54, Train: 0.9003/0.2859 Test: 0.8691/0.3995
     
     # large DataAug and Dropout
-    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da  
-    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize do  
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da2 do
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da2 
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -785,18 +786,18 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-dropout".format("GCNNet")
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GCNNet")
     _batch_size = 64
-    # _batch_size = 128
     _image_size = 32
     _sp_size = 4
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
