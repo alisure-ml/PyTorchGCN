@@ -97,26 +97,6 @@ class MyDataset(Dataset):
 
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da2
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      # transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da3
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      # transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      # transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da4
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      # transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
         pass
 
@@ -127,8 +107,8 @@ class MyDataset(Dataset):
         img, target = self.data_set.__getitem__(idx)
         img = np.asarray(img)
         graph, pixel_graph = self.get_sp_info(img)
-        img = transforms.Compose([transforms.ToTensor(), transforms.Normalize(
-            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])(img).unsqueeze(dim=0)
+        img = transforms.Compose([transforms.ToTensor(),
+                                  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])(img)
         return graph, pixel_graph, img, target
 
     def get_sp_info(self, img):
@@ -161,7 +141,7 @@ class MyDataset(Dataset):
     @staticmethod
     def collate_fn(samples):
         graphs, pixel_graphs, images, labels = map(list, zip(*samples))
-        images = torch.cat(images)
+        images = torch.tensor(np.transpose(images, axes=(0, 3, 1, 2)))
         labels = torch.tensor(np.array(labels))
 
         # 超像素图
@@ -775,11 +755,11 @@ if __name__ == '__main__':
     GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da  
     GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize do  
     """
-    _data_root_path = 'D:\data\CIFAR'
-    _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
+    _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
+    _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
     _batch_size = 2
-    _image_size = 32
-    _sp_size = 4
+    _image_size = 224
+    _sp_size = 14
     _train_print_freq = 1
     _test_print_freq = 1
     _num_workers = 1
@@ -789,6 +769,7 @@ if __name__ == '__main__':
     # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-dropout".format("GCNNet")
     # _batch_size = 64
+    # _batch_size = 128
     # _image_size = 32
     # _sp_size = 4
     # _train_print_freq = 100
