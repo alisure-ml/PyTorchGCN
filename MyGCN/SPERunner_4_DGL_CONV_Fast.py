@@ -128,6 +128,8 @@ class MyDataset(Dataset):
         img, target = self.data_set.__getitem__(idx)
         img = np.asarray(img)
         graph, pixel_graph = self.get_sp_info(img)
+        img = transforms.Compose([transforms.ToTensor(),
+                                  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])(img)
         return graph, pixel_graph, img, target
 
     def get_sp_info(self, img):
@@ -774,28 +776,27 @@ if __name__ == '__main__':
     GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da  
     GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize do  
     """
-    # _data_root_path = 'D:\data\CIFAR'
-    # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
+    _data_root_path = 'D:\data\CIFAR'
+    _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
+    _batch_size = 2
+    _image_size = 32
+    _sp_size = 4
+    _train_print_freq = 1
+    _test_print_freq = 1
+    _num_workers = 1
+    _use_gpu = False
+    _gpu_id = "1"
+
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-dropout".format("GCNNet")
     # _batch_size = 64
     # _image_size = 32
     # _sp_size = 4
-    # _train_print_freq = 1
-    # _test_print_freq = 1
-    # _num_workers = 1
-    # _use_gpu = False
-    # _gpu_id = "1"
-
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-dropout".format("GCNNet")
-    _batch_size = 64
-    # _batch_size = 128
-    _image_size = 32
-    _sp_size = 4
-    _train_print_freq = 100
-    _test_print_freq = 50
-    _num_workers = 8
-    _use_gpu = True
-    _gpu_id = "0"
+    # _train_print_freq = 100
+    # _test_print_freq = 50
+    # _num_workers = 8
+    # _use_gpu = True
+    # _gpu_id = "0"
     # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
