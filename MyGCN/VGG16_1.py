@@ -1,5 +1,6 @@
 import os
 import torch
+import numpy as np
 import torchvision
 import torch.nn as nn
 import torch.optim as optim
@@ -107,7 +108,7 @@ class Runner(object):
         self.best_acc = 0
         self.start_epoch = 0
 
-        self.net = CNNNet().to(self.device)
+        self.net = VGG().to(self.device)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
 
@@ -146,8 +147,16 @@ class Runner(object):
 
         pass
 
+    @staticmethod
+    def _view_model_param(model):
+        total_param = 0
+        for param in model.parameters():
+            total_param += np.prod(list(param.data.size()))
+        return total_param
+
     def info(self):
         Tools.print("batch size={} lr={}".format(self.batch_size, self.lr))
+        Tools.print("{} ".format(self._view_model_param(self.net)))
         pass
 
     def train(self, epoch, change_lr=False):
@@ -210,13 +219,13 @@ if __name__ == '__main__':
     No Pool 86.31
     """
 
-    os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # 1
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 1
 
     runner = Runner(batch_size=128, lr=0.01)
     runner.info()
 
-    for _epoch in range(runner.start_epoch, 300):
-        runner.train(_epoch, change_lr=True)
-        runner.test(_epoch)
-        pass
+    # for _epoch in range(runner.start_epoch, 300):
+    #     runner.train(_epoch, change_lr=True)
+    #     runner.test(_epoch)
+    #     pass
     pass

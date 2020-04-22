@@ -95,12 +95,29 @@ class MyDataset(Dataset):
         self.image_size = image_size
         self.data_root_path = data_root_path
 
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.2, 1.)),
+        self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
+                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
+
+        # da
+        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
         #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
         #                                      transforms.RandomGrayscale(p=0.2),
         #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
+        # da2
+        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
+        #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
+        #                                      # transforms.RandomGrayscale(p=0.2),
+        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
+        # da3
+        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
+        #                                      # transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
+        #                                      # transforms.RandomGrayscale(p=0.2),
+        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
+        # da4
+        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
+        #                                      # transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
+        #                                      transforms.RandomGrayscale(p=0.2),
+        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
         pass
 
@@ -413,7 +430,7 @@ class GatedGCNNet1(nn.Module):
         self.hidden_dims = hidden_dims
         assert 2 <= len(self.hidden_dims) <= 3
         self.in_dim_edge = 1
-        self.dropout = 0.0
+        self.dropout = 0.5
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
@@ -454,7 +471,7 @@ class GatedGCNNet2(nn.Module):
         self.hidden_dims = hidden_dims
         assert 3 <= len(self.hidden_dims) <= 6
         self.in_dim_edge = 1
-        self.dropout = 0.0
+        self.dropout = 0.5
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
@@ -522,9 +539,13 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[108, 108], out_dim=108)
         # self.model_gnn2 = GraphSageNet2(in_dim=108, hidden_dims=[108, 108, 108, 108], out_dim=108, n_classes=10)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
-        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
+        self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
+        self.model_gnn2 = GatedGCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
 
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[], out_dim=64)
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
@@ -533,10 +554,6 @@ class MyGCNNet(nn.Module):
         # self.model_conv = None
         # self.model_gnn1 = GCNNet1(in_dim=3, hidden_dims=[146, 146], out_dim=146)
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -581,7 +598,10 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=0.001, weight_decay=0.0)
+        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        # self.lr_s = [[0, 0.01], [40, 0.001], [70, 0.0001], [90, 0.00001]]
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -690,19 +710,12 @@ class RunnerSPE(object):
         return epoch_test_loss / (len(self.test_loader) + 1), epoch_test_acc / nb_data
 
     def _lr(self, epoch):
-        if epoch == 25:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.001
-            pass
-
-        if epoch == 50:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.0002
-            pass
-
-        if epoch == 75:
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = 0.00004
+        # [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        for lr in self.lr_s:
+            if lr[0] == epoch:
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = lr[1]
+                pass
             pass
         pass
 
@@ -737,15 +750,29 @@ if __name__ == '__main__':
     GCN       251273 3Conv 2GCN1 4GCN2 4spsize 2020-04-18 12:37:39 Epoch: 93, Train: 0.9585/0.1166 Test: 0.8750/0.4803
     GCN       251273 3Conv 2GCN1 4GCN2 6spsize 2020-04-18 10:01:07 Epoch: 97, Train: 0.9502/0.1414 Test: 0.8678/0.4937
     GCN      1187018 3Conv 2GCN1 4GCN2 4spsize 2020-04-18 22:27:57 Epoch: 79, Train: 0.9656/0.0958 Test: 0.8795/0.4865
-    
+    SageNet   244387 3Conv 2GCN1 4GCN2 4spsize 2020-04-19 12:38:14 Epoch: 79, Train: 0.9754/0.0685 Test: 0.8867/0.4702
     SageNet  2006218 3Conv 2GCN1 4GCN2 4spsize 2020-04-19 00:34:45 Epoch: 75, Train: 0.9940/0.0175 Test: 0.8988/0.5567
-    SageNet   244387 3Conv 2GCN1 4GCN2 4spsize 2020-04-19 12:38:14 Epoch: 79, lr=0.0000, Train: 0.9754/0.0685 Test: 0.8867/0.4702
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 05:33:01 Epoch: 90, Train: 0.9693/0.0877 Test: 0.8932/0.4230
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 13:23:06 Epoch: 77, Train: 0.9970/0.0092 Test: 0.9072/0.5581
     
-    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize 
-    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize 
+    # ConvNet
+    GCN       177161 1Conv 2GCN1 4GCN2 4spsize 2020-04-20 05:49:03 Epoch: 98, Train: 0.9040/0.2680 Test: 0.8283/0.5756
+    GCN       166335 0Conv 2GCN1 4GCN2 4spsize 2020-04-21 06:03:26 Epoch: 98, Train: 0.4885/1.4157 Test: 0.4744/1.4767
     
-    GCN       177161 1Conv 2GCN1 4GCN2 4spsize 
-    GCN       166335 0Conv 2GCN1 4GCN2 4spsize 
+    # LR
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize lr 2020-04-21 04:57 Epoch: 83, Train: 0.9360/0.1844 Test: 0.8812/0.3784
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize lr-wd 2020-04-21 09 Epoch: 92, Train: 0.6860/0.8664 Test: 0.6847/0.8777
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize lr-wd-sgd 2020-04-2 Epoch: 93, Train: 0.9395/0.1752 Test: 0.8847/0.3645
+    
+    # DataAug
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize da 2020-04-22 07:49 Epoch: 97, Train: 0.8852/0.3292 Test: 0.8626/0.4107
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize da2 2020-04-22 12:2 Epoch: 62, Train: 0.8763/0.3528 Test: 0.8596/0.4243
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize da3 2020-04-22 12:2 Epoch: 56, Train: 0.9201/0.2289 Test: 0.8694/0.4134
+    GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize da4 2020-04-22 12:0 Epoch: 54, Train: 0.9003/0.2859 Test: 0.8691/0.3995
+    
+    # large DataAug and Dropout
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da  
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize do  
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -759,8 +786,9 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-dropout".format("GCNNet")
     _batch_size = 64
+    # _batch_size = 128
     _image_size = 32
     _sp_size = 4
     _train_print_freq = 100
