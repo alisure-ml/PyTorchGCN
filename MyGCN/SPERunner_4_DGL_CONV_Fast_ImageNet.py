@@ -107,6 +107,7 @@ class MyDataset(Dataset):
         _transform = self.transform_train if self.is_train else self.transform_test
 
         self.data_set = datasets.ImageFolder(root=_train_dir if self.is_train else _test_dir, transform=_transform)
+        # self.data_set.samples = self.data_set.samples[0: 6]
         pass
 
     def __len__(self):
@@ -586,19 +587,19 @@ class RunnerSPE(object):
             Tools.print("Start Epoch {}".format(epoch))
 
             self._lr(epoch)
-            epoch_loss, epoch_train_acc = self._train_epoch()
+            epoch_loss, epoch_train_acc, epoch_train_acc_k = self._train_epoch()
             self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
-            epoch_test_loss, epoch_test_acc = self.test()
+            epoch_test_loss, epoch_test_acc, epoch_test_acc_k = self.test()
 
-            Tools.print('Epoch: {:02d}, lr={:.4f}, Train: {:.4f}/{:.4f} Test: {:.4f}/{:.4f}'.format(
+            Tools.print('Epoch:{:02d},lr={:.4f},Train:{:.4f}-{:.4f}/{:.4f} Test:{:.4f}-{:.4f}/{:.4f}'.format(
                 epoch, self.optimizer.param_groups[0]['lr'],
-                epoch_train_acc, epoch_loss, epoch_test_acc, epoch_test_loss))
+                epoch_train_acc, epoch_train_acc_k, epoch_loss, epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
             pass
         pass
 
     def _train_epoch(self):
         self.model.train()
-        epoch_loss, epoch_train_acc, nb_data = 0, 0, 0
+        epoch_loss, epoch_train_acc, epoch_train_acc_k, nb_data = 0, 0, 0, 0
         for i, (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt, batched_pixel_graph,
                 pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt) in enumerate(self.train_loader):
             # Data
@@ -624,24 +625,24 @@ class RunnerSPE(object):
             # Stat
             nb_data += labels.size(0)
             epoch_loss += loss.detach().item()
-            epoch_train_acc += self._accuracy(logits, labels)
+            top_1, top_k = self._accuracy_top_k(logits, labels)
+            epoch_train_acc += top_1
+            epoch_train_acc_k += top_k
 
             # Print
             if i % self.train_print_freq == 0:
-                Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
+                Tools.print("{}-{} loss={:.4f}/{:.4f} acc={:.4f} acc5={:.4f}".format(
+                    i, len(self.train_loader), epoch_loss/(i+1),
+                    loss.detach().item(), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data))
                 pass
             pass
-
-        epoch_train_acc /= nb_data
-        epoch_loss /= (len(self.train_loader) + 1)
-        return epoch_loss, epoch_train_acc
+        return epoch_loss/(len(self.train_loader)+1), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data
 
     def test(self):
         self.model.eval()
 
         Tools.print()
-        epoch_test_loss, epoch_test_acc, nb_data = 0, 0, 0
+        epoch_test_loss, epoch_test_acc, epoch_test_acc_k, nb_data = 0, 0, 0, 0
         with torch.no_grad():
             for i, (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt, batched_pixel_graph,
                     pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt) in enumerate(self.test_loader):
@@ -665,17 +666,20 @@ class RunnerSPE(object):
                 # Stat
                 nb_data += labels.size(0)
                 epoch_test_loss += loss.detach().item()
-                epoch_test_acc += self._accuracy(logits, labels)
+                top_1, top_k = self._accuracy_top_k(logits, labels)
+                epoch_test_acc += top_1
+                epoch_test_acc_k += top_k
 
                 # Print
                 if i % self.test_print_freq == 0:
-                    Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                        i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(), epoch_test_acc/nb_data))
+                    Tools.print("{}-{} loss={:.4f}/{:.4f} acc={:.4f} acc5={:.4f}".format(
+                        i, len(self.test_loader), epoch_test_loss/(i+1),
+                        loss.detach().item(), epoch_test_acc/nb_data, epoch_test_acc_k/nb_data))
                     pass
                 pass
             pass
 
-        return epoch_test_loss / (len(self.test_loader) + 1), epoch_test_acc / nb_data
+        return epoch_test_loss/(len(self.test_loader)+1), epoch_test_acc/nb_data, epoch_test_acc_k/nb_data
 
     def _lr(self, epoch):
         # [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
@@ -700,6 +704,13 @@ class RunnerSPE(object):
     @staticmethod
     def _accuracy(scores, targets):
         return (scores.detach().argmax(dim=1) == targets).float().sum().item()
+
+    @staticmethod
+    def _accuracy_top_k(scores, targets, top_k=5):
+        top_k_index = scores.detach().topk(top_k)[1]
+        top_k = sum([int(a) in b for a, b in zip(targets, top_k_index)])
+        top_1 = sum([int(a) == int(b[0]) for a, b in zip(targets, top_k_index)])
+        return top_1, top_k
 
     @staticmethod
     def _view_model_param(model):
