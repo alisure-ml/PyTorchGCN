@@ -52,11 +52,6 @@ class MyDataset(Dataset):
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
-
-        self.data_set.data = self.data_set.data[:100]
-        self.data_set.targets = self.data_set.targets[:100]
-
-        self.graph, self.pixel_graph = self.get_sp_info(self.image_size_for_sp, self.sp_size)
         pass
 
     def __len__(self):
@@ -65,7 +60,8 @@ class MyDataset(Dataset):
     def __getitem__(self, idx):
         img, target = self.data_set.__getitem__(idx)
         img_data = transforms.Compose([transforms.ToTensor()])(np.asarray(img)).unsqueeze(dim=0)
-        return self.graph, self.pixel_graph, img_data, target
+        graph, pixel_graph = self.get_sp_info(self.image_size_for_sp, self.sp_size)
+        return graph, pixel_graph, img_data, target
 
     @classmethod
     def get_sp_info(cls, image_size_for_sp, sp_size):
@@ -127,8 +123,8 @@ class MyDataset(Dataset):
     def get_adj(cls, image_size, sp_size):
         sp_num = image_size // sp_size
 
-        data_where, edge_index, edge_w = cls._adj(sp_num)
-        sp_adj = [np.asarray(edge_index), np.asarray(edge_w)]
+        _, edge_index, edge_w = cls._adj(sp_num)
+        sp_adj = [edge_index, edge_w]
 
         pixel_adj = []
         for i in range(sp_num):
@@ -141,7 +137,10 @@ class MyDataset(Dataset):
 
     @staticmethod
     def _adj(num, s_i=0, s_j=0, k=3):
-        _now_where = [[_i + s_i, _j + s_j] for _i in range(num) for _j in range(num)]
+        _now_where = []
+        for _i in range(num):
+            for _j in range(num):
+                _now_where.append([_i + s_i, _j + s_j])
 
         _a = np.tile([_now_where], (len(_now_where), 1, 1))
         _dis = np.sum(np.power(_a - np.transpose(_a, (1, 0, 2)), 2), axis=-1)
@@ -151,6 +150,7 @@ class MyDataset(Dataset):
 
         edge_w = np.ones(len(edge_index))
         data_where = np.concatenate([[[0]] * len(_now_where), _now_where], axis=-1)
+
         return data_where, edge_index, edge_w
 
     pass
@@ -514,8 +514,8 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-small-sgd-lr-300".format("GCNNet")
-    _batch_size = 64
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-sgd-lr-300".format("GCNNet")
+    _batch_size = 128
     _image_size = 32
     _sp_size = 4
     _epochs = 300
