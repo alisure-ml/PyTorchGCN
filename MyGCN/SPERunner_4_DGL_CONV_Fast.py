@@ -95,11 +95,7 @@ class MyDataset(Dataset):
         self.image_size = image_size
         self.data_root_path = data_root_path
 
-        # self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da0
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-                                             transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
         # da
         # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
@@ -544,9 +540,9 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[108, 108], out_dim=108)
         # self.model_gnn2 = GraphSageNet2(in_dim=108, hidden_dims=[108, 108, 108, 108], out_dim=108, n_classes=10)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
-        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)
 
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
         # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
@@ -559,6 +555,13 @@ class MyGCNNet(nn.Module):
         # self.model_conv = None
         # self.model_gnn1 = GCNNet1(in_dim=3, hidden_dims=[146, 146], out_dim=146)
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146, 146, 146], out_dim=146, n_classes=10)
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
+        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70, 70, 70], out_dim=70, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -778,6 +781,14 @@ if __name__ == '__main__':
     # Norm
     GCN       251273 3Conv 2GCN1 4GCN2 4spsize norm 2020-04-23 08: Epoch: 78, Train: 0.9543/0.1294 Test: 0.8742/0.4595
     GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize norm 2020-04-23 09: Epoch: 81, Train: 0.9621/0.1063 Test: 0.8832/0.4342
+    
+    # large DataAug and Dropout
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da2 dropout 2020-04 Epoch: 75, Train: 0.9346/0.1832 Test: 0.8929/0.3831
+    GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize da2    2020-04-23 1 Epoch: 78, Train: 0.9619/0.1099 Test: 0.8908/0.4071
+    
+    # More GCN
+    GCNNet    294781 3Conv 2GCN1 6GCN2 4spsize 2020-04-24 01:56:51 Epoch: 90, Train: 0.9561/0.1228 Test: 0.8762/0.4923
+    GatedGCN  290149 3Conv 2GCN1 6GCN2 4spsize 2020-04-24 05:32:20 Epoch: 99, Train: 0.9784/0.0611 Test: 0.8973/0.4478
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -790,9 +801,9 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-norm".format("GatedGCNNet")
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GatedGCNNet")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4
