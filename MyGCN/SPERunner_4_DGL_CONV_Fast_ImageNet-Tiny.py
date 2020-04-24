@@ -150,8 +150,7 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         img, target = self.data_set.__getitem__(idx)
-        img_data = transforms.Compose([transforms.ToTensor(), transforms.Normalize(
-            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])(np.asarray(img)).unsqueeze(dim=0)
+        img_data = transforms.Compose([transforms.ToTensor()])(np.asarray(img)).unsqueeze(dim=0)
 
         img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
         graph, pixel_graph = self.get_sp_info(img_small_data)

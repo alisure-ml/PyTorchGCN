@@ -40,10 +40,11 @@ def gpu_setup(use_gpu, gpu_id):
 
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True, image_size=32, sp_size=4):
+    def __init__(self, data_root_path='D:\data\CIFAR', batch_size=32, is_train=True, image_size=32, sp_size=4):
         super().__init__()
         self.is_train = is_train
         self.data_root_path = data_root_path
+        self.batch_size = batch_size
         self.image_size = image_size
         self.image_size_for_sp = self.image_size // 1
         self.sp_size = sp_size
@@ -53,7 +54,9 @@ class MyDataset(Dataset):
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
 
-        self.graph, self.pixel_graph = self.get_sp_info(self.image_size_for_sp, self.sp_size)
+        (self.graph, self.pixel_graph, self.batched_graph, self.nodes_num_norm_sqrt, self.edges_num_norm_sqrt,
+         self.batched_pixel_graph, self.pixel_nodes_num_norm_sqrt, self.pixel_edges_num_norm_sqrt) = self.get_sp_info(
+            self.image_size_for_sp, self.sp_size, self.batch_size)
         pass
 
     def __len__(self):
@@ -61,13 +64,11 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         img, target = self.data_set.__getitem__(idx)
-        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        # img_data = transforms.Compose([transforms.ToTensor(), normalize])(np.asarray(img)).unsqueeze(dim=0)
         img_data = transforms.Compose([transforms.ToTensor()])(np.asarray(img)).unsqueeze(dim=0)
-        return self.graph, self.pixel_graph, img_data, target
+        return img_data, target
 
     @classmethod
-    def get_sp_info(cls, image_size_for_sp, sp_size):
+    def get_sp_info(cls, image_size_for_sp, sp_size, batch_size):
         # Super Pixel
         #################################################################################
         sp_adj, pixel_adj = cls.get_adj(image_size=image_size_for_sp, sp_size=sp_size)
@@ -91,7 +92,27 @@ class MyDataset(Dataset):
             pixel_graph.append(small_graph)
             pass
         #################################################################################
-        return graph, pixel_graph
+        _nodes_num = [graph.number_of_nodes()] * batch_size
+        _edges_num = [graph.number_of_edges()] * batch_size
+        nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
+        edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
+        batched_graph = dgl.batch([graph for _ in range(batch_size)])
+
+        # 像素图
+        _pixel_graphs = []
+        for super_pixel_i in range(batch_size):
+            for now_graph in pixel_graph:
+                now_graph.ndata["data_where"][:, 0] = super_pixel_i
+                _pixel_graphs.append(now_graph)
+            pass
+        _nodes_num = [graph.number_of_nodes() for graph in _pixel_graphs]
+        _edges_num = [graph.number_of_edges() for graph in _pixel_graphs]
+        pixel_nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
+        pixel_edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
+        batched_pixel_graph = dgl.batch(_pixel_graphs)
+        #################################################################################
+        return (graph, pixel_graph, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt,
+                batched_pixel_graph, pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt)
 
     @classmethod
     def get_adj(cls, image_size, sp_size):
@@ -125,32 +146,10 @@ class MyDataset(Dataset):
 
     @staticmethod
     def collate_fn(samples):
-        graphs, pixel_graphs, images, labels = map(list, zip(*samples))
+        images, labels = map(list, zip(*samples))
         images = torch.cat(images)
         labels = torch.tensor(np.array(labels))
-
-        # 超像素图
-        _nodes_num = [graph.number_of_nodes() for graph in graphs]
-        _edges_num = [graph.number_of_edges() for graph in graphs]
-        nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
-        batched_graph = dgl.batch(graphs)
-
-        # 像素图
-        _pixel_graphs = []
-        for super_pixel_i, pixel_graph in enumerate(pixel_graphs):
-            for now_graph in pixel_graph:
-                now_graph.ndata["data_where"][:, 0] = super_pixel_i
-                _pixel_graphs.append(now_graph)
-            pass
-        _nodes_num = [graph.number_of_nodes() for graph in _pixel_graphs]
-        _edges_num = [graph.number_of_edges() for graph in _pixel_graphs]
-        pixel_nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        pixel_edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
-        batched_pixel_graph = dgl.batch(_pixel_graphs)
-
-        return (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt,
-                batched_pixel_graph, pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt)
+        return images, labels
 
     pass
 
@@ -337,9 +336,9 @@ class RunnerSPE(object):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path,
+        self.train_dataset = MyDataset(data_root_path=data_root_path, batch_size=batch_size,
                                        is_train=True, image_size=image_size, sp_size=sp_size)
-        self.test_dataset = MyDataset(data_root_path=data_root_path,
+        self.test_dataset = MyDataset(data_root_path=data_root_path, batch_size=batch_size,
                                       is_train=False, image_size=image_size, sp_size=sp_size)
 
         self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
@@ -382,18 +381,25 @@ class RunnerSPE(object):
     def _train_epoch(self):
         self.model.train()
         epoch_loss, epoch_train_acc, nb_data = 0, 0, 0
-        for i, (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt, batched_pixel_graph,
-                pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt) in enumerate(self.train_loader):
+        batched_graph = self.train_dataset.batched_graph
+        nodes_num_norm_sqrt = self.train_dataset.nodes_num_norm_sqrt
+        edges_num_norm_sqrt = self.train_dataset.edges_num_norm_sqrt
+        batched_pixel_graph = self.train_dataset.batched_pixel_graph
+        pixel_nodes_num_norm_sqrt = self.train_dataset.pixel_nodes_num_norm_sqrt
+        pixel_edges_num_norm_sqrt = self.train_dataset.pixel_edges_num_norm_sqrt
+
+        edges_feat = batched_graph.edata['feat'].to(self.device)
+        nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
+        edges_num_norm_sqrt = edges_num_norm_sqrt.to(self.device)
+        pixel_data_where = batched_pixel_graph.ndata["data_where"].to(self.device)
+        pixel_edges_feat = batched_pixel_graph.edata['feat'].to(self.device)
+        pixel_nodes_num_norm_sqrt = pixel_nodes_num_norm_sqrt.to(self.device)
+        pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
+
+        for i, (images, labels) in enumerate(self.train_loader):
             # Data
             images = images.float().to(self.device)
             labels = labels.long().to(self.device)
-            edges_feat = batched_graph.edata['feat'].to(self.device)
-            nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
-            edges_num_norm_sqrt = edges_num_norm_sqrt.to(self.device)
-            pixel_data_where = batched_pixel_graph.ndata["data_where"].to(self.device)
-            pixel_edges_feat = batched_pixel_graph.edata['feat'].to(self.device)
-            pixel_nodes_num_norm_sqrt = pixel_nodes_num_norm_sqrt.to(self.device)
-            pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
 
             # Run
             self.optimizer.zero_grad()
@@ -425,19 +431,27 @@ class RunnerSPE(object):
 
         Tools.print()
         epoch_test_loss, epoch_test_acc, nb_data = 0, 0, 0
+
         with torch.no_grad():
-            for i, (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt, batched_pixel_graph,
-                    pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt) in enumerate(self.test_loader):
+            batched_graph = self.test_dataset.batched_graph
+            nodes_num_norm_sqrt = self.test_dataset.nodes_num_norm_sqrt
+            edges_num_norm_sqrt = self.test_dataset.edges_num_norm_sqrt
+            batched_pixel_graph = self.test_dataset.batched_pixel_graph
+            pixel_nodes_num_norm_sqrt = self.test_dataset.pixel_nodes_num_norm_sqrt
+            pixel_edges_num_norm_sqrt = self.test_dataset.pixel_edges_num_norm_sqrt
+
+            edges_feat = batched_graph.edata['feat'].to(self.device)
+            nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
+            edges_num_norm_sqrt = edges_num_norm_sqrt.to(self.device)
+            pixel_data_where = batched_pixel_graph.ndata["data_where"].to(self.device)
+            pixel_edges_feat = batched_pixel_graph.edata['feat'].to(self.device)
+            pixel_nodes_num_norm_sqrt = pixel_nodes_num_norm_sqrt.to(self.device)
+            pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
+
+            for i, (images, labels) in enumerate(self.test_loader):
                 # Data
                 images = images.float().to(self.device)
                 labels = labels.long().to(self.device)
-                edges_feat = batched_graph.edata['feat'].to(self.device)
-                nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
-                edges_num_norm_sqrt = edges_num_norm_sqrt.to(self.device)
-                pixel_data_where = batched_pixel_graph.ndata["data_where"].to(self.device)
-                pixel_edges_feat = batched_pixel_graph.edata['feat'].to(self.device)
-                pixel_nodes_num_norm_sqrt = pixel_nodes_num_norm_sqrt.to(self.device)
-                pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
 
                 # Run
                 logits = self.model.forward(images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt,
@@ -531,6 +545,7 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
+    # runner.test()
     runner.train(_epochs)
 
     pass

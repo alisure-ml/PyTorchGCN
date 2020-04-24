@@ -127,8 +127,7 @@ class MyDataset(Dataset):
         img, target = self.data_set.__getitem__(idx)
         img = np.asarray(img)
         graph, pixel_graph = self.get_sp_info(img)
-        img = transforms.Compose([transforms.ToTensor(), transforms.Normalize(
-            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])(img).unsqueeze(dim=0)
+        img = transforms.Compose([transforms.ToTensor()])(img).unsqueeze(dim=0)
         return graph, pixel_graph, img, target
 
     def get_sp_info(self, img):
