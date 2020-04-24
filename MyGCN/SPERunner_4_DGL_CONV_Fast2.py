@@ -93,34 +93,11 @@ class MyDataset(Dataset):
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
+        self.image_size_for_sp = self.image_size // 2
         self.data_root_path = data_root_path
 
-        # self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da0
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-                                             transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da2
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      # transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da3
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      # transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      # transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # da4
-        # self.transform = transforms.Compose([transforms.RandomResizedCrop(size=self.image_size, scale=(0.6, 1.)),
-        #                                      # transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-        #                                      transforms.RandomGrayscale(p=0.2),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
         pass
 
@@ -129,16 +106,19 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         img, target = self.data_set.__getitem__(idx)
-        img = np.asarray(img)
-        graph, pixel_graph = self.get_sp_info(img)
-        img = transforms.Compose([transforms.ToTensor(), transforms.Normalize(
-            (0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])(img).unsqueeze(dim=0)
-        return graph, pixel_graph, img, target
+        normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # img_data = transforms.Compose([transforms.ToTensor(), normalize])(np.asarray(img)).unsqueeze(dim=0)
+        img_data = transforms.Compose([transforms.ToTensor()])(np.asarray(img)).unsqueeze(dim=0)
+
+        img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
+        graph, pixel_graph = self.get_sp_info(img_small_data)
+        return graph, pixel_graph, img_data, target
 
     def get_sp_info(self, img):
         # Super Pixel
         #################################################################################
-        deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=self.image_size, super_pixel_size=self.sp_size)
+        deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=self.image_size_for_sp,
+                                          super_pixel_size=self.sp_size)
         segment, sp_adj, pixel_adj = deal_super_pixel.run()
         #################################################################################
         # Graph
@@ -219,32 +199,26 @@ class ConvBlock(nn.Module):
 
 class CONVNet(nn.Module):
 
-    def __init__(self, in_dim=3, hidden_dims=[64, 64], out_dim=64, has_bn=True):
+    def __init__(self, in_dim=3, hidden_dims=["64", "64", "M", "128", "128"], out_dim=128, has_bn=True):
         super().__init__()
         self.hidden_dims = hidden_dims
-        assert 0 <= len(self.hidden_dims) <= 3
-        if len(self.hidden_dims) >= 1:
-            self.conv_1 = ConvBlock(in_dim, self.hidden_dims[0], stride=1, padding=1, ks=3, has_bn=has_bn)
-        if len(self.hidden_dims) >= 2:
-            self.conv_2 = ConvBlock(self.hidden_dims[0], self.hidden_dims[1], stride=1, padding=1, ks=3, has_bn=has_bn)
-        if len(self.hidden_dims) >= 3:
-            self.conv_3 = ConvBlock(self.hidden_dims[1], self.hidden_dims[2], stride=1, padding=1, ks=3, has_bn=has_bn)
 
-        if not self.hidden_dims and len(self.hidden_dims) == 0:
-            self.conv_o = ConvBlock(in_dim, out_dim, stride=1, padding=1, ks=3, has_bn=has_bn)
-        else:
-            self.conv_o = ConvBlock(self.hidden_dims[-1], out_dim, stride=1, padding=1, ks=3, has_bn=has_bn)
+        layers = []
+        _in_dim = in_dim
+        for index, hidden_dim in enumerate(self.hidden_dims):
+            if hidden_dim == "M":
+                layers.append(nn.MaxPool2d((2, 2)))
+            else:
+                layers.append(ConvBlock(_in_dim, int(hidden_dim), 1, padding=1, ks=3, has_bn=has_bn))
+                _in_dim = int(hidden_dim)
+            pass
+        layers.append(ConvBlock(_in_dim, out_dim, 1, padding=1, ks=3, has_bn=has_bn))
+
+        self.features = nn.Sequential(*layers)
         pass
 
     def forward(self, x):
-        e = x
-        if len(self.hidden_dims) >= 1:
-            e = self.conv_1(e)
-        if len(self.hidden_dims) >= 2:
-            e = self.conv_2(e)
-        if len(self.hidden_dims) >= 3:
-            e = self.conv_3(e)
-        e = self.conv_o(e)
+        e = self.features(x)
         return e
 
     pass
@@ -528,37 +502,13 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)  # 2, 3
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64], out_dim=64)  # 2, 3
+
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)  # 2, 3
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
-        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
-        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
-        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[108, 108], out_dim=108)
-        # self.model_gnn2 = GraphSageNet2(in_dim=108, hidden_dims=[108, 108, 108, 108], out_dim=108, n_classes=10)
-
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
-        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[], out_dim=64)
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
-
-        # self.model_conv = None
-        # self.model_gnn1 = GCNNet1(in_dim=3, hidden_dims=[146, 146], out_dim=146)
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
+        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
+        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -603,10 +553,11 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        # self.lr_s = [[0, 0.01], [40, 0.001], [70, 0.0001], [90, 0.00001]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        # self.lr_s = [[0, 0.1], [40, 0.01], [70, 0.001], [90, 0.0001]]
+        self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -778,6 +729,12 @@ if __name__ == '__main__':
     # Norm
     GCN       251273 3Conv 2GCN1 4GCN2 4spsize norm 2020-04-23 08: Epoch: 78, Train: 0.9543/0.1294 Test: 0.8742/0.4595
     GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize norm 2020-04-23 09: Epoch: 81, Train: 0.9621/0.1063 Test: 0.8832/0.4342
+    
+    
+    GCNNet-norm-small 303631 pool              2020-04-24 01:35:35 Epoch: 76, Train: 0.9672/0.0916 Test: 0.8850/0.4574
+    GatedGCNNet-norm-small 288871 pool         2020-04-24 09:42:54 Epoch: 92, Train: 0.9777/0.0623 Test: 0.8876/0.5000
+    GatedGCNNet-norm-small-sgd 288871 pool     2020-04-24 10:16:10 Epoch: 94, Train: 0.9118/0.2568 Test: 0.8574/0.4659
+    GatedGCNNet-norm-small-sgd-lr 288871 pool  2020-04-24 09:01:59 Epoch: 81, Train: 0.9576/0.1246 Test: 0.8980/0.3493
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -792,16 +749,17 @@ if __name__ == '__main__':
 
     # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-norm".format("GatedGCNNet")
-    _batch_size = 64
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-small-sgd-lr-300".format("GatedGCNNet")
+    _batch_size = 128
     _image_size = 32
-    _sp_size = 4
+    _sp_size = 3
+    _epochs = 300
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
@@ -810,6 +768,6 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.train(100)
+    runner.train(_epochs)
 
     pass
