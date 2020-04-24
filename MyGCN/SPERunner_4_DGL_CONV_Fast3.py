@@ -93,7 +93,7 @@ class MyDataset(Dataset):
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
-        self.image_size_for_sp = self.image_size // 4
+        self.image_size_for_sp = self.image_size // 1
         self.data_root_path = data_root_path
 
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
@@ -505,16 +505,21 @@ class MyGCNNet(nn.Module):
     def __init__(self):
         super().__init__()
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64], out_dim=64)  # 2, 3
-
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)  # 2, 3
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
 
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64], out_dim=64)  # 2, 3
         # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
         # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64, "M", 128, 128], out_dim=128)
-        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146], out_dim=146)
-        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
+        # 602203
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64, "M", 128, 128], out_dim=128)
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146], out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
+        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -740,6 +745,9 @@ if __name__ == '__main__':
     GatedGCNNet-norm-small 288871 pool         2020-04-24 09:42:54 Epoch: 92, Train: 0.9777/0.0623 Test: 0.8876/0.5000
     GatedGCNNet-norm-small-sgd 288871 pool     2020-04-24 10:16:10 Epoch: 94, Train: 0.9118/0.2568 Test: 0.8574/0.4659
     GatedGCNNet-norm-small-sgd-lr 288871 pool  2020-04-24 09:01:59 Epoch: 81, Train: 0.9576/0.1246 Test: 0.8980/0.3493
+    
+    GCNNet-small-sgd-lr-300 602203 7Conv 1GCN1 2GCN2 2spsize 2pool Epoch: 204, Train: 0.9962/0.0137 Test: 0.9263/0.3205
+    GCNNet-sgd-lr-300 251273 3Conv 2GCN1 4GCN2 4spsize 0pool 
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -757,7 +765,7 @@ if __name__ == '__main__':
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-small-sgd-lr-300".format("GCNNet")
     _batch_size = 128
     _image_size = 32
-    _sp_size = 2
+    _sp_size = 4
     _epochs = 300
     _train_print_freq = 100
     _test_print_freq = 50
