@@ -54,6 +54,9 @@ class MyDataset(Dataset):
                                              transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
 
+        self.data_set.data = self.data_set.data[:200]
+        self.data_set.targets = self.data_set.targets[:200]
+
         (self.graph, self.pixel_graph, self.batched_graph, self.nodes_num_norm_sqrt, self.edges_num_norm_sqrt,
          self.batched_pixel_graph, self.pixel_nodes_num_norm_sqrt, self.pixel_edges_num_norm_sqrt) = self.get_sp_info(
             self.image_size_for_sp, self.sp_size, self.batch_size)
@@ -330,18 +333,19 @@ class RunnerSPE(object):
     def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10',
                  batch_size=64, image_size=32, sp_size=4, train_print_freq=100, test_print_freq=50,
                  root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
+        self.batch_size = batch_size
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
 
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path, batch_size=batch_size,
+        self.train_dataset = MyDataset(data_root_path=data_root_path, batch_size=self.batch_size,
                                        is_train=True, image_size=image_size, sp_size=sp_size)
         self.test_dataset = MyDataset(data_root_path=data_root_path, batch_size=batch_size,
                                       is_train=False, image_size=image_size, sp_size=sp_size)
 
-        self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
+        self.train_loader = DataLoader(self.train_dataset, batch_size=self.batch_size, shuffle=True,
                                        num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
@@ -397,6 +401,8 @@ class RunnerSPE(object):
         pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
 
         for i, (images, labels) in enumerate(self.train_loader):
+            if images.size(0) < self.batch_size:
+                continue
             # Data
             images = images.float().to(self.device)
             labels = labels.long().to(self.device)
@@ -527,7 +533,7 @@ if __name__ == '__main__':
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-small-sgd-lr-300".format("GCNNet")
-    _batch_size = 128
+    _batch_size = 64
     _image_size = 32
     _sp_size = 4
     _epochs = 300
