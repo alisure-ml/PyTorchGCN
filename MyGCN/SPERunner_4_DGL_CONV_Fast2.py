@@ -734,10 +734,13 @@ if __name__ == '__main__':
     GatedGCNNet-norm-small-sgd 288871 pool     2020-04-24 10:16:10 Epoch: 94, Train: 0.9118/0.2568 Test: 0.8574/0.4659
     GatedGCNNet-norm-small-sgd-lr 288871 pool  2020-04-24 09:01:59 Epoch: 81, Train: 0.9576/0.1246 Test: 0.8980/0.3493
     
-    GatedGCNNet-small-sgd-lr-300 288871 pool      2020-04-25 10:23 Epoch: 184, Train: 0.9687/0.0932 Test: 0.9023/0.3263
-    GatedGCNNet-norm-small-sgd-lr-300 288871 pool 2020-04-25 20:43 Epoch: 269, Train: 0.9879/0.0355 Test: 0.9013/0.4252
-    GCNNet-small-sgd-lr-300 303631 pool           2020-04-25 18:55 Epoch: 256, Train: 0.9875/0.0385 Test: 0.9026/0.4346
-    GCNNet-norm-small-sgd-lr-300 303631 pool      2020-04-25 11:31 Epoch: 193, Train: 0.9754/0.0750 Test: 0.9052/0.3510
+    GatedGCNNet-small-sgd-lr-300 288871 1pool      2020-04-25 10:2 Epoch: 184, Train: 0.9687/0.0932 Test: 0.9023/0.3263
+    GatedGCNNet-norm-small-sgd-lr-300 2888711 pool 2020-04-25 20:4 Epoch: 269, Train: 0.9879/0.0355 Test: 0.9013/0.4252
+    GCNNet-small-sgd-lr-300 303631 1pool           2020-04-25 18:5 Epoch: 256, Train: 0.9875/0.0385 Test: 0.9026/0.4346
+    GCNNet-norm-small-sgd-lr-300 303631 1pool      2020-04-25 11:3 Epoch: 193, Train: 0.9754/0.0750 Test: 0.9052/0.3510
+    
+    GatedGCNNet-small-sgd-lr-300 362983 2pool      2020-04-26 07:2 Epoch: 241, Train: 0.9961/0.0128 Test: 0.9126/0.4303
+    GCNNet-small-sgd-lr-300 377743 2pool           2020-04-26 10:1 Epoch: 291, Train: 0.9962/0.0132 Test: 0.9106/0.4261
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
