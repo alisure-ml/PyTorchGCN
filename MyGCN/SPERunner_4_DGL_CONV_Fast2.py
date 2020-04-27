@@ -93,7 +93,7 @@ class MyDataset(Dataset):
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
-        self.image_size_for_sp = self.image_size // 4
+        self.image_size_for_sp = self.image_size // 2
         self.data_root_path = data_root_path
 
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
@@ -500,13 +500,21 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64, "M", 64, 64], out_dim=64)  # 2, 3
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64, "M", 64, 64], out_dim=64)  # 2, 3
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)  # 2, 3
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
 
-        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)  # 2, 3
-        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
-
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64, "M", 64, 64], out_dim=64)  # 2, 3
         # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
         # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 128, 128], out_dim=128)  # 2, 3
+
+        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[140, 140], out_dim=140)  # 2, 3
+        # self.model_gnn2 = GatedGCNNet2(in_dim=140, hidden_dims=[280, 280, 280], out_dim=280, n_classes=10)  # 3, 6
+
+        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[292, 292], out_dim=292)  # 2, 3
+        self.model_gnn2 = GCNNet2(in_dim=292, hidden_dims=[584, 584, 584], out_dim=584, n_classes=10)  # 3, 6
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -739,8 +747,10 @@ if __name__ == '__main__':
     GCNNet-small-sgd-lr-300 303631 1pool           2020-04-25 18:5 Epoch: 256, Train: 0.9875/0.0385 Test: 0.9026/0.4346
     GCNNet-norm-small-sgd-lr-300 303631 1pool      2020-04-25 11:3 Epoch: 193, Train: 0.9754/0.0750 Test: 0.9052/0.3510
     
-    GatedGCNNet-small-sgd-lr-300 362983 2pool      2020-04-26 07:2 Epoch: 241, Train: 0.9961/0.0128 Test: 0.9126/0.4303
-    GCNNet-small-sgd-lr-300 377743 2pool           2020-04-26 10:1 Epoch: 291, Train: 0.9962/0.0132 Test: 0.9106/0.4261
+    GatedGCNNet-small-sgd-lr-300 362983 2pool 1024 2020-04-26 07:2 Epoch: 241, Train: 0.9961/0.0128 Test: 0.9126/0.4303
+    GCNNet-small-sgd-lr-300      377743 2pool 1024 2020-04-26 10:1 Epoch: 291, Train: 0.9962/0.0132 Test: 0.9106/0.4261
+    GatedGCNNet-small-sgd-lr-300 362983 2pool   64 2020-04-27 10:2 Epoch: 281, Train: 0.9887/0.0347 Test: 0.9130/0.3853
+    GCNNet-small-sgd-lr-300      377743 2pool   64 2020-04-27 09:4 Epoch: 273, Train: 0.9902/0.0306 Test: 0.9151/0.3820
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -755,17 +765,17 @@ if __name__ == '__main__':
 
     # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-small-sgd-lr-300".format("GCNNet")
-    _batch_size = 1024
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-sgd-lr-300".format("GCN")
+    _batch_size = 64
     _image_size = 32
-    _sp_size = 2
+    _sp_size = 3
     _epochs = 300
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
