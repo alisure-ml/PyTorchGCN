@@ -404,7 +404,7 @@ class MyGCNNet(nn.Module):
 
         self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)  # 2, 3
         self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
-        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
+        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -599,7 +599,8 @@ if __name__ == '__main__':
     """
     GCN      Baseline Has Sigmoid  2020-04-08 15:41:33 Epoch:  97, Train: 0.7781/0.6535 Test: 0.7399/0.8137
     
-    GCNNet-sgd-lr-300 251273       2020-04-25 20:08:12 Epoch: 186, Train: 0.9777/0.0711 Test: 0.8959/0.3542
+    GCNNet-sgd-lr-300   251273 128 2020-04-25 20:08:12 Epoch: 186, Train: 0.9777/0.0711 Test: 0.8959/0.3542
+    GatedGCN-sgd-lr-300 239889 128 2020-04-27 20:50:11 Epoch: 187, Train: 0.9681/0.0961 Test: 0.9040/0.3218
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
