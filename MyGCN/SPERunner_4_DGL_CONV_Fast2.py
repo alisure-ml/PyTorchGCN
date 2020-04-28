@@ -751,6 +751,9 @@ if __name__ == '__main__':
     GCNNet-small-sgd-lr-300      377743 2pool 1024 2020-04-26 10:1 Epoch: 291, Train: 0.9962/0.0132 Test: 0.9106/0.4261
     GatedGCNNet-small-sgd-lr-300 362983 2pool   64 2020-04-27 10:2 Epoch: 281, Train: 0.9887/0.0347 Test: 0.9130/0.3853
     GCNNet-small-sgd-lr-300      377743 2pool   64 2020-04-27 09:4 Epoch: 273, Train: 0.9902/0.0306 Test: 0.9151/0.3820
+    
+    GatedGCNNet-sgd-lr-300 1899148 1pool 64 2020-04-27 19:39:30 Epoch: 278, Train: 0.9986/0.0079 Test: 0.9147/0.4005
+    GCN-sgd-lr-300         2033320 1pool 64 2020-04-27 18:18:30 Epoch: 267, Train: 0.9980/0.0089 Test: 0.9170/0.3834
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
