@@ -50,6 +50,12 @@ class MyDataset(Dataset):
                                               transforms.RandomHorizontalFlip(), transforms.ToTensor(),
                                               transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
 
+        # self.tran_train = transforms.Compose([transforms.RandomRotation(10),
+        #                                       transforms.RandomCrop(32, padding=4),
+        #                                       transforms.RandomHorizontalFlip(),
+        #                                       transforms.ToTensor(),
+        #                                       transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+
         self.tran_test = transforms.Compose([transforms.ToTensor(),
                                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
 
@@ -687,9 +693,724 @@ class CNNNet8(nn.Module):
     pass
 
 
+class CNNNet7_10(nn.Module):
+
+    def __init__(self, is_train=True):
+        super().__init__()
+        self.is_train = is_train
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(4, 4, padding=0)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv02 = ConvBlock(64, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.gcn1_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv4 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv01(x)
+        e = self.conv02(e)
+
+        e1 = e
+        e = self.gcn1_conv1(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn1_conv2(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.gcn2_conv1(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn2_conv2(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+
+        e1 = e
+        e = self.gcn2_conv3(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn2_conv4(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet6_11(nn.Module):
+
+    def __init__(self, is_train=True):
+        super().__init__()
+        self.is_train = is_train
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(4, 4, padding=0)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv02 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.conv0 = ConvBlock(64, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn1_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv4 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv01(x)
+        e = self.conv02(e)
+
+        e = self.conv0(e)
+
+        e1 = e
+        e = self.gcn1_conv1(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn1_conv2(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv1(e)
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.gcn2_conv1(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn2_conv2(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv2(e)
+
+        e1 = e
+        e = self.gcn2_conv3(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn2_conv4(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet7_12(nn.Module):
+
+    def __init__(self, is_train=True):
+        super().__init__()
+        self.is_train = is_train
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(4, 4, padding=0)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv02 = ConvBlock(64, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.gcn1_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=False)
+        self.gcn1_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=False)
+
+        self.gcn2_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=False)
+        self.gcn2_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=False)
+
+        self.gcn2_conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=False)
+        self.gcn2_conv4 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=False)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv01(x)
+        e = self.conv02(e)
+
+        e1 = e
+        e = self.gcn1_conv1(e)
+        e = self.pool(e)
+        e2 = e
+        e = F.relu(e)
+        e = self.gcn1_conv2(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = F.relu(e)
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.gcn2_conv1(e)
+        e = self.pool(e)
+        e2 = e
+        e = F.relu(e)
+        e = self.gcn2_conv2(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = F.relu(e)
+
+        e1 = e
+        e = self.gcn2_conv3(e)
+        e = self.pool(e)
+        e2 = e
+        e = F.relu(e)
+        e = self.gcn2_conv4(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = F.relu(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class ResBlock(nn.Module):
+
+    def __init__(self, cin=146, cout=146, padding=0, ks=1, has_relu=True, has_bn=True):
+        super().__init__()
+        self.has_relu = has_relu
+        self.has_bn = has_bn
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+
+        self.conv1 = ConvBlock(cin, cout, padding=padding, ks=ks, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.conv2 = ConvBlock(cout, cout, padding=padding, ks=ks, has_bn=self.has_bn, has_relu=self.has_relu)
+        pass
+
+    def forward(self, e):
+        e1 = e
+        e = self.conv1(e)
+        e = self.pool(e)
+        e2 = e
+        if not self.has_relu:
+            e = F.relu(e)
+        e = self.conv2(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        if not self.has_relu:
+            e = F.relu(e)
+        return e
+
+    pass
+
+
+class CNNNet7_13(nn.Module):
+
+    def __init__(self, is_train=True):
+        super().__init__()
+        self.is_train = is_train
+        self.has_bn = True
+        self.has_relu = True
+        sp_size = 6
+        sp_size_padding = 2
+        # sp_size = 4
+        # sp_size_padding = 0
+
+        self.sp = nn.AvgPool2d(sp_size, sp_size, padding=sp_size_padding)
+
+        self.conv1 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(64, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.gcn1_1 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.gcn1_2 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.gcn1_3 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+
+        self.gcn2_1 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.gcn2_2 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.gcn2_3 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.gcn2_4 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.gcn2_5 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+        self.gcn2_6 = ResBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn, has_relu=self.has_relu)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv1(x)
+        e = self.conv2(e)
+
+        e = self.gcn1_1(e)
+        e = self.gcn1_2(e)
+        e = self.gcn1_3(e)
+
+        # e = self.sp(e)
+
+        e = self.gcn2_1(e)
+        e = self.gcn2_2(e)
+        e = self.gcn2_3(e)
+        e = self.gcn2_4(e)
+        e = self.gcn2_5(e)
+        e = self.gcn2_6(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet6_14(nn.Module):
+
+    def __init__(self, is_train=True):
+        super().__init__()
+        self.is_train = is_train
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(4, 4, padding=0)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv02 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv0 = ConvBlock(64, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn1_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv4 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv01(x)
+        e = self.conv02(e)
+
+        e = self.conv0(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn1_conv1(e)
+        e2 = e
+        e = self.pool(e)
+        e = self.gcn1_conv2(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv1(e)
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv1(e)
+        e2 = e
+        e = self.pool(e)
+        e = self.gcn2_conv2(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv2(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv3(e)
+        e2 = e
+        e = self.pool(e)
+        e = self.gcn2_conv4(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet6_15(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(3, 3, padding=1)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv11 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv12 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv0 = ConvBlock(64, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv21 = ConvBlock(146, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        # self.conv21 = ConvBlock(64, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv22 = ConvBlock(146, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.gcn1_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv4 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv11(x)
+        e = self.conv12(e)
+
+        e = self.pool2(e)
+        e = self.conv0(e)
+
+        e = self.conv21(e)
+        e = self.conv22(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn1_conv1(e)
+        e = self.pool(e)
+        e = self.gcn1_conv2(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv1(e)
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv1(e)
+        e = self.pool(e)
+        e = self.gcn2_conv2(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv2(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv3(e)
+        e = self.pool(e)
+        e = self.gcn2_conv4(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet6_16(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(2, 2, padding=0)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv11 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv12 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv0 = ConvBlock(64, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv21 = ConvBlock(146, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv22 = ConvBlock(146, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv31 = ConvBlock(146, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv32 = ConvBlock(146, 146, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.gcn1_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv4 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv11(x)
+        e = self.conv12(e)
+        e = self.pool2(e)
+
+        e = self.conv0(e)
+
+        e = self.conv21(e)
+        e = self.conv22(e)
+        e = self.pool2(e)
+
+        e = self.conv31(e)
+        e = self.conv32(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn1_conv1(e)
+        e = self.pool(e)
+        e = self.gcn1_conv2(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv1(e)
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv1(e)
+        e = self.pool(e)
+        e = self.gcn2_conv2(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv2(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv3(e)
+        e = self.pool(e)
+        e = self.gcn2_conv4(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet6_17(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(2, 2, padding=0)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv11 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv12 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        # self.conv0 = ConvBlock(64, 128, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv21 = ConvBlock(64, 128, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv22 = ConvBlock(128, 128, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv31 = ConvBlock(128, 256, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv32 = ConvBlock(256, 256, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.gcn1_conv1 = ConvBlock(256, 256, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv2 = ConvBlock(256, 256, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv1 = ConvBlock(256, 512, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv1 = ConvBlock(512, 512, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv2 = ConvBlock(512, 512, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(512, 512, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv3 = ConvBlock(512, 512, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv4 = ConvBlock(512, 512, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv3 = ConvBlock(512, 512, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(512, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv11(x)
+        e = self.conv12(e)
+        e = self.pool2(e)
+
+        # e = self.conv0(e)
+
+        e = self.conv21(e)
+        e = self.conv22(e)
+        e = self.pool2(e)
+
+        e = self.conv31(e)
+        e = self.conv32(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn1_conv1(e)
+        e = self.pool(e)
+        e = self.gcn1_conv2(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv1(e)
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv1(e)
+        e = self.pool(e)
+        e = self.gcn2_conv2(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv2(e)
+
+        e1 = e
+        e = self.pool(e)
+        e = self.gcn2_conv3(e)
+        e = self.pool(e)
+        e = self.gcn2_conv4(e)
+        e3 = e
+        e = e1 + e3
+        e = self.conv3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
+class CNNNet6_18(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.has_bn = True
+
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.sp = nn.AvgPool2d(4, 4, padding=0)
+        self.pool2 = nn.MaxPool2d(2, 2, padding=0)
+
+        self.conv01 = ConvBlock(3, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+        self.conv02 = ConvBlock(64, 64, stride=1, padding=1, ks=3, has_bn=self.has_bn)
+
+        self.conv0 = ConvBlock(64, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn1_conv11 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv12 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv21 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn1_conv22 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv1 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv11 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv12 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv21 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv22 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv2 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.gcn2_conv31 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv32 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv41 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.gcn2_conv42 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+        self.conv3 = ConvBlock(146, 146, padding=0, ks=1, has_bn=self.has_bn)
+
+        self.avg = nn.AdaptiveAvgPool2d(1)
+        self.readout_mlp = MLPReadout(146, 10)
+        pass
+
+    def forward(self, x):
+        e = self.conv01(x)
+        e = self.conv02(e)
+
+        e = self.conv0(e)
+
+        e1 = e
+        e = self.gcn1_conv11(e)
+        e = self.gcn1_conv12(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn1_conv21(e)
+        e = self.gcn1_conv22(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv1(e)
+
+        e = self.sp(e)
+
+        e1 = e
+        e = self.gcn2_conv11(e)
+        e = self.gcn2_conv12(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn2_conv21(e)
+        e = self.gcn2_conv22(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv2(e)
+
+        e1 = e
+        e = self.gcn2_conv31(e)
+        e = self.gcn2_conv32(e)
+        e = self.pool(e)
+        e2 = e
+        e = self.gcn2_conv41(e)
+        e = self.gcn2_conv42(e)
+        e = self.pool(e)
+        e3 = e
+        e = e1 + e2 + e3
+        e = self.conv3(e)
+
+        e = self.avg(e).squeeze()
+        out = self.readout_mlp(e)
+        return out
+
+    pass
+
+
 class RunnerSPE(object):
 
-    def __init__(self, model, data_root_path='/mnt/4T/Data/cifar/cifar-10',
+    def __init__(self, model, data_root_path='/mnt/4T/Data/cifar/cifar-10', weight_decay=5e-4, is_sgd=False,
                  root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
@@ -701,11 +1422,15 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=128, shuffle=False, num_workers=num_workers)
 
         self.model = model().to(self.device)
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        # self.lr_s = [[0, 0.1], [40, 0.01], [70, 0.001], [90, 0.0001]]
-        self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+
+        if not is_sgd:
+            self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        else:
+            self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0],
+                                             momentum=0.9, weight_decay=weight_decay)
+            pass
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -909,11 +1634,35 @@ if __name__ == '__main__':
     CNNNet4 1919626               2020-04-26 16:39:48 Epoch: 200, lr=0.0010, Train: 0.9989/0.0071 Test: 0.9205/0.3287
     CNNNet4  171293 1sp 0pool     2020-04-26 18:48:18 Epoch: 188, lr=0.0010, Train: 0.9928/0.0285 Test: 0.8868/0.4595
     CNNNet4  171293 1sp 1pool     2020-04-26 21:39:03 Epoch: 209, lr=0.0010, Train: 0.9965/0.0155 Test: 0.8904/0.5183
-    CNNNet5  171293 2sp 0pool     2020-04-27 00:15:34 Epoch: 182, lr=0.0010, Train: 0.9896/0.0400 Test: 0.8939/0.4049
     CNNNet4  171293 1sp 1pool da  2020-04-27 00:55:13 Epoch: 196, lr=0.0010, Train: 0.9634/0.1086 Test: 0.8791/0.4591
+    CNNNet5  171293 2sp 0pool     2020-04-27 00:15:34 Epoch: 182, lr=0.0010, Train: 0.9896/0.0400 Test: 0.8939/0.4049
     CNNNet6  258309 1sp 0pool Res 2020-04-27 17:35:29 Epoch: 230, lr=0.0010, Train: 0.9990/0.0070 Test: 0.9034/0.4176
     CNNNet7  230743 1sp 0pool Res 2020-04-28 19:52:45 Epoch: 187, lr=0.0010, Train: 0.9914/0.0351 Test: 0.8905/0.4287
-    CNNNet8  274251 1sp 0pool Res 
+    CNNNet8  274251 1sp 0pool Res 2020-04-28 23:20:46 Epoch: 277, lr=0.0001, Train: 0.9990/0.0072 Test: 0.8974/0.4924
+    CNNNet7_10 230743 0.0001      2020-04-29 20:46:27 Epoch: 119, lr=0.0100, Train: 0.9791/0.0622 Test: 0.8906/0.5073
+    CNNNet6_11 258309 0.0001      2020-04-29 23:47:40 Epoch: 182, lr=0.0010, Train: 0.9988/0.0046 Test: 0.9035/0.5330
+    CNNNet6_11 258309 0.0000      2020-04-29 21:00:42 Epoch: 120, lr=0.0100, Train: 0.9981/0.0062 Test: 0.8923/0.7137
+    CNNNet7_10 230743 0.0000      2020-04-29 21:44:22 Epoch: 113, lr=0.0100, Train: 0.9782/0.0665 Test: 0.8807/0.6206
+    CNNNet7_12 230743 0.0005 Res  2020-04-30 00:19:19 Epoch: 183, lr=0.0010, Train: 0.9940/0.0275 Test: 0.8912/0.4153
+    CNNNet7_13 491791 0.0 Res sp=0 2020-04-30 02:54:07 Epoch: 51, lr=0.0002, Train: 0.9743/0.0796 Test: 0.8674/0.5320
+    CNNNet7_13 361267 0.0 Res sp=6 2020-04-30 01:36:40 Epoch: 51, lr=0.0002, Train: 0.9834/0.0494 Test: 0.8873/0.5029
+    CNNNet7_13 491791 0.0 Res sp=4 2020-04-30 04:54:4 Epoch: 103, lr=0.0000, Train: 0.9989/0.0035 Test: 0.8930/0.8704
+    CNNNet6  258309 1sp 0pool Res 2020-04-30 04:39:31 Epoch: 179, lr=0.0000, Train: 0.9979/0.0067 Test: 0.8798/0.9744
+    CNNNet7_13 491791 0.0005 Res sp=4 2020-04-30 16:2 Epoch: 199, lr=0.0010, Train: 0.9925/0.0258 Test: 0.8959/0.4635
+    CNNNet7_13 491791 0.0005 Res sp=6 2020-04-30 16:1 Epoch: 195, lr=0.0010, Train: 0.9911/0.0292 Test: 0.8941/0.4504
+    CNNNet7_13 491791 0.0005 Res sp=0 2020-04-30 16:2 Epoch: 223, lr=0.0010, Train: 0.0971/2.2967 Test: 0.1000/2.2738
+    CNNNet6_14 258309 0.0005 Res sp=4 2020-04-30 12:2 Epoch: 203, lr=0.0010, Train: 0.9983/0.0095 Test: 0.9024/0.4140
+    
+    CNNNet6_15 642873 0.0005 Res sp=3 e123 2020-04-30 Epoch: 232, lr=0.0010, Train: 0.9996/0.0035 Test: 0.9274/0.3284
+    CNNNet6_15 642873 0.0005 Res sp=3 e13  2020-04-30 Epoch: 248, lr=0.0010, Train: 0.9994/0.0035 Test: 0.9280/0.3293
+    CNNNet6_15 413535 0.0005 Res sp=3 e13  2020-04-30 Epoch: 228, lr=0.0010, Train: 0.9977/0.0094 Test: 0.9062/0.4492
+    CNNNet6_15 305787 0.0005 Res sp=3 e13  2020-04-30 Epoch: 182, lr=0.0010, Train: 0.9839/0.0539 Test: 0.8996/0.3589
+    CNNNet6_16 1027437 0.0005 Res sp=2 e13 2020-04-30 Epoch: 216, lr=0.0010, Train: 0.9992/0.0039 Test: 0.9394/0.2799
+    CNNNet6_17 3160010 0.0005 Res sp=2 e13 2020-05-01 Epoch: 299, lr=0.0001, Train: 0.9998/0.0015 Test: 0.9397/0.2928
+    CNNNet6  258309 1sp 0pool Res R=20 2020-05-01 18: Epoch: 187, lr=0.0010, Train: 0.9690/0.0920 Test: 0.8963/0.3699
+    CNNNet6  258309 1sp 0pool Res R=10 
+    CNNNet6_18 388833 1sp 0pool Res 
+    CNNNet6  258309 1sp 0pool Res 
     """
 
     # _data_root_path = 'D:\data\CIFAR'
@@ -923,15 +1672,17 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/Test_1/{}".format("CNNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/Test_1/{}".format("CNNNet6")
+    _weight_decay = 5e-4
     _num_workers = 4
+    _is_sgd = True
     _use_gpu = True
     _gpu_id = "0"
 
     Tools.print("ckpt:{}, workers:{}, gpu:{}".format(_root_ckpt_dir, _num_workers, _gpu_id))
 
-    runner = RunnerSPE(model=CNNNet8, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
-                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
+    runner = RunnerSPE(model=CNNNet6, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, is_sgd=_is_sgd,
+                       weight_decay=_weight_decay, num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     runner.train(300)
 
     pass
