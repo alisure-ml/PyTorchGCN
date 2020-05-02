@@ -216,10 +216,10 @@ class GCNNet1(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=False))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=False))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
         self.relu = nn.ReLU()
         pass
 
@@ -245,10 +245,10 @@ class GCNNet2(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=False))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=False))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
 
         self.readout_mlp = MLPReadout(out_dim, n_classes)
         self.relu = nn.ReLU()
@@ -473,7 +473,7 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast/{}".format("GCN")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast/{}norm".format("GCN")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4

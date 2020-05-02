@@ -759,9 +759,9 @@ if __name__ == '__main__':
     GCN-sgd-lr-300         251273 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 198, Train: 0.9771/0.0693 Test: 0.8962/0.3721
     GatedGCNNet-sgd-lr-300 239889 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 264, Train: 0.9815/0.0591 Test: 0.8999/0.3774
     
-    GCN-sgd-lr-300 64 R=10 381797 3Conv 2GCN1 4GCN2 4spsize 
-    GCN-sgd-lr-300 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 
-    GCN-sgd-lr-300 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-100 64 R=10 381797 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-100 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-100 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
