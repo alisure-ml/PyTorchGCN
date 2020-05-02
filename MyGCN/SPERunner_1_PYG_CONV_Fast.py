@@ -1,5 +1,6 @@
 import os
 import cv2
+import glob
 import torch
 import skimage
 import numpy as np
@@ -215,10 +216,10 @@ class GCNNet1(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=False))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=False))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
         self.relu = nn.ReLU()
         pass
 
@@ -244,10 +245,10 @@ class GCNNet2(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=False))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=False))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
 
         self.readout_mlp = MLPReadout(out_dim, n_classes)
         self.relu = nn.ReLU()
@@ -278,12 +279,13 @@ class MyGCNNet(nn.Module):
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
         pass
 
-    def forward(self, images, batched_graph, pixel_data_where, batched_pixel_graph):
+    def forward(self, images, batched_graph, batched_pixel_graph):
         # model 1
         conv_feature = self.model_conv(images) if self.model_conv else images
 
         # model 2
-        pixel_nodes_feat = conv_feature[pixel_data_where[:, 0], :, pixel_data_where[:, 1], pixel_data_where[:, 2]]
+        data_where = batched_pixel_graph.data_where
+        pixel_nodes_feat = conv_feature[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
 
@@ -361,11 +363,17 @@ class RunnerSPE(object):
             # Data
             images = images.float().to(self.device)
             labels = labels.long().to(self.device)
-            pixel_data_where = batched_pixel_graph.data_where.to(self.device)
+
+            batched_graph.batch = batched_graph.batch.to(self.device)
+            batched_graph.edge_index = batched_graph.edge_index.to(self.device)
+
+            batched_pixel_graph.batch = batched_pixel_graph.batch.to(self.device)
+            batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
+            batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
 
             # Run
             self.optimizer.zero_grad()
-            logits = self.model.forward(images, batched_graph, pixel_data_where, batched_pixel_graph)
+            logits = self.model.forward(images, batched_graph, batched_pixel_graph)
             loss = self.loss_class(logits, labels)
             loss.backward()
             self.optimizer.step()
@@ -396,10 +404,16 @@ class RunnerSPE(object):
                 # Data
                 images = images.float().to(self.device)
                 labels = labels.long().to(self.device)
-                pixel_data_where = batched_pixel_graph.data_where.to(self.device)
+
+                batched_graph.batch = batched_graph.batch.to(self.device)
+                batched_graph.edge_index = batched_graph.edge_index.to(self.device)
+
+                batched_pixel_graph.batch = batched_pixel_graph.batch.to(self.device)
+                batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
+                batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
 
                 # Run
-                logits = self.model.forward(images, batched_graph, pixel_data_where, batched_pixel_graph)
+                logits = self.model.forward(images, batched_graph, batched_pixel_graph)
                 loss = self.loss_class(logits, labels)
 
                 # Stat
@@ -445,31 +459,31 @@ if __name__ == '__main__':
     """
     
     """
-    _data_root_path = 'D:\data\CIFAR'
-    _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
+    # _data_root_path = 'D:\data\CIFAR'
+    # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
+    # _batch_size = 64
+    # _image_size = 32
+    # _sp_size = 4
+    # _epochs = 100
+    # _train_print_freq = 1
+    # _test_print_freq = 1
+    # _num_workers = 1
+    # _use_gpu = False
+    # _gpu_id = "1"
+
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast/{}norm".format("GCN")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4
     _epochs = 100
-    _train_print_freq = 1
-    _test_print_freq = 1
-    _num_workers = 1
-    _use_gpu = False
-    _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    # _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast/{}".format("GCN")
-    # _batch_size = 128
-    # _image_size = 32
-    # _sp_size = 4
-    # _epochs = 300
-    # _train_print_freq = 100
-    # _test_print_freq = 50
-    # _num_workers = 8
-    # _use_gpu = True
+    _train_print_freq = 100
+    _test_print_freq = 50
+    _num_workers = 8
+    _use_gpu = True
     # _gpu_id = "0"
-    # _gpu_id = "1"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
