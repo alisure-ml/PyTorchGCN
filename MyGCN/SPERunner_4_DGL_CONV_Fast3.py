@@ -96,8 +96,10 @@ class MyDataset(Dataset):
         self.image_size_for_sp = self.image_size // 1
         self.data_root_path = data_root_path
 
-        self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
+        self.transform = transforms.Compose([
+            # transforms.RandomRotation(10),
+            transforms.RandomCrop(self.image_size, padding=4),
+            transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
         pass
 
@@ -515,13 +517,17 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146], out_dim=146)
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
 
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)  # 2, 3
+        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
+        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
+
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)  # 2, 3
-        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
-        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146], out_dim=146)
+        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -566,11 +572,10 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        # self.lr_s = [[0, 0.1], [40, 0.01], [70, 0.001], [90, 0.0001]]
-        self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        # self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
+        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -753,6 +758,10 @@ if __name__ == '__main__':
     
     GCN-sgd-lr-300         251273 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 198, Train: 0.9771/0.0693 Test: 0.8962/0.3721
     GatedGCNNet-sgd-lr-300 239889 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 264, Train: 0.9815/0.0591 Test: 0.8999/0.3774
+    
+    GCN-sgd-lr-300 64 R=10 381797 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-sgd-lr-300 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-sgd-lr-300 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -767,11 +776,11 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-sgd-lr-300".format("GatedGCNNet")
-    _batch_size = 128
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GCN")
+    _batch_size = 64
     _image_size = 32
     _sp_size = 4
-    _epochs = 300
+    _epochs = 100
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8

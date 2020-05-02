@@ -46,15 +46,15 @@ class MyDataset(Dataset):
         # self.transform = transforms.Compose([transforms.RandomCrop(image_size, padding=4),
         #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
 
-        self.tran_train = transforms.Compose([transforms.RandomCrop(32, padding=4),
-                                              transforms.RandomHorizontalFlip(), transforms.ToTensor(),
-                                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
-
-        # self.tran_train = transforms.Compose([transforms.RandomRotation(10),
-        #                                       transforms.RandomCrop(32, padding=4),
-        #                                       transforms.RandomHorizontalFlip(),
-        #                                       transforms.ToTensor(),
+        # self.tran_train = transforms.Compose([transforms.RandomCrop(32, padding=4),
+        #                                       transforms.RandomHorizontalFlip(), transforms.ToTensor(),
         #                                       transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+
+        self.tran_train = transforms.Compose([transforms.RandomRotation(10),
+                                              transforms.RandomCrop(32, padding=4),
+                                              transforms.RandomHorizontalFlip(),
+                                              transforms.ToTensor(),
+                                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
 
         self.tran_test = transforms.Compose([transforms.ToTensor(),
                                              transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
@@ -1660,9 +1660,9 @@ if __name__ == '__main__':
     CNNNet6_16 1027437 0.0005 Res sp=2 e13 2020-04-30 Epoch: 216, lr=0.0010, Train: 0.9992/0.0039 Test: 0.9394/0.2799
     CNNNet6_17 3160010 0.0005 Res sp=2 e13 2020-05-01 Epoch: 299, lr=0.0001, Train: 0.9998/0.0015 Test: 0.9397/0.2928
     CNNNet6  258309 1sp 0pool Res R=20 2020-05-01 18: Epoch: 187, lr=0.0010, Train: 0.9690/0.0920 Test: 0.8963/0.3699
-    CNNNet6  258309 1sp 0pool Res R=10 
-    CNNNet6_18 388833 1sp 0pool Res 
-    CNNNet6  258309 1sp 0pool Res 
+    CNNNet6  258309 1sp 0pool Res R=10 2020-05-01 20: Epoch: 234, lr=0.0010, Train: 0.9902/0.0313 Test: 0.9022/0.4289
+    CNNNet6_18 388833 1sp 0pool Res 2020-05-01 21:36: Epoch: 182, lr=0.0010, Train: 0.9902/0.0364 Test: 0.9053/0.3361
+    CNNNet6_18 388833 1sp 0pool Res R=10 2020-05-02 0 Epoch: 188, lr=0.0010, Train: 0.9780/0.0683 Test: 0.9058/0.3417
     """
 
     # _data_root_path = 'D:\data\CIFAR'
@@ -1672,16 +1672,16 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _root_ckpt_dir = "./ckpt2/dgl/Test_1/{}".format("CNNNet6")
+    _root_ckpt_dir = "./ckpt2/dgl/Test_1/{}".format("CNNNet6_18")
     _weight_decay = 5e-4
     _num_workers = 4
     _is_sgd = True
     _use_gpu = True
-    _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{}, workers:{}, gpu:{}".format(_root_ckpt_dir, _num_workers, _gpu_id))
 
-    runner = RunnerSPE(model=CNNNet6, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, is_sgd=_is_sgd,
+    runner = RunnerSPE(model=CNNNet6_18, data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, is_sgd=_is_sgd,
                        weight_decay=_weight_decay, num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     runner.train(300)
 

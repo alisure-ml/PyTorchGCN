@@ -33,6 +33,27 @@ class NodeApplyModule(nn.Module):
     pass
 
 
+class NodeApplyModule2(nn.Module):
+
+    def __init__(self, in_dim, out_dim):
+        super().__init__()
+        self.linear1 = nn.Linear(in_dim, out_dim)
+        self.linear2 = nn.Linear(out_dim, out_dim)
+        self.batchnorm_h = nn.BatchNorm1d(out_dim)
+        self.activation = F.relu
+        pass
+
+    def forward(self, node):
+        h = self.linear1(node.data['h'])
+        h = self.batchnorm_h(h)
+        h = self.activation(h)
+
+        h = self.linear2(h)
+        return {'h': h}
+
+    pass
+
+
 class GCNLayer(nn.Module):
 
     def __init__(self, in_dim, out_dim, activation, dropout, graph_norm, batch_norm, residual=False):
