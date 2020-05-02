@@ -215,10 +215,10 @@ class GCNNet1(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=False))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=False))
         self.relu = nn.ReLU()
         pass
 
@@ -244,10 +244,10 @@ class GCNNet2(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=False))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=False))
 
         self.readout_mlp = MLPReadout(out_dim, n_classes)
         self.relu = nn.ReLU()
@@ -270,8 +270,12 @@ class MyGCNNet(nn.Module):
     def __init__(self):
         super().__init__()
         self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+
         self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
         self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
+
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146], out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, pixel_data_where, batched_pixel_graph):
@@ -313,10 +317,8 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
