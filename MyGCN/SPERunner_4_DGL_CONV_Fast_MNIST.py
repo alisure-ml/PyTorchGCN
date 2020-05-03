@@ -41,7 +41,7 @@ def gpu_setup(use_gpu, gpu_id):
 
 class DealSuperPixel(object):
 
-    def __init__(self, image_data, ds_image_size=224, super_pixel_size=14, slic_sigma=1, slic_max_iter=5):
+    def __init__(self, image_data, ds_image_size=28, super_pixel_size=4, slic_sigma=1, slic_max_iter=5):
         self.ds_image_size = ds_image_size
         self.super_pixel_num = (self.ds_image_size // super_pixel_size) ** 2
 
@@ -89,7 +89,7 @@ class DealSuperPixel(object):
 
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path='D:\\data\\MNIST', is_train=True, image_size=64, sp_size=5):
+    def __init__(self, data_root_path='D:\\data\\MNIST', is_train=True, image_size=28, sp_size=4):
         super().__init__()
         self.sp_size = sp_size
         self.is_train = is_train
@@ -327,7 +327,7 @@ class MyGCNNet(nn.Module):
 class RunnerSPE(object):
 
     def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50,
+                 batch_size=64, image_size=28, sp_size=4, train_print_freq=100, test_print_freq=50,
                  root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -503,9 +503,7 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCN       Baseline Has Sigmoid             2020-04-08 15:41:33 Epoch: 97, Train: 0.7781/0.6535 Test: 0.7399/0.8137
     
-    GCNNet 830024                    2020-04-24 15:32:06 Epoch:22,Train:0.4189-0.6963/2.3912 Test:0.3812-0.6580/2.6269
     """
     _data_root_path = 'D:\\data\\MNIST'
     _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -521,8 +519,8 @@ if __name__ == '__main__':
     # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
     # _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GCNNet")
     # _batch_size = 64
-    # _image_size = 64
-    # _sp_size = 5
+    # _image_size = 28
+    # _sp_size = 4
     # _train_print_freq = 100
     # _test_print_freq = 50
     # _num_workers = 8
