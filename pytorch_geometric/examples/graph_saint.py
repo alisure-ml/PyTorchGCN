@@ -99,5 +99,5 @@ def test():
 for epoch in range(1, 51):
     loss = train()
     accs = test()
-    print(f'Epoch: {epoch:02d}, Loss: {loss:.4f}, Train: {accs[0]:.4f}, '
-          f'Val: {accs[1]:.4f}, Test: {accs[2]:.4f}')
+    print('Epoch: {epoch:02d}, Loss: {loss:.4f}, '
+          'Train: {accs[0]:.4f}, Val: {accs[1]:.4f}, Test: {accs[2]:.4f}')
