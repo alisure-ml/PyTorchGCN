@@ -301,7 +301,6 @@ class GraphSageNet1(nn.Module):
     def __init__(self, in_dim=64, hidden_dims=[108, 108], out_dim=108):
         super().__init__()
         self.hidden_dims = hidden_dims
-        assert 2 <= len(self.hidden_dims) <= 3
         self.dropout = 0.0
         self.residual = True
         self.sage_aggregator = "meanpool"
@@ -311,11 +310,11 @@ class GraphSageNet1(nn.Module):
         _in_dim = self.hidden_dims[0]
         self.gcn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu, self.dropout,
+            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu,
                                                 self.dropout, self.sage_aggregator, self.residual))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu, self.dropout,
+        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
                                             self.dropout, self.sage_aggregator, self.residual))
         pass
 
@@ -338,7 +337,6 @@ class GraphSageNet2(nn.Module):
     def __init__(self, in_dim=146, hidden_dims=[108, 108, 108, 108], out_dim=108, n_classes=10):
         super().__init__()
         self.hidden_dims = hidden_dims
-        assert 3 <= len(self.hidden_dims) <= 6
         self.dropout = 0.0
         self.residual = True
         self.sage_aggregator = "meanpool"
@@ -348,11 +346,11 @@ class GraphSageNet2(nn.Module):
         _in_dim = self.hidden_dims[0]
         self.gcn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu, self.dropout,
+            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu,
                                                 self.dropout, self.sage_aggregator, self.residual))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu, self.dropout,
+        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
                                             self.dropout, self.sage_aggregator, self.residual))
 
         self.readout_mlp = MLPReadout(out_dim, n_classes)

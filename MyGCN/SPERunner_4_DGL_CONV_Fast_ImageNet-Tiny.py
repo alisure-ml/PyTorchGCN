@@ -353,11 +353,11 @@ class GraphSageNet1(nn.Module):
         _in_dim = self.hidden_dims[0]
         self.gcn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu, self.dropout,
+            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu,
                                                 self.dropout, self.sage_aggregator, self.residual))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu, self.dropout,
+        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
                                             self.dropout, self.sage_aggregator, self.residual))
         pass
 
@@ -389,11 +389,11 @@ class GraphSageNet2(nn.Module):
         _in_dim = self.hidden_dims[0]
         self.gcn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu, self.dropout,
+            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu,
                                                 self.dropout, self.sage_aggregator, self.residual))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu, self.dropout,
+        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
                                             self.dropout, self.sage_aggregator, self.residual))
 
         self.readout_mlp = MLPReadout(out_dim, n_classes)
@@ -505,13 +505,13 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128], out_dim=256)
         # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=1024, n_classes=200)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64"], out_dim=128)
-        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 128], out_dim=256)
-        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=1024, n_classes=200)
-
         self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64"], out_dim=128)
-        self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[64, 64], out_dim=128)
-        self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 256], out_dim=512, n_classes=200)
+        self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 128], out_dim=256)
+        self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=1024, n_classes=200)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64"], out_dim=128)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[64, 64], out_dim=128)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 256], out_dim=512, n_classes=200)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -730,7 +730,7 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
     # _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GatedGCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GraphSageNet")
     _batch_size = 64
     _image_size = 64
     _sp_size = 4
@@ -738,8 +738,8 @@ if __name__ == '__main__':
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
