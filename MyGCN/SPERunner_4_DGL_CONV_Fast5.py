@@ -97,7 +97,6 @@ class MyDataset(Dataset):
         self.data_root_path = data_root_path
 
         self.transform = transforms.Compose([
-            # transforms.RandomRotation(10),
             transforms.RandomCrop(self.image_size, padding=4),
             transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
@@ -226,277 +225,210 @@ class CONVNet(nn.Module):
 
 class GCNNet1(nn.Module):
 
-    def __init__(self, in_dim=64, hidden_dims=[146, 146], out_dim=146):
+    def __init__(self, in_dim=64, out_dim=146):
         super().__init__()
-        self.hidden_dims = hidden_dims
         self.dropout = 0.0
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
 
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        if len(self.hidden_dims) >= 2:
-            self.gcn_1 = GCNLayer(self.hidden_dims[0], self.hidden_dims[1], F.relu,
-                                  self.dropout, self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 3:
-            self.gcn_2 = GCNLayer(self.hidden_dims[1], self.hidden_dims[2], F.relu,
-                                  self.dropout, self.graph_norm, self.batch_norm, self.residual)
-            pass
-        self.gcn_o = GCNLayer(self.hidden_dims[-1], out_dim, F.relu,
-                              self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.embedding_h = nn.Linear(in_dim, out_dim)
+        self.gcn_1 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_o = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.embedding_o = nn.Linear(out_dim, out_dim)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = self.embedding_h(nodes_feat)
+        e0 = self.embedding_h(nodes_feat)
 
-        if len(self.hidden_dims) >= 2:
-            hidden_nodes_feat = self.gcn_1(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 3:
-            hidden_nodes_feat = self.gcn_2(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-            pass
-        hidden_nodes_feat = self.gcn_o(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+        e1 = self.gcn_1(graphs, e0, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e1
+        hg1 = dgl.mean_nodes(graphs, 'h')
 
-        graphs.ndata['h'] = hidden_nodes_feat
-        hg = dgl.mean_nodes(graphs, 'h')
-        return hg
+        e2 = self.gcn_o(graphs, e1, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e2
+        hg2 = dgl.mean_nodes(graphs, 'h')
+
+        hg = hg1 + hg2
+        return self.embedding_o(hg)
 
     pass
 
 
 class GCNNet2(nn.Module):
 
-    def __init__(self, in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10):
+    def __init__(self, in_dim=146, out_dim=146, n_classes=10):
         super().__init__()
-        self.hidden_dims = hidden_dims
         self.dropout = 0.0
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
 
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        self.gcn_1 = GCNLayer(self.hidden_dims[0], self.hidden_dims[1], F.relu,
-                              self.dropout, self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 3:
-            self.gcn_2 = GCNLayer(self.hidden_dims[1], self.hidden_dims[2], F.relu,
-                                  self.dropout, self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 4:
-            self.gcn_3 = GCNLayer(self.hidden_dims[2], self.hidden_dims[3], F.relu,
-                                  self.dropout, self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 5:
-            self.gcn_4 = GCNLayer(self.hidden_dims[3], self.hidden_dims[4], F.relu,
-                                  self.dropout, self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 6:
-            self.gcn_5 = GCNLayer(self.hidden_dims[4], self.hidden_dims[5], F.relu,
-                                  self.dropout, self.graph_norm, self.batch_norm, self.residual)
-
-        self.gcn_o = GCNLayer(self.hidden_dims[-1], out_dim, F.relu,
-                              self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.embedding_h = nn.Linear(in_dim, out_dim)
+        self.gcn_1 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_2 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_3 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_o = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
         self.readout_mlp = MLPReadout(out_dim, n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = self.embedding_h(nodes_feat)
+        e0 = self.embedding_h(nodes_feat)
 
-        hidden_nodes_feat = self.gcn_1(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 3:
-            hidden_nodes_feat = self.gcn_2(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 4:
-            hidden_nodes_feat = self.gcn_3(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 5:
-            hidden_nodes_feat = self.gcn_4(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 6:
-            hidden_nodes_feat = self.gcn_5(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        hidden_nodes_feat = self.gcn_o(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+        e1 = self.gcn_1(graphs, e0, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e1
+        hg1 = dgl.mean_nodes(graphs, 'h')
 
-        graphs.ndata['h'] = hidden_nodes_feat
-        hg = dgl.mean_nodes(graphs, 'h')
+        e2 = self.gcn_2(graphs, e1, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e2
+        hg2 = dgl.mean_nodes(graphs, 'h')
+
+        e3 = self.gcn_3(graphs, e2, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e3
+        hg3 = dgl.mean_nodes(graphs, 'h')
+
+        e4 = self.gcn_o(graphs, e3, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e4
+        hg4 = dgl.mean_nodes(graphs, 'h')
+
+        hg = hg1 + hg2 + hg3 + hg4
         logits = self.readout_mlp(hg)
         return logits
 
     pass
 
 
-class GraphSageNet1(nn.Module):
+class GCNNet21(nn.Module):
 
-    def __init__(self, in_dim=64, hidden_dims=[108, 108], out_dim=108):
+    def __init__(self, in_dim=64, out_dim=146):
         super().__init__()
-        self.hidden_dims = hidden_dims
-        assert 2 <= len(self.hidden_dims) <= 3
         self.dropout = 0.0
         self.residual = True
-        self.sage_aggregator = "meanpool"
+        self.graph_norm = True
+        self.batch_norm = True
 
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        self.graph_sage_1 = GraphSageLayer(self.hidden_dims[0], self.hidden_dims[1], F.relu,
-                                           self.dropout, self.sage_aggregator, self.residual)
-        if len(self.hidden_dims) >= 3:
-            self.graph_sage_2 = GraphSageLayer(self.hidden_dims[1], self.hidden_dims[2], F.relu,
-                                               self.dropout, self.sage_aggregator, self.residual)
-            pass
-        self.graph_sage_o = GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
-                                           self.dropout, self.sage_aggregator, self.residual)
+        self.embedding_h = nn.Linear(in_dim, out_dim)
+        self.gcn_1 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_o = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.embedding_o = nn.Linear(out_dim * 2, out_dim)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = self.embedding_h(nodes_feat)
+        e0 = self.embedding_h(nodes_feat)
 
-        hidden_nodes_feat = self.graph_sage_1(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 3:
-            hidden_nodes_feat = self.graph_sage_2(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-            pass
-        hidden_nodes_feat = self.graph_sage_o(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+        e1 = self.gcn_1(graphs, e0, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e1
+        hg1 = dgl.mean_nodes(graphs, 'h')
 
-        graphs.ndata['h'] = hidden_nodes_feat
-        hg = dgl.mean_nodes(graphs, 'h')
-        return hg
+        e2 = self.gcn_o(graphs, e1, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e2
+        hg2 = dgl.mean_nodes(graphs, 'h')
+
+        hg = torch.cat([hg1, hg2], dim=1)
+        return self.embedding_o(hg)
 
     pass
 
 
-class GraphSageNet2(nn.Module):
+class GCNNet22(nn.Module):
 
-    def __init__(self, in_dim=146, hidden_dims=[108, 108, 108, 108], out_dim=108, n_classes=10):
+    def __init__(self, in_dim=146, out_dim=146, n_classes=10):
         super().__init__()
-        self.hidden_dims = hidden_dims
-        assert 3 <= len(self.hidden_dims) <= 6
         self.dropout = 0.0
         self.residual = True
-        self.sage_aggregator = "meanpool"
+        self.graph_norm = True
+        self.batch_norm = True
 
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        self.graph_sage_1 = GraphSageLayer(self.hidden_dims[0], self.hidden_dims[1], F.relu,
-                                           self.dropout, self.sage_aggregator, self.residual)
-        self.graph_sage_2 = GraphSageLayer(self.hidden_dims[1], self.hidden_dims[2], F.relu,
-                                           self.dropout, self.sage_aggregator, self.residual)
-        if len(self.hidden_dims) >= 4:
-            self.graph_sage_3 = GraphSageLayer(self.hidden_dims[2], self.hidden_dims[3], F.relu,
-                                               self.dropout, self.sage_aggregator, self.residual)
-        if len(self.hidden_dims) >= 5:
-            self.graph_sage_4 = GraphSageLayer(self.hidden_dims[3], self.hidden_dims[4], F.relu,
-                                               self.dropout, self.sage_aggregator, self.residual)
-        if len(self.hidden_dims) >= 6:
-            self.graph_sage_5 = GraphSageLayer(self.hidden_dims[4], self.hidden_dims[5], F.relu,
-                                               self.dropout, self.sage_aggregator, self.residual)
-
-        self.graph_sage_o = GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
-                                           self.dropout, self.sage_aggregator, self.residual)
+        self.embedding_h = nn.Linear(in_dim, out_dim)
+        self.gcn_1 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_2 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_3 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_o = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.embedding_o = nn.Linear(out_dim * 4, out_dim)
         self.readout_mlp = MLPReadout(out_dim, n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = self.embedding_h(nodes_feat)
+        e0 = self.embedding_h(nodes_feat)
 
-        hidden_nodes_feat = self.graph_sage_1(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        hidden_nodes_feat = self.graph_sage_2(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 4:
-            hidden_nodes_feat = self.graph_sage_3(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 5:
-            hidden_nodes_feat = self.graph_sage_4(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        if len(self.hidden_dims) >= 6:
-            hidden_nodes_feat = self.graph_sage_5(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-        hidden_nodes_feat = self.graph_sage_o(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+        e1 = self.gcn_1(graphs, e0, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e1
+        hg1 = dgl.mean_nodes(graphs, 'h')
 
-        graphs.ndata['h'] = hidden_nodes_feat
-        hg = dgl.mean_nodes(graphs, 'h')
+        e2 = self.gcn_2(graphs, e1, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e2
+        hg2 = dgl.mean_nodes(graphs, 'h')
+
+        e3 = self.gcn_3(graphs, e2, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e3
+        hg3 = dgl.mean_nodes(graphs, 'h')
+
+        e4 = self.gcn_o(graphs, e3, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = e4
+        hg4 = dgl.mean_nodes(graphs, 'h')
+
+        hg = torch.cat([hg1, hg2, hg3, hg4], dim=1)
+        hg = self.embedding_o(hg)
+
         logits = self.readout_mlp(hg)
         return logits
 
     pass
 
 
-class GatedGCNNet1(nn.Module):
+class GCNNet31(nn.Module):
 
-    def __init__(self, in_dim=64, hidden_dims=[70, 70], out_dim=70):
+    def __init__(self, in_dim=64, out_dim=146):
         super().__init__()
-        self.hidden_dims = hidden_dims
-        self.in_dim_edge = 1
         self.dropout = 0.0
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
 
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
-        if len(self.hidden_dims) >= 2:
-            self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 3:
-            self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
-            pass
-        self.gated_gcn_o = GatedGCNLayer(self.hidden_dims[-1], out_dim, self.dropout,
-                                         self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_1 = GCNLayer(in_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_o = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        h = self.embedding_h(nodes_feat)
-        e = self.embedding_e(edges_feat)
+        e0 = nodes_feat
+        e1 = self.gcn_1(graphs, e0, nodes_num_norm_sqrt)
+        e2 = self.gcn_o(graphs, e1, nodes_num_norm_sqrt)
 
-        if len(self.hidden_dims) >= 2:
-            h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        if len(self.hidden_dims) >= 3:
-            h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-            pass
-        h, e = self.gated_gcn_o(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
+        graphs.ndata['h'] = e2
+        hg2 = dgl.mean_nodes(graphs, 'h')
 
-        graphs.ndata['h'] = h
-        hg = dgl.mean_nodes(graphs, 'h')
-        return hg
+        return hg2
 
     pass
 
 
-class GatedGCNNet2(nn.Module):
+class GCNNet32(nn.Module):
 
-    def __init__(self, in_dim=146, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10):
+    def __init__(self, in_dim=146, out_dim=146, n_classes=10):
         super().__init__()
-        self.hidden_dims = hidden_dims
-        self.in_dim_edge = 1
         self.dropout = 0.0
         self.residual = True
         self.graph_norm = True
         self.batch_norm = True
 
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
-        self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
-                                         self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 3:
-            self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 4:
-            self.gated_gcn_3 = GatedGCNLayer(self.hidden_dims[2], self.hidden_dims[3], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 5:
-            self.gated_gcn_4 = GatedGCNLayer(self.hidden_dims[3], self.hidden_dims[4], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 6:
-            self.gated_gcn_5 = GatedGCNLayer(self.hidden_dims[4], self.hidden_dims[5], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
-
-        self.gated_gcn_o = GatedGCNLayer(self.hidden_dims[-1], out_dim, self.dropout,
-                                         self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_1 = GCNLayer(in_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_2 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_3 = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
+        self.gcn_o = GCNLayer(out_dim, out_dim, F.relu, self.dropout, self.graph_norm, self.batch_norm, self.residual)
         self.readout_mlp = MLPReadout(out_dim, n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        h = self.embedding_h(nodes_feat)
-        e = self.embedding_e(edges_feat)
+        e0 = nodes_feat
+        e1 = self.gcn_1(graphs, e0, nodes_num_norm_sqrt)
+        e2 = self.gcn_2(graphs, e1, nodes_num_norm_sqrt)
+        e3 = self.gcn_3(graphs, e2, nodes_num_norm_sqrt)
+        e4 = self.gcn_o(graphs, e3, nodes_num_norm_sqrt)
 
-        h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        if len(self.hidden_dims) >= 3:
-            h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        if len(self.hidden_dims) >= 4:
-            h, e = self.gated_gcn_3(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        if len(self.hidden_dims) >= 5:
-            h, e = self.gated_gcn_4(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        if len(self.hidden_dims) >= 6:
-            h, e = self.gated_gcn_5(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        h, e = self.gated_gcn_o(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
+        graphs.ndata['h'] = e4
+        hg4 = dgl.mean_nodes(graphs, 'h')
 
-        graphs.ndata['h'] = h
-        hg = dgl.mean_nodes(graphs, 'h')
-        logits = self.readout_mlp(hg)
+        logits = self.readout_mlp(hg4)
         return logits
 
     pass
@@ -506,34 +438,17 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64], out_dim=64)  # 2, 3
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)  # 2, 3
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146], out_dim=146, n_classes=10)  # 3, 6
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GCNNet1(in_dim=64, out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, out_dim=146, n_classes=10)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64], out_dim=64)  # 2, 3
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
-        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
-
-        # 602203
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 64, 64, "M", 128, 128], out_dim=128)
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146], out_dim=146)
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)  # 2, 3
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
-        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GCNNet21(in_dim=64, out_dim=146)
+        # self.model_gnn2 = GCNNet22(in_dim=146, out_dim=146, n_classes=10)
 
         self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
-        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146], out_dim=146)
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70], out_dim=70)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70], out_dim=70, n_classes=10)
+        self.model_gnn1 = GCNNet31(in_dim=64, out_dim=146)
+        self.model_gnn2 = GCNNet32(in_dim=146, out_dim=146, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -578,7 +493,7 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
         # self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
         # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
@@ -760,7 +675,6 @@ if __name__ == '__main__':
     GatedGCNNet-norm-small-sgd-lr 288871 pool  2020-04-24 09:01:59 Epoch: 81, Train: 0.9576/0.1246 Test: 0.8980/0.3493
     
     GCNNet-small-sgd-lr-300 602203 7Conv 1GCN1 2GCN2 2spsize 2pool Epoch: 204, Train: 0.9962/0.0137 Test: 0.9263/0.3205
-    GCNNet-sgd-lr-300 251273 3Conv 2GCN1 4GCN2 4spsize 0pool 
     
     GCN-sgd-lr-300         251273 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 198, Train: 0.9771/0.0693 Test: 0.8962/0.3721
     GatedGCNNet-sgd-lr-300 239889 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 264, Train: 0.9815/0.0591 Test: 0.8999/0.3774
@@ -769,12 +683,12 @@ if __name__ == '__main__':
     GCN-100 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 202 Epoch: 77, lr=0.0000, Train: 0.9592/0.1132 Test: 0.8764/0.4624
     GCN-100 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 202 Epoch: 81, lr=0.0000, Train: 0.9231/0.2173 Test: 0.8663/0.4271
     
-    GCN-100         64 R=0 186011 3Conv 1GCN1 2GCN2 4spsize 2020-05 Epoch: 79, Train: 0.9312/0.1945 Test: 0.8645/0.4445
-    GatedGCNNet-100 64 R=0 164499 3Conv 1GCN1 2GCN2 4spsize 2020-05 Epoch: 75, Train: 0.9378/0.1770 Test: 0.8667/0.4477
+    GCN-100-do 64  251273 3Conv 2GCN1 4GCN2 4spsize dropout=0.2 202 Epoch: 80, Train: 0.9287/0.2016 Test: 0.8708/0.4375
+    GCN-100-do 64 1187018 3Conv 2GCN1 4GCN2 4spsize dropout=0.2 202 Epoch: 78, Train: 0.9524/0.1333 Test: 0.8789/0.4631
     
-    GCN-sgd-lr-300 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 
-    GCN-sgd-lr-300 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 
-    # GCN-sgd-lr-300 64 R=10 381797 3Conv 2GCN1 4GCN2 4spsize 
+    GCN1-100 64 272735 3Conv 2GCN1 4GCN2 4spsize add 2020-05-04 02: Epoch: 54, Train: 0.9217/0.2218 Test: 0.8643/0.4408
+    GCN2-100 64 379461 3Conv 2GCN1 4GCN2 4spsize cat 2020-05-04 12: Epoch: 94, Train: 0.9532/0.1330 Test: 0.8738/0.5054
+    GCN3-100 64 208349 3Conv 2GCN1 4GCN2 4spsize noe 2020-05-04 07: Epoch: 78, Train: 0.9665/0.0967 Test: 0.8739/0.5092
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -798,8 +712,8 @@ if __name__ == '__main__':
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))

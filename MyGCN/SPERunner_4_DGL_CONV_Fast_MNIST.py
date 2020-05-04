@@ -99,7 +99,8 @@ class MyDataset(Dataset):
 
         _transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4)]) if self.is_train else None
 
-        self.data_set = datasets.MNIST(root=self.data_root_path, train=self.is_train, transform=_transform)
+        self.data_set = datasets.MNIST(root=self.data_root_path,
+                                       train=self.is_train, transform=_transform, download=False)
         pass
 
     def __len__(self):

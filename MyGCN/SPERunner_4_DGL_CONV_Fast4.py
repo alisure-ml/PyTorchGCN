@@ -97,7 +97,6 @@ class MyDataset(Dataset):
         self.data_root_path = data_root_path
 
         self.transform = transforms.Compose([
-            # transforms.RandomRotation(10),
             transforms.RandomCrop(self.image_size, padding=4),
             transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
@@ -409,6 +408,7 @@ class GatedGCNNet1(nn.Module):
     def __init__(self, in_dim=64, hidden_dims=[70, 70], out_dim=70):
         super().__init__()
         self.hidden_dims = hidden_dims
+        assert 2 <= len(self.hidden_dims) <= 3
         self.in_dim_edge = 1
         self.dropout = 0.0
         self.residual = True
@@ -417,9 +417,8 @@ class GatedGCNNet1(nn.Module):
 
         self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
         self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
-        if len(self.hidden_dims) >= 2:
-            self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
+        self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
+                                         self.graph_norm, self.batch_norm, self.residual)
         if len(self.hidden_dims) >= 3:
             self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
                                              self.graph_norm, self.batch_norm, self.residual)
@@ -432,8 +431,7 @@ class GatedGCNNet1(nn.Module):
         h = self.embedding_h(nodes_feat)
         e = self.embedding_e(edges_feat)
 
-        if len(self.hidden_dims) >= 2:
-            h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
+        h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
         if len(self.hidden_dims) >= 3:
             h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
             pass
@@ -451,6 +449,7 @@ class GatedGCNNet2(nn.Module):
     def __init__(self, in_dim=146, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10):
         super().__init__()
         self.hidden_dims = hidden_dims
+        assert 3 <= len(self.hidden_dims) <= 6
         self.in_dim_edge = 1
         self.dropout = 0.0
         self.residual = True
@@ -461,9 +460,8 @@ class GatedGCNNet2(nn.Module):
         self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
         self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
                                          self.graph_norm, self.batch_norm, self.residual)
-        if len(self.hidden_dims) >= 3:
-            self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
-                                             self.graph_norm, self.batch_norm, self.residual)
+        self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
+                                         self.graph_norm, self.batch_norm, self.residual)
         if len(self.hidden_dims) >= 4:
             self.gated_gcn_3 = GatedGCNLayer(self.hidden_dims[2], self.hidden_dims[3], self.dropout,
                                              self.graph_norm, self.batch_norm, self.residual)
@@ -484,8 +482,7 @@ class GatedGCNNet2(nn.Module):
         e = self.embedding_e(edges_feat)
 
         h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        if len(self.hidden_dims) >= 3:
-            h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
+        h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
         if len(self.hidden_dims) >= 4:
             h, e = self.gated_gcn_3(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
         if len(self.hidden_dims) >= 5:
@@ -527,13 +524,13 @@ class MyGCNNet(nn.Module):
         self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
         self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
 
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=128)
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 256], out_dim=256)
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=512, n_classes=10)
+
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146], out_dim=146)
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70], out_dim=70)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70], out_dim=70, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -578,7 +575,7 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
         # self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
         # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
@@ -760,7 +757,6 @@ if __name__ == '__main__':
     GatedGCNNet-norm-small-sgd-lr 288871 pool  2020-04-24 09:01:59 Epoch: 81, Train: 0.9576/0.1246 Test: 0.8980/0.3493
     
     GCNNet-small-sgd-lr-300 602203 7Conv 1GCN1 2GCN2 2spsize 2pool Epoch: 204, Train: 0.9962/0.0137 Test: 0.9263/0.3205
-    GCNNet-sgd-lr-300 251273 3Conv 2GCN1 4GCN2 4spsize 0pool 
     
     GCN-sgd-lr-300         251273 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 198, Train: 0.9771/0.0693 Test: 0.8962/0.3721
     GatedGCNNet-sgd-lr-300 239889 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 264, Train: 0.9815/0.0591 Test: 0.8999/0.3774
@@ -769,12 +765,10 @@ if __name__ == '__main__':
     GCN-100 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 202 Epoch: 77, lr=0.0000, Train: 0.9592/0.1132 Test: 0.8764/0.4624
     GCN-100 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 202 Epoch: 81, lr=0.0000, Train: 0.9231/0.2173 Test: 0.8663/0.4271
     
-    GCN-100         64 R=0 186011 3Conv 1GCN1 2GCN2 4spsize 2020-05 Epoch: 79, Train: 0.9312/0.1945 Test: 0.8645/0.4445
-    GatedGCNNet-100 64 R=0 164499 3Conv 1GCN1 2GCN2 4spsize 2020-05 Epoch: 75, Train: 0.9378/0.1770 Test: 0.8667/0.4477
+    GCN-100-do 64  251273 3Conv 2GCN1 4GCN2 4spsize dropout=0.2 202 Epoch: 80, Train: 0.9287/0.2016 Test: 0.8708/0.4375
+    GCN-100-do 64 1187018 3Conv 2GCN1 4GCN2 4spsize dropout=0.2 202 Epoch: 78, Train: 0.9524/0.1333 Test: 0.8789/0.4631
     
-    GCN-sgd-lr-300 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 
-    GCN-sgd-lr-300 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 
-    # GCN-sgd-lr-300 64 R=10 381797 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-100 64 251273 3Conv 2GCN1 4GCN2 4spsize norm=False 2020-05- Epoch: 92, Train: 0.9579/0.1195 Test: 0.8670/0.5186
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")

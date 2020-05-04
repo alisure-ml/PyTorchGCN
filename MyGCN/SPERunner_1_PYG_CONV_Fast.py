@@ -15,7 +15,7 @@ import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from layers.mlp_readout_layer import MLPReadout
 from torch.utils.data import Dataset, DataLoader
-from torch_geometric.nn import GCNConv, global_mean_pool
+from torch_geometric.nn import GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -207,7 +207,7 @@ class CONVNet(nn.Module):
 
 class GCNNet1(nn.Module):
 
-    def __init__(self, in_dim=128, hidden_dims=[146, 146, 146, 146], out_dim=146):
+    def __init__(self, in_dim=128, hidden_dims=[146, 146, 146, 146], out_dim=146, normalize=False):
         super().__init__()
         self.hidden_dims = hidden_dims
 
@@ -216,10 +216,10 @@ class GCNNet1(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=normalize))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=normalize))
         self.relu = nn.ReLU()
         pass
 
@@ -228,6 +228,7 @@ class GCNNet1(nn.Module):
         for gcn in self.gcn_list:
             hidden_nodes_feat = self.relu(gcn(hidden_nodes_feat, data.edge_index))
             pass
+
         hg = global_mean_pool(hidden_nodes_feat, data.batch)
         return hg
 
@@ -236,7 +237,7 @@ class GCNNet1(nn.Module):
 
 class GCNNet2(nn.Module):
 
-    def __init__(self, in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10):
+    def __init__(self, in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10, normalize=False):
         super().__init__()
         self.hidden_dims = hidden_dims
 
@@ -245,10 +246,10 @@ class GCNNet2(nn.Module):
         self.gcn_list = nn.ModuleList()
         _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=True))
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=normalize))
             _in_dim = hidden_dim
             pass
-        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=True))
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=normalize))
 
         self.readout_mlp = MLPReadout(out_dim, n_classes)
         self.relu = nn.ReLU()
@@ -266,17 +267,90 @@ class GCNNet2(nn.Module):
     pass
 
 
+class GCNNetTopK1(nn.Module):
+
+    def __init__(self, in_dim=128, hidden_dims=[146, 146, 146, 146], out_dim=146, normalize=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+
+        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = self.hidden_dims[0]
+        for hidden_dim in self.hidden_dims[1:]:
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=normalize))
+            _in_dim = hidden_dim
+            pass
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=normalize))
+        self.relu = nn.ReLU()
+
+        self.top_k = TopKPooling(out_dim, ratio=0.7)
+        pass
+
+    def forward(self, data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        x = self.embedding_h(x)
+        for gcn in self.gcn_list:
+            x = self.relu(gcn(x, edge_index))
+            pass
+        x, edge_index, _, batch, _, _ = self.top_k(x, edge_index, None, batch)
+        hg = global_mean_pool(x, batch)
+        return hg
+
+    pass
+
+
+class GCNNetTopK2(nn.Module):
+
+    def __init__(self, in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10, normalize=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+
+        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = self.hidden_dims[0]
+        for hidden_dim in self.hidden_dims[1:]:
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=normalize))
+            _in_dim = hidden_dim
+            pass
+        self.gcn_list.append(GCNConv(self.hidden_dims[-1], out_dim, normalize=normalize))
+
+        self.readout_mlp = MLPReadout(out_dim, n_classes)
+        self.relu = nn.ReLU()
+
+        self.top_k = TopKPooling(out_dim, ratio=0.7)
+        pass
+
+    def forward(self, data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+
+        x = self.embedding_h(x)
+        for gcn in self.gcn_list:
+            x = self.relu(gcn(x, edge_index))
+            pass
+
+        x, edge_index, _, batch, _, _ = self.top_k(x, edge_index, None, batch)
+
+        hg = global_mean_pool(x, batch)
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
         self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
 
-        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
-        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
 
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146], out_dim=146)
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
+        self.model_gnn1 = GCNNetTopK1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
+        self.model_gnn2 = GCNNetTopK2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, batched_pixel_graph):
@@ -319,7 +393,7 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        self.lr_s = [[0, 0.003], [25, 0.001], [50, 0.0003], [75, 0.0001]]
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -457,7 +531,8 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    
+    GCN        249521 2020-05-02 20:47:54 Epoch: 77, lr=0.0000, Train: 0.9454/0.1538 Test: 0.8608/0.5652
+    GCNNetTopK 249813 2020-05-03 08:08:14 Epoch: 76, lr=0.0001, Train: 0.8509/0.4303 Test: 0.8020/0.6302
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -473,7 +548,7 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast/{}norm".format("GCN")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast/{}".format("GCNNetTopK")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4
