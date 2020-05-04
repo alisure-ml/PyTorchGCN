@@ -409,7 +409,6 @@ class GatedGCNNet1(nn.Module):
     def __init__(self, in_dim=64, hidden_dims=[70, 70], out_dim=70):
         super().__init__()
         self.hidden_dims = hidden_dims
-        assert 2 <= len(self.hidden_dims) <= 3
         self.in_dim_edge = 1
         self.dropout = 0.0
         self.residual = True
@@ -418,8 +417,9 @@ class GatedGCNNet1(nn.Module):
 
         self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
         self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
-        self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
-                                         self.graph_norm, self.batch_norm, self.residual)
+        if len(self.hidden_dims) >= 2:
+            self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
+                                             self.graph_norm, self.batch_norm, self.residual)
         if len(self.hidden_dims) >= 3:
             self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
                                              self.graph_norm, self.batch_norm, self.residual)
@@ -432,7 +432,8 @@ class GatedGCNNet1(nn.Module):
         h = self.embedding_h(nodes_feat)
         e = self.embedding_e(edges_feat)
 
-        h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
+        if len(self.hidden_dims) >= 2:
+            h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
         if len(self.hidden_dims) >= 3:
             h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
             pass
@@ -450,7 +451,6 @@ class GatedGCNNet2(nn.Module):
     def __init__(self, in_dim=146, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10):
         super().__init__()
         self.hidden_dims = hidden_dims
-        assert 3 <= len(self.hidden_dims) <= 6
         self.in_dim_edge = 1
         self.dropout = 0.0
         self.residual = True
@@ -461,8 +461,10 @@ class GatedGCNNet2(nn.Module):
         self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
         self.gated_gcn_1 = GatedGCNLayer(self.hidden_dims[0], self.hidden_dims[1], self.dropout,
                                          self.graph_norm, self.batch_norm, self.residual)
-        self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
-                                         self.graph_norm, self.batch_norm, self.residual)
+
+        if len(self.hidden_dims) >= 3:
+            self.gated_gcn_2 = GatedGCNLayer(self.hidden_dims[1], self.hidden_dims[2], self.dropout,
+                                             self.graph_norm, self.batch_norm, self.residual)
         if len(self.hidden_dims) >= 4:
             self.gated_gcn_3 = GatedGCNLayer(self.hidden_dims[2], self.hidden_dims[3], self.dropout,
                                              self.graph_norm, self.batch_norm, self.residual)
@@ -483,7 +485,8 @@ class GatedGCNNet2(nn.Module):
         e = self.embedding_e(edges_feat)
 
         h, e = self.gated_gcn_1(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-        h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
+        if len(self.hidden_dims) >= 3:
+            h, e = self.gated_gcn_2(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
         if len(self.hidden_dims) >= 4:
             h, e = self.gated_gcn_3(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
         if len(self.hidden_dims) >= 5:
@@ -521,13 +524,17 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)  # 2, 3
         # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10)  # 3, 6
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
-
         self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146], out_dim=146)
-        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
+        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
+        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], out_dim=146, n_classes=10)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146], out_dim=146)
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146], out_dim=146, n_classes=10)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70], out_dim=70)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70], out_dim=70, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -572,10 +579,10 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        # self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        self.lr_s = [[0, 0.1], [100, 0.01], [180, 0.001], [250, 0.0001]]
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -759,9 +766,12 @@ if __name__ == '__main__':
     GCN-sgd-lr-300         251273 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 198, Train: 0.9771/0.0693 Test: 0.8962/0.3721
     GatedGCNNet-sgd-lr-300 239889 3Conv 2GCN1 4GCN2 4spsize 2020-0 Epoch: 264, Train: 0.9815/0.0591 Test: 0.8999/0.3774
     
-    GCN-100 64 R=10 381797 3Conv 2GCN1 4GCN2 4spsize 
-    GCN-100 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 
-    GCN-100 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-100         64 R=0 186011 3Conv 1GCN1 2GCN2 4spsize 2020-05 Epoch: 79, Train: 0.9312/0.1945 Test: 0.8645/0.4445
+    GatedGCNNet-100 64 R=0 164499 3Conv 1GCN1 2GCN2 4spsize 2020-05 Epoch: 75, Train: 0.9378/0.1770 Test: 0.8667/0.4477
+    
+    GCN-sgd-lr-300 64 R=10 251273 3Conv 2GCN1 4GCN2 4spsize 
+    GCN-sgd-lr-300 64 R=0  381797 3Conv 2GCN1 4GCN2 4spsize 
+    # GCN-sgd-lr-300 64 R=10 381797 3Conv 2GCN1 4GCN2 4spsize 
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -774,19 +784,19 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GCN")
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-sgd-lr-300".format("GCN")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4
-    _epochs = 100
+    _epochs = 300
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))

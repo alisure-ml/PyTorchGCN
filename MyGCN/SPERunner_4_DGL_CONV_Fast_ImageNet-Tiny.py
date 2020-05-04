@@ -71,7 +71,9 @@ class TranTiny(object):
 
     @staticmethod
     def main():
-        TranTiny().new_val()
+        TranTiny(val_root="/home/ubuntu/ALISURE/data/tiny-imagenet-200/val",
+                 tiny_val_txt="val_annotations.txt",
+                 val_result_root="/home/ubuntu/ALISURE/data/tiny-imagenet-200/val_new").new_val()
         pass
 
     pass
@@ -133,7 +135,7 @@ class MyDataset(Dataset):
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
-        self.image_size_for_sp = self.image_size
+        self.image_size_for_sp = self.image_size // 2
         self.data_root_path = data_root_path
 
         _test_dir = os.path.join(self.data_root_path, test_split)
@@ -341,9 +343,9 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64"], out_dim=64)
-        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128], out_dim=128)
-        self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 256, 512], out_dim=512, n_classes=200)
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64"], out_dim=128)
+        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128], out_dim=256)
+        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=1024, n_classes=200)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -388,10 +390,8 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        self.lr_s = [[0, 0.01], [10, 0.001], [20, 0.0001], [30, 0.00001]]
+        self.lr_s = [[0, 0.01], [30, 0.001], [60, 0.0001]]
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -560,17 +560,20 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
+    # TranTiny.main()
+
+    # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
+    _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GCNNet")
     _batch_size = 64
     _image_size = 64
-    _sp_size = 5
+    _sp_size = 4
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
@@ -579,7 +582,7 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model("./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/GCNNet/epoch_8.pkl")
-    runner.train(100)
+    # runner.load_model("./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/GCNNet/epoch_8.pkl")
+    runner.train(90)
 
     pass

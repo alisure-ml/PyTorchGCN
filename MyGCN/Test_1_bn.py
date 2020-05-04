@@ -1549,7 +1549,7 @@ class CNNNet6_20(nn.Module):
         e = e1 + e2 + e3
         e = self.conv2(e)
 
-        e = self.pool2(e)
+        # e = self.pool2(e)
 
         e1 = e
         e = self.gcn2_conv3(e)
@@ -1824,7 +1824,7 @@ if __name__ == '__main__':
     CNNNet6_18 388833 1sp 0pool Res 2020-05-01 21:36: Epoch: 182, lr=0.0010, Train: 0.9902/0.0364 Test: 0.9053/0.3361
     CNNNet6_18 388833 1sp 0pool Res R=10 2020-05-02 0 Epoch: 188, lr=0.0010, Train: 0.9780/0.0683 Test: 0.9058/0.3417
     
-    CNNNet6_16_19 2050605 
+    CNNNet6_20 2050605 2020-05-03 12:40:16 Epoch: 200, lr=0.0010, Train: 0.9955/0.0184 Test: 0.9026/0.4112
     """
 
     # _data_root_path = 'D:\data\CIFAR'
@@ -1833,13 +1833,14 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
     _root_ckpt_dir = "./ckpt2/dgl/Test_1/{}".format("CNNNet6_20")
     _weight_decay = 5e-4
     _num_workers = 4
     _is_sgd = True
     _use_gpu = True
-    _gpu_id = "1"
+    _gpu_id = "0"
 
     Tools.print("ckpt:{}, workers:{}, gpu:{}".format(_root_ckpt_dir, _num_workers, _gpu_id))
 
