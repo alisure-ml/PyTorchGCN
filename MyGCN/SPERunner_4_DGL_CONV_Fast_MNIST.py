@@ -702,6 +702,17 @@ if __name__ == '__main__':
     GCNNet 239242 2020-05-04 05:41:49 Epoch:27,lr=0.0001,Train:0.9961-1.0000/0.0121 Test:0.9949-1.0000/0.0168
     GCNNet  36170 2020-05-04 04:01:07 Epoch:22,lr=0.0001,Train:0.9919-1.0000/0.0261 Test:0.9932-1.0000/0.0197
     GCNNet  34794 2020-05-04 06:05:31 Epoch:28,lr=0.0001,Train:0.9526-0.9988/0.1459 Test:0.9652-0.9990/0.1085
+    GCNNet  89354 2020-05-05 02:11:39 Epoch:28,lr=0.0001,Train:0.9625-0.9994/0.1148 Test:0.9714-0.9997/0.0897
+    
+    GraphSageNet 239082 2020-05-05 03:23:05 Epoch:29,lr=0.0001,Train:0.9968-1.0000/0.0100 Test:0.9952-0.9999/0.0161
+    GraphSageNet 35770 
+    GraphSageNet 34394 2020-05-05 03:08:37 Epoch:29,lr=0.0001,Train:0.9642-0.9994/0.1098 Test:0.9711-0.9993/0.0936
+    GraphSageNet 79626 2020-05-05 01:40:53 Epoch:26,lr=0.0001,Train:0.9744-0.9997/0.0775 Test:0.9811-0.9997/0.0656
+    
+    GatedGCNNet 176551 2020-05-05 09:08:57 Epoch:26,lr=0.0001,Train:0.9959-1.0000/0.0135 Test:0.9954-1.0000/0.0134
+    GatedGCNNet  21378 2020-05-05 10:25:43 Epoch:29,lr=0.0001,Train:0.9923-0.9999/0.0262 Test:0.9924-0.9998/0.0239
+    GatedGCNNet  20498 2020-05-05 10:22:09 Epoch:29,lr=0.0001,Train:0.9548-0.9987/0.1429 Test:0.9600-0.9988/0.1193
+    GatedGCNNet  53660 2020-05-05 10:10:11 Epoch:28,lr=0.0001,Train:0.9721-0.9997/0.0835 Test:0.9755-0.9992/0.0770
     """
     # _data_root_path = 'D:\\data\\MNIST'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -721,7 +732,7 @@ if __name__ == '__main__':
     _sp_size = 4
     _train_print_freq = 100
     _test_print_freq = 50
-    _num_workers = 4
+    _num_workers = 8
     _use_gpu = True
     # _gpu_id = "0"
     _gpu_id = "1"
