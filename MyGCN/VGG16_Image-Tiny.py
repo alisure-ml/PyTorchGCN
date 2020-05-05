@@ -120,6 +120,27 @@ class VGG2(nn.Module):
         return nn.Sequential(*layers)
 
     @staticmethod
+    def _make_layers7():
+        layers = [
+            ConvBlock(3, 64, ks=3, padding=1),
+            ConvBlock(64, 64, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(64, 128, ks=3, padding=1),
+            ConvBlock(128, 128, ks=3, padding=1),
+
+            GCNBlock(128, 256, ks=1, padding=0),
+            GCNBlock(256, 256, ks=1, padding=0),
+            nn.AvgPool2d(kernel_size=4, stride=4),
+
+            GCNBlock(256, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            nn.AdaptiveAvgPool2d(1)
+        ]
+        return nn.Sequential(*layers)
+
+    @staticmethod
     def _make_layers6():
         layers = [
             ConvBlock(3, 64, ks=3, padding=1),
@@ -248,8 +269,8 @@ class Runner(object):
         self.net = VGG2().to(self.device)
         self.criterion = nn.CrossEntropyLoss()
 
-        # self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
-        self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=0.0)
+        self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
+        # self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=0.0)
 
         self.train_loader, self.test_loader = self._data()
         pass
@@ -370,18 +391,22 @@ if __name__ == '__main__':
     """
     64 lr=0.01 76.48 - 56.98
     64 lr= 0.1 73.38 - 59.92
-    VGG2 64 lr=0.1 99.95 - 62.38
-    VGG3 64 lr=0.1 99.85 - 61.21
-    VGG4 64 lr=0.1 98.40 - 59.47
-    VGG5 64 lr=0.1 93.19 - 57.59
-    VGG6 64 lr=0.1 95.13 - 56.24
+    VGG2 64 SGD lr= 0.1 99.95 - 62.38
+    VGG3 64 SGD lr= 0.1 99.85 - 61.21
+    VGG4 64 SGD lr= 0.1 98.40 - 59.47
+    VGG5 64 SGD lr= 0.1 93.19 - 57.59
+    VGG6 64 SGD lr= 0.1 95.13 - 56.24
+    VGG7 64 SGD lr= 0.1 97.04 - 58.37
+    VGG7 64 Ada lr=0.02 
     """
 
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # 1
 
     # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
     _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
-    runner = Runner(root_path=_data_root_path, batch_size=128, lr=0.02)
+
+    # runner = Runner(root_path=_data_root_path, batch_size=128, lr=0.02)
+    runner = Runner(root_path=_data_root_path, batch_size=128, lr=0.1)
     runner.info()
 
     for _epoch in range(runner.start_epoch, 100):
