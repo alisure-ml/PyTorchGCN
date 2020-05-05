@@ -71,9 +71,7 @@ class TranTiny(object):
 
     @staticmethod
     def main():
-        TranTiny(val_root="/home/ubuntu/ALISURE/data/tiny-imagenet-200/val",
-                 tiny_val_txt="val_annotations.txt",
-                 val_result_root="/home/ubuntu/ALISURE/data/tiny-imagenet-200/val_new").new_val()
+        TranTiny().new_val()
         pass
 
     pass
@@ -104,8 +102,9 @@ class DealSuperPixel(object):
             for sp_id in np.unique(self.segment[_now_adj]):
                 if sp_id != i:
                     edge_index.append([i, sp_id])
-                    _adj_dis.append(1/(np.sqrt((self.region_props[i][0][0] - self.region_props[sp_id][0][0]) ** 2 +
-                                               (self.region_props[i][0][1] - self.region_props[sp_id][0][1]) ** 2) + 1))
+                    _adj_dis.append(1 / (np.sqrt((self.region_props[i][0][0] - self.region_props[sp_id][0][0]) ** 2 +
+                                                 (self.region_props[i][0][1] - self.region_props[sp_id][0][
+                                                     1]) ** 2) + 1))
                 pass
             edge_w.extend(_adj_dis / np.sum(_adj_dis, axis=0))
 
@@ -135,19 +134,16 @@ class MyDataset(Dataset):
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
-        self.image_size_for_sp = self.image_size // 1
+        self.image_size_for_sp = self.image_size
         self.data_root_path = data_root_path
 
         _test_dir = os.path.join(self.data_root_path, test_split)
         _train_dir = os.path.join(self.data_root_path, train_split)
-
-        # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        # _transform = transforms.Compose([transforms.RandomResizedCrop(64),
-        #                                  transforms.RandomHorizontalFlip()]) if self.is_train else None
         _transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=8),
                                          transforms.RandomHorizontalFlip()]) if self.is_train else None
 
         self.data_set = datasets.ImageFolder(root=_train_dir if self.is_train else _test_dir, transform=_transform)
+        # self.data_set.samples = self.data_set.samples[0: 6]
         pass
 
     def __len__(self):
@@ -155,7 +151,8 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         img, target = self.data_set.__getitem__(idx)
-        img_data = transforms.Compose([transforms.ToTensor()])(np.asarray(img)).unsqueeze(dim=0)
+        img_data = transforms.Compose([transforms.ToTensor(), transforms.Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])(np.asarray(img)).unsqueeze(dim=0)
 
         img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
         graph, pixel_graph = self.get_sp_info(img_small_data)
@@ -197,8 +194,8 @@ class MyDataset(Dataset):
         # 超像素图
         _nodes_num = [graph.number_of_nodes() for graph in graphs]
         _edges_num = [graph.number_of_edges() for graph in graphs]
-        nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
+        nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1. / num) for num in _nodes_num]).sqrt()
+        edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1. / num) for num in _edges_num]).sqrt()
         batched_graph = dgl.batch(graphs)
 
         # 像素图
@@ -210,8 +207,8 @@ class MyDataset(Dataset):
             pass
         _nodes_num = [graph.number_of_nodes() for graph in _pixel_graphs]
         _edges_num = [graph.number_of_edges() for graph in _pixel_graphs]
-        pixel_nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        pixel_edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
+        pixel_nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1. / num) for num in _nodes_num]).sqrt()
+        pixel_edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1. / num) for num in _edges_num]).sqrt()
         batched_pixel_graph = dgl.batch(_pixel_graphs)
 
         return (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt,
@@ -342,164 +339,6 @@ class GCNNet2(nn.Module):
     pass
 
 
-class GraphSageNet1(nn.Module):
-
-    def __init__(self, in_dim=64, hidden_dims=[108, 108], out_dim=108):
-        super().__init__()
-        self.hidden_dims = hidden_dims
-        self.dropout = 0.0
-        self.residual = True
-        self.sage_aggregator = "meanpool"
-
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-
-        _in_dim = self.hidden_dims[0]
-        self.gcn_list = nn.ModuleList()
-        for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu,
-                                                self.dropout, self.sage_aggregator, self.residual))
-            _in_dim = hidden_dim
-            pass
-        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
-                                            self.dropout, self.sage_aggregator, self.residual))
-        pass
-
-    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = self.embedding_h(nodes_feat)
-
-        for gcn in self.gcn_list:
-            hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-            pass
-
-        graphs.ndata['h'] = hidden_nodes_feat
-        hg = dgl.mean_nodes(graphs, 'h')
-        return hg
-
-    pass
-
-
-class GraphSageNet2(nn.Module):
-
-    def __init__(self, in_dim=146, hidden_dims=[108, 108, 108, 108], out_dim=108, n_classes=10):
-        super().__init__()
-        self.hidden_dims = hidden_dims
-        self.dropout = 0.0
-        self.residual = True
-        self.sage_aggregator = "meanpool"
-
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-
-        _in_dim = self.hidden_dims[0]
-        self.gcn_list = nn.ModuleList()
-        for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu,
-                                                self.dropout, self.sage_aggregator, self.residual))
-            _in_dim = hidden_dim
-            pass
-        self.gcn_list.append(GraphSageLayer(self.hidden_dims[-1], out_dim, F.relu,
-                                            self.dropout, self.sage_aggregator, self.residual))
-
-        self.readout_mlp = MLPReadout(out_dim, n_classes)
-        pass
-
-    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = self.embedding_h(nodes_feat)
-
-        for gcn in self.gcn_list:
-            hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
-            pass
-
-        graphs.ndata['h'] = hidden_nodes_feat
-        hg = dgl.mean_nodes(graphs, 'h')
-        logits = self.readout_mlp(hg)
-        return logits
-
-    pass
-
-
-class GatedGCNNet1(nn.Module):
-
-    def __init__(self, in_dim=64, hidden_dims=[70, 70], out_dim=70):
-        super().__init__()
-        self.hidden_dims = hidden_dims
-        self.in_dim_edge = 1
-        self.dropout = 0.0
-        self.residual = True
-        self.graph_norm = True
-        self.batch_norm = True
-
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
-
-        _in_dim = self.hidden_dims[0]
-        self.gcn_list = nn.ModuleList()
-        for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GatedGCNLayer(_in_dim, hidden_dim, self.dropout,
-                                               self.graph_norm, self.batch_norm, self.residual))
-            _in_dim = hidden_dim
-            pass
-        self.gcn_list.append(GatedGCNLayer(self.hidden_dims[-1], out_dim, self.dropout,
-                                           self.graph_norm, self.batch_norm, self.residual))
-        pass
-
-    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        h = self.embedding_h(nodes_feat)
-        e = self.embedding_e(edges_feat)
-
-        for gcn in self.gcn_list:
-            h, e = gcn(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-            pass
-
-        graphs.ndata['h'] = h
-        hg = dgl.mean_nodes(graphs, 'h')
-        return hg
-
-    pass
-
-
-class GatedGCNNet2(nn.Module):
-
-    def __init__(self, in_dim=146, hidden_dims=[70, 70, 70, 70], out_dim=70, n_classes=10):
-        super().__init__()
-        self.hidden_dims = hidden_dims
-        self.in_dim_edge = 1
-        self.dropout = 0.0
-        self.residual = True
-        self.graph_norm = True
-        self.batch_norm = True
-
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
-        self.embedding_e = nn.Linear(self.in_dim_edge, self.hidden_dims[0])
-
-        _in_dim = self.hidden_dims[0]
-        self.gcn_list = nn.ModuleList()
-        for hidden_dim in self.hidden_dims[1:]:
-            self.gcn_list.append(GatedGCNLayer(_in_dim, hidden_dim, self.dropout,
-                                               self.graph_norm, self.batch_norm, self.residual))
-            _in_dim = hidden_dim
-            pass
-        self.gcn_list.append(GatedGCNLayer(self.hidden_dims[-1], out_dim, self.dropout,
-                                           self.graph_norm, self.batch_norm, self.residual))
-
-        self.readout_mlp = MLPReadout(out_dim, n_classes)
-        pass
-
-    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        h = self.embedding_h(nodes_feat)
-        e = self.embedding_e(edges_feat)
-
-        for gcn in self.gcn_list:
-            h, e = gcn(graphs, h, e, nodes_num_norm_sqrt, edges_num_norm_sqrt)
-            pass
-
-        graphs.ndata['h'] = h
-        hg = dgl.mean_nodes(graphs, 'h')
-        logits = self.readout_mlp(hg)
-        return logits
-
-    pass
-
-
 class MyGCNNet(nn.Module):
 
     def __init__(self):
@@ -507,27 +346,6 @@ class MyGCNNet(nn.Module):
         self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64"], out_dim=64)
         self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128], out_dim=128)
         self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 256, 512], out_dim=512, n_classes=200)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64"], out_dim=64)
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128], out_dim=128)
-        # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 256, 512], out_dim=512, n_classes=200)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64"], out_dim=64)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128], out_dim=128)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 256, 512], out_dim=512, n_classes=200)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64"], out_dim=128)
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128], out_dim=256)
-        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=1024, n_classes=200)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64"], out_dim=128)
-        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 128], out_dim=256)
-        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[256, 256, 512, 512], out_dim=1024, n_classes=200)
-
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"], out_dim=128)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128], out_dim=128)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], out_dim=512, n_classes=200)
-
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -572,8 +390,10 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.lr_s = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+        self.lr_s = [[0, 0.01], [10, 0.001], [20, 0.0001], [30, 0.00001]]
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -635,11 +455,11 @@ class RunnerSPE(object):
             # Print
             if i % self.train_print_freq == 0:
                 Tools.print("{}-{} loss={:.4f}/{:.4f} acc={:.4f} acc5={:.4f}".format(
-                    i, len(self.train_loader), epoch_loss/(i+1),
-                    loss.detach().item(), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data))
+                    i, len(self.train_loader), epoch_loss / (i + 1),
+                    loss.detach().item(), epoch_train_acc / nb_data, epoch_train_acc_k / nb_data))
                 pass
             pass
-        return epoch_loss/(len(self.train_loader)+1), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data
+        return epoch_loss / (len(self.train_loader) + 1), epoch_train_acc / nb_data, epoch_train_acc_k / nb_data
 
     def test(self):
         self.model.eval()
@@ -676,13 +496,13 @@ class RunnerSPE(object):
                 # Print
                 if i % self.test_print_freq == 0:
                     Tools.print("{}-{} loss={:.4f}/{:.4f} acc={:.4f} acc5={:.4f}".format(
-                        i, len(self.test_loader), epoch_test_loss/(i+1),
-                        loss.detach().item(), epoch_test_acc/nb_data, epoch_test_acc_k/nb_data))
+                        i, len(self.test_loader), epoch_test_loss / (i + 1),
+                        loss.detach().item(), epoch_test_acc / nb_data, epoch_test_acc_k / nb_data))
                     pass
                 pass
             pass
 
-        return epoch_test_loss/(len(self.test_loader)+1), epoch_test_acc/nb_data, epoch_test_acc_k/nb_data
+        return epoch_test_loss / (len(self.test_loader) + 1), epoch_test_acc / nb_data, epoch_test_acc_k / nb_data
 
     def _lr(self, epoch):
         # [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
@@ -727,9 +547,7 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCN       Baseline Has Sigmoid             2020-04-08 15:41:33 Epoch: 97, Train: 0.7781/0.6535 Test: 0.7399/0.8137
-    
-    GCNNet 830024                    2020-04-24 15:32:06 Epoch:22,Train:0.4189-0.6963/2.3912 Test:0.3812-0.6580/2.6269
+    GCNNet 830024  2020-04-24 15:32:06 Epoch:22,Train:0.4189-0.6963/2.3912 Test:0.3812-0.6580/2.6269
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -742,11 +560,8 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    # TranTiny.main()
-
     _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GatedGCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GCNNet")
     _batch_size = 64
     _image_size = 64
     _sp_size = 5
@@ -765,6 +580,6 @@ if __name__ == '__main__':
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.load_model("./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/GCNNet/epoch_8.pkl")
-    runner.train(90)
+    runner.train(100)
 
     pass
