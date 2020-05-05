@@ -43,6 +43,195 @@ class VGG(nn.Module):
     pass
 
 
+class ConvBlock(nn.Module):
+
+    def __init__(self, cin, cout, stride=1, padding=1, ks=3, has_relu=True, has_bn=True, bias=True):
+        super().__init__()
+        self.has_relu = has_relu
+        self.has_bn = has_bn
+
+        self.conv = nn.Conv2d(cin, cout, kernel_size=ks, stride=stride, padding=padding, bias=bias)
+        self.bn = nn.BatchNorm2d(cout)
+        self.relu = nn.ReLU(inplace=True)
+        pass
+
+    def forward(self, x):
+        out = self.conv(x)
+        if self.has_bn:
+            out = self.bn(out)
+        if self.has_relu:
+            out = self.relu(out)
+        return out
+
+    pass
+
+
+class GCNBlock(nn.Module):
+
+    def __init__(self, cin=146, cout=146, padding=0, ks=1, has_relu=True, has_bn=True):
+        super().__init__()
+        self.has_bn = has_bn
+        self.has_relu = has_relu
+        self.pool = nn.AvgPool2d(3, 1, padding=1)
+        self.conv = ConvBlock(cin, cout, padding=padding, ks=ks, has_bn=self.has_bn, has_relu=self.has_relu)
+        pass
+
+    def forward(self, e):
+        e = self.conv(e)
+        e = self.pool(e)
+        return e
+
+    pass
+
+
+class VGG2(nn.Module):
+
+    def __init__(self):
+        super(VGG2, self).__init__()
+        # self.features = self._make_layers2(
+        #     [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'])
+        self.features = self._make_layers()
+        self.classifier = nn.Linear(512, 200)
+        pass
+
+    def forward(self, x):
+        out = self.features(x)
+        out = out.view(out.size(0), -1)
+        out = self.classifier(out)
+        return out
+
+    @staticmethod
+    def _make_layers():
+        layers = [
+            ConvBlock(3, 64, ks=3, padding=1),
+            ConvBlock(64, 64, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(64, 128, ks=3, padding=1),
+            ConvBlock(128, 128, ks=3, padding=1),
+
+            GCNBlock(128, 256, ks=1, padding=0),
+            GCNBlock(256, 256, ks=1, padding=0),
+            nn.AvgPool2d(kernel_size=4, stride=4),
+
+            GCNBlock(256, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            nn.AdaptiveAvgPool2d(1)
+        ]
+        return nn.Sequential(*layers)
+
+    @staticmethod
+    def _make_layers6():
+        layers = [
+            ConvBlock(3, 64, ks=3, padding=1),
+            ConvBlock(64, 64, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(64, 128, ks=3, padding=1),
+            ConvBlock(128, 128, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            GCNBlock(128, 256, ks=1, padding=0),
+            GCNBlock(256, 256, ks=1, padding=0),
+            GCNBlock(256, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            nn.AvgPool2d(kernel_size=4, stride=4),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            nn.AdaptiveAvgPool2d(1)
+        ]
+        return nn.Sequential(*layers)
+
+    @staticmethod
+    def _make_layers5():
+        layers = [
+            ConvBlock(3, 64, ks=3, padding=1),
+            ConvBlock(64, 64, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(64, 128, ks=3, padding=1),
+            ConvBlock(128, 128, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(128, 256, ks=3, padding=1),
+            ConvBlock(256, 256, ks=3, padding=1),
+            ConvBlock(256, 256, ks=3, padding=1),
+            nn.AvgPool2d(kernel_size=4, stride=4),
+            GCNBlock(256, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            nn.AdaptiveAvgPool2d(1)
+        ]
+        return nn.Sequential(*layers)
+
+    @staticmethod
+    def _make_layers4():
+        layers = [
+            ConvBlock(3, 64, ks=3, padding=1),
+            ConvBlock(64, 64, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(64, 128, ks=3, padding=1),
+            ConvBlock(128, 128, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(128, 256, ks=3, padding=1),
+            ConvBlock(256, 256, ks=3, padding=1),
+            ConvBlock(256, 256, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            GCNBlock(256, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            GCNBlock(512, 512, ks=1, padding=0),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.AdaptiveAvgPool2d(1)
+        ]
+        return nn.Sequential(*layers)
+
+    @staticmethod
+    def _make_layers3():
+        layers = [
+            ConvBlock(3, 64, ks=3, padding=1),
+            ConvBlock(64, 64, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(64, 128, ks=3, padding=1),
+            ConvBlock(128, 128, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(128, 256, ks=3, padding=1),
+            ConvBlock(256, 256, ks=3, padding=1),
+            ConvBlock(256, 256, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(256, 512, ks=3, padding=1),
+            ConvBlock(512, 512, ks=3, padding=1),
+            ConvBlock(512, 512, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            ConvBlock(512, 512, ks=3, padding=1),
+            ConvBlock(512, 512, ks=3, padding=1),
+            ConvBlock(512, 512, ks=3, padding=1),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.AdaptiveAvgPool2d(1)
+        ]
+        return nn.Sequential(*layers)
+
+    @staticmethod
+    def _make_layers2(cfg_vgg):
+        layers = []
+        in_channels = 3
+        for x in cfg_vgg:
+            if x == 'M':
+                layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+            else:
+                layers.append(ConvBlock(in_channels, x, ks=3, padding=1))
+                in_channels = x
+        layers += [nn.AvgPool2d(kernel_size=1, stride=1)]
+        return nn.Sequential(*layers)
+
+    pass
+
+
 class Runner(object):
 
     def __init__(self, root_path='/mnt/4T/Data/cifar/cifar-10', batch_size=128, lr=0.1):
@@ -57,7 +246,8 @@ class Runner(object):
         self.start_epoch = 0
 
         # self.net = vgg.vgg16_bn(pretrained=False, num_classes=200).to(self.device)
-        self.net = VGG().to(self.device)
+        # self.net = VGG().to(self.device)
+        self.net = VGG2().to(self.device)
         self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
 
@@ -180,6 +370,7 @@ if __name__ == '__main__':
     """
     64 lr=0.01 76.48 - 56.98
     64 lr= 0.1 73.38 - 59.92
+    64 lr= 0.1 99.95 - 62.38
     """
 
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # 1

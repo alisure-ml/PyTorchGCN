@@ -151,8 +151,7 @@ class MyDataset(Dataset):
 
     def __getitem__(self, idx):
         img, target = self.data_set.__getitem__(idx)
-        img_data = transforms.Compose([transforms.ToTensor(), transforms.Normalize(
-            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])])(np.asarray(img)).unsqueeze(dim=0)
+        img_data = transforms.Compose([transforms.ToTensor()])(np.asarray(img)).unsqueeze(dim=0)
 
         img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
         graph, pixel_graph = self.get_sp_info(img_small_data)
@@ -579,7 +578,8 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    # runner.load_model("./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/GCNNet/epoch_8.pkl")
+    runner.load_model("./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/GCNNet/epoch_23.pkl")
+    runner.test()
     runner.train(100)
 
     pass
