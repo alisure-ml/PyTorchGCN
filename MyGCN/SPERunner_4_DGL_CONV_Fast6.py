@@ -386,12 +386,12 @@ class MyGCNNet(nn.Module):
         self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146])
         self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], n_classes=10)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64])
         # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[108, 108])
         # self.model_gnn2 = GraphSageNet2(in_dim=108, hidden_dims=[108, 108, 108, 108], n_classes=10)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64])
+        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70])
         # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], n_classes=10)
         pass
 
@@ -594,6 +594,10 @@ if __name__ == '__main__':
     GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 05:33:01 Epoch: 90, Train: 0.9693/0.0877 Test: 0.8932/0.4230
     GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 13:23:06 Epoch: 77, Train: 0.9970/0.0092 Test: 0.9072/0.5581
     
+    GCN          168999 2Conv 2GCN1 4GCN2 4spsize 
+    GraphSageNet 179035 2Conv 2GCN1 4GCN2 4spsize 
+    GatedGCNNet  191201 2Conv 2GCN1 4GCN2 4spsize 
+    GCN          168999 2Conv 2GCN1 4GCN2 4spsize 
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -608,7 +612,7 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GCN")
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GCNNet")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4
