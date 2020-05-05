@@ -5,8 +5,6 @@ import torchvision
 import torch.nn as nn
 import torch.optim as optim
 from alisuretool.Tools import Tools
-import torch.backends.cudnn as cudnn
-import torchvision.models.vgg as vgg
 import torchvision.transforms as transforms
 
 
@@ -249,7 +247,9 @@ class Runner(object):
         # self.net = VGG().to(self.device)
         self.net = VGG2().to(self.device)
         self.criterion = nn.CrossEntropyLoss()
-        self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
+
+        # self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=0.0)
 
         self.train_loader, self.test_loader = self._data()
         pass
@@ -270,10 +270,10 @@ class Runner(object):
         _test_dir = os.path.join(self.root_path, "val_new")
 
         train_set = torchvision.datasets.ImageFolder(_train_dir, transform=transform_train)
-        _train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True, num_workers=2)
+        _train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True, num_workers=8)
 
         test_set = torchvision.datasets.ImageFolder(_test_dir, transform=transform_test)
-        _test_loader = torch.utils.data.DataLoader(test_set, batch_size=100, shuffle=False, num_workers=2)
+        _test_loader = torch.utils.data.DataLoader(test_set, batch_size=100, shuffle=False, num_workers=8)
 
         return _train_loader, _test_loader
 
@@ -375,8 +375,9 @@ if __name__ == '__main__':
 
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # 1
 
-    _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
-    runner = Runner(root_path=_data_root_path, batch_size=128, lr=0.1)
+    # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
+    _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
+    runner = Runner(root_path=_data_root_path, batch_size=128, lr=0.02)
     runner.info()
 
     for _epoch in range(runner.start_epoch, 100):
