@@ -397,7 +397,7 @@ if __name__ == '__main__':
     VGG5 64 SGD lr= 0.1 93.19 - 57.59
     VGG6 64 SGD lr= 0.1 95.13 - 56.24
     VGG7 64 SGD lr= 0.1 97.04 - 58.37
-    VGG7 64 Ada lr=0.02 
+    VGG7 64 Ada lr=0.02 xxxxx - xxxxx
     """
 
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # 1
