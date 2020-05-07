@@ -245,6 +245,7 @@ class GCNNet2(nn.Module):
 
     def __init__(self, in_dim, hidden_dims, n_classes=10):
         super().__init__()
+        self.embedding_h = nn.Linear(in_dim, in_dim)
         self.gcn_list = nn.ModuleList()
         for hidden_dim in hidden_dims:
             self.gcn_list.append(GCNLayer(in_dim, hidden_dim, F.relu, 0.0, True, True, True))
@@ -254,7 +255,7 @@ class GCNNet2(nn.Module):
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = nodes_feat
+        hidden_nodes_feat = self.embedding_h(nodes_feat)
         for gcn in self.gcn_list:
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
             pass
@@ -293,6 +294,7 @@ class GraphSageNet2(nn.Module):
 
     def __init__(self, in_dim, hidden_dims, n_classes=10):
         super().__init__()
+        self.embedding_h = nn.Linear(in_dim, in_dim)
         self.gcn_list = nn.ModuleList()
         for hidden_dim in hidden_dims:
             self.gcn_list.append(GraphSageLayer(in_dim, hidden_dim, F.relu, 0.0, "meanpool", True))
@@ -302,7 +304,7 @@ class GraphSageNet2(nn.Module):
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        hidden_nodes_feat = nodes_feat
+        hidden_nodes_feat = self.embedding_h(nodes_feat)
         for gcn in self.gcn_list:
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
             pass
@@ -321,6 +323,7 @@ class GatedGCNNet1(nn.Module):
         super().__init__()
 
         self.in_dim_edge = 1
+        self.embedding_h = nn.Linear(in_dim, in_dim)
         self.embedding_e = nn.Linear(self.in_dim_edge, in_dim)
 
         self.gcn_list = nn.ModuleList()
@@ -331,7 +334,7 @@ class GatedGCNNet1(nn.Module):
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        h = nodes_feat
+        h = self.embedding_h(nodes_feat)
         e = self.embedding_e(edges_feat)
 
         for gcn in self.gcn_list:
@@ -351,6 +354,7 @@ class GatedGCNNet2(nn.Module):
         super().__init__()
 
         self.in_dim_edge = 1
+        self.embedding_h = nn.Linear(in_dim, in_dim)
         self.embedding_e = nn.Linear(self.in_dim_edge, in_dim)
 
         self.gcn_list = nn.ModuleList()
@@ -363,7 +367,7 @@ class GatedGCNNet2(nn.Module):
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        h = nodes_feat
+        h = self.embedding_h(nodes_feat)
         e = self.embedding_e(edges_feat)
 
         for gcn in self.gcn_list:
@@ -382,9 +386,9 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64])
-        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146])
-        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], n_classes=10)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64])
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146])
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], n_classes=10)
 
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64])
         # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[108, 108])
@@ -393,6 +397,14 @@ class MyGCNNet(nn.Module):
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64])
         # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70])
         # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70], n_classes=10)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, 128])
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146, 146])
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], n_classes=10)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, 128])
+        self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[108, 108])
+        self.model_gnn2 = GraphSageNet2(in_dim=108, hidden_dims=[108, 108, 108, 108], n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -437,10 +449,10 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        self.lr_s = [[0, 0.1], [80, 0.01], [140, 0.001], [180, 0.0001]]
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        # self.lr_s = [[0, 0.1], [80, 0.01], [140, 0.001], [180, 0.0001]]
+        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -594,10 +606,10 @@ if __name__ == '__main__':
     GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 05:33:01 Epoch: 90, Train: 0.9693/0.0877 Test: 0.8932/0.4230
     GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 13:23:06 Epoch: 77, Train: 0.9970/0.0092 Test: 0.9072/0.5581
     
-    GCN          168999 2Conv 2GCN1 4GCN2 4spsize 
-    GraphSageNet 179035 2Conv 2GCN1 4GCN2 4spsize 
-    GatedGCNNet  191201 2Conv 2GCN1 4GCN2 4spsize 
-    GCN          168999 2Conv 2GCN1 4GCN2 4spsize 
+    GCN          168999 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch: 149, Train: 0.8854/0.3329 Test: 0.8454/0.4708
+    GraphSageNet 179035 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch: 142, Train: 0.9366/0.1883 Test: 0.8846/0.3609
+    GatedGCNNet  191201 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch: 146, Train: 0.8738/0.3655 Test: 0.8477/0.4478
+    GCN          168999 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch:  76, Train: 0.9501/0.1402 Test: 0.8573/0.5432
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")
@@ -612,18 +624,19 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GCNNet")
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GraphSageNet")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4
-    _epochs = 200
+    # _epochs = 200
+    _epochs = 100
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
     # _gpu_id = "0"
     _gpu_id = "1"
-
+    #
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
 
