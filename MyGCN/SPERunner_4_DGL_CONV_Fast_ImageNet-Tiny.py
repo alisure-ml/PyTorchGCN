@@ -432,13 +432,13 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
         # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
-        self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
-        self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
-
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
-        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
-        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[256, 256, 256, 256], n_classes=200)
+        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
+        self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[256, 256, 256, 256], n_classes=200)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -642,9 +642,8 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCN       Baseline Has Sigmoid             2020-04-08 15:41:33 Epoch: 97, Train: 0.7781/0.6535 Test: 0.7399/0.8137
-    
-    GCNNet 830024                    2020-04-24 15:32:06 Epoch:22,Train:0.4189-0.6963/2.3912 Test:0.3812-0.6580/2.6269
+    GCNNet       1467144 128 2020-05-06 17:00:55 Epoch:68,lr=0.0010,Train:0.7836-0.9423/0.8190 Test:0.5481-0.7885/2.0015
+    GraphSageNet 2490248 128 2020-05-07 07:48:41 Epoch:66,lr=0.0010,Train:0.7226-0.9170/1.0306 Test:0.5595-0.8013/1.8372
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -661,16 +660,16 @@ if __name__ == '__main__':
 
     # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
     _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GraphSageNet")
-    _batch_size = 128
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GatedGCNNet")
+    _batch_size = 64
     _image_size = 64
     _sp_size = 4
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
