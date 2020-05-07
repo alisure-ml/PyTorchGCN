@@ -66,7 +66,8 @@ def demo2(image_name="input\\3.jpg", image_size=None, pixel_size=8, sigma=1, max
 
     start = time.time()
     Tools.print("start")
-    segment = segmentation.slic(image, n_segments=n_segment, sigma=sigma, max_iter=max_iter)
+    segment = segmentation.slic(image, n_segments=n_segment, sigma=sigma,
+                                max_iter=max_iter, min_size_factor=0.5, max_size_factor=10)
     Tools.print("end {} {}".format(n_segment, time.time() - start))
 
     result = segmentation.mark_boundaries(image, segment)
@@ -83,5 +84,6 @@ if __name__ == '__main__':
     # demo_multi(image_name="input\\11.jpg", n_segments=[2 ** (i + 1) for i in range(8)])
     # demo(image_name="input\\11.jpg", n_segment=128, sigma=2, max_iter=10)
     # demo2(image_name="input\\1.jpg", image_size=224, pixel_size=14, sigma=1, max_iter=2)
-    demo2(image_name="input\\6.png", image_size=32, pixel_size=6, sigma=1, max_iter=5)
+    # demo2(image_name="input\\6.png", image_size=32, pixel_size=6, sigma=1, max_iter=5)
+    demo2(image_name="input\\3.jpg", image_size=224, pixel_size=11, sigma=0.1, max_iter=30)
     pass
