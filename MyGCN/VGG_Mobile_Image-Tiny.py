@@ -50,7 +50,7 @@ class TranTiny(object):
 
 class Runner(object):
 
-    def __init__(self, root_path='/mnt/4T/Data/cifar/cifar-10', batch_size=128, lr=0.1):
+    def __init__(self, root_path='/mnt/4T/Data/cifar/cifar-10', batch_size=128, image_size=64, lr=0.1):
         self.root_path = root_path
         self.batch_size = batch_size
         self.lr = lr
@@ -67,7 +67,7 @@ class Runner(object):
         self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=0.9, weight_decay=5e-4)
         # self.optimizer = optim.Adam(self.net.parameters(), lr=self.lr, weight_decay=0.0)
 
-        self.train_loader, self.test_loader = self._data()
+        self.train_loader, self.test_loader = self._data(image_size=image_size)
         pass
 
     def _change_lr(self, epoch):
@@ -77,29 +77,30 @@ class Runner(object):
                 param_group['lr'] = _lr
             pass
 
-        # if 0 <= epoch < 100:
-        #     __change_lr(self.lr)
-        # elif 100 <= epoch < 150:
-        #     __change_lr(self.lr / 10)
-        # elif 150 <= epoch:
-        #     __change_lr(self.lr / 100)
-
-        if 0 <= epoch < 33:
+        if 0 <= epoch < 100:
             __change_lr(self.lr)
-        elif 33 <= epoch < 66:
+        elif 100 <= epoch < 150:
             __change_lr(self.lr / 10)
-        elif 66 <= epoch:
+        elif 150 <= epoch:
             __change_lr(self.lr / 100)
+
+        # if 0 <= epoch < 33:
+        #     __change_lr(self.lr)
+        # elif 33 <= epoch < 66:
+        #     __change_lr(self.lr / 10)
+        # elif 66 <= epoch:
+        #     __change_lr(self.lr / 100)
 
         pass
 
-    def _data(self):
+    def _data(self, image_size=64):
         Tools.print('==> Preparing data..')
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
-        transform_train = transforms.Compose([transforms.RandomCrop(64, padding=8),
+        transform_train = transforms.Compose([transforms.Resize(image_size),
+                                              transforms.RandomCrop(image_size, padding=8),
                                               transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize])
-        transform_test = transforms.Compose([transforms.ToTensor(), normalize])
+        transform_test = transforms.Compose([transforms.Resize(image_size), transforms.ToTensor(), normalize])
 
         _train_dir = os.path.join(self.root_path, "train")
         _test_dir = os.path.join(self.root_path, "val_new")
@@ -179,21 +180,27 @@ class Runner(object):
 
 
 if __name__ == '__main__':
-    """ """
+    """
+     64 SGD 0.1 100 37.007 37.60
+    128 SGD 0.1 100 48.084 45.53
+    
+     64 SGD 0.01 200 69.028 55.15
+    128 SGD 0.01 200 81.365 61.24
+    """
 
     # TranTiny(val_root='D:\\data\\ImageNet\\tiny-imagenet-200\\val', tiny_val_txt="val_annotations.txt",
     #          val_result_root="D:\\data\\ImageNet\\tiny-imagenet-200\\val_new").new_val()
 
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "1"  # 1
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 1
 
-    # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
+    _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
     # _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
-    _data_root_path = 'D:\\data\\ImageNet\\tiny-imagenet-200'
+    # _data_root_path = 'D:\\data\\ImageNet\\tiny-imagenet-200'
 
-    runner = Runner(root_path=_data_root_path, batch_size=128, lr=0.1)
+    runner = Runner(root_path=_data_root_path, batch_size=64, image_size=128, lr=0.01)
     runner.info()
 
-    for _epoch in range(runner.start_epoch, 100):
+    for _epoch in range(runner.start_epoch, 200):
         runner.train(_epoch, change_lr=True)
         runner.test(_epoch)
         pass

@@ -673,7 +673,7 @@ if __name__ == '__main__':
     
     GCN          273917 3Conv 2GCN1 em 4GCN2 4spsize 2020-05-08 Epoch: 79, Train: 0.9746/0.0720 Test: 0.8787/0.5194
     GraphSageNet 278743 3Conv 2GCN1 em 4GCN2 4spsize 2020-05-07 Epoch: 51, Train: 0.9637/0.1064 Test: 0.8887/0.4253
-    GatedGCNNet  309323 3Conv 2GCN1 em 4GCN2 4spsize 
+    GatedGCNNet  309323 3Conv 2GCN1 em 4GCN2 4spsize 2020-05-09 Epoch: 92, Train: 0.9765/0.0670 Test: 0.8895/0.4673
     """
     # _data_root_path = 'D:\data\CIFAR'
     # _root_ckpt_dir = "ckpt2\\dgl\\my\\{}".format("GCNNet")

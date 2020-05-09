@@ -339,6 +339,7 @@ class GraphSageNet2(nn.Module):
 
     def __init__(self, in_dim, hidden_dims, n_classes=200):
         super().__init__()
+        # self.embedding_h = nn.Linear(in_dim, in_dim)
         self.gcn_list = nn.ModuleList()
         for hidden_dim in hidden_dims:
             self.gcn_list.append(GraphSageLayer(in_dim, hidden_dim, F.relu, 0.0, "meanpool", True))
@@ -349,6 +350,7 @@ class GraphSageNet2(nn.Module):
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
         hidden_nodes_feat = nodes_feat
+        # hidden_nodes_feat = self.embedding_h(nodes_feat)
         for gcn in self.gcn_list:
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
             pass
@@ -432,13 +434,17 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
         # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
-        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
-        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
-
         self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
-        self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
-        self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[256, 256, 256, 256], n_classes=200)
+        self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
+        self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
+        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[256, 256, 256, 256], n_classes=200)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "256"])
+        # self.model_gnn1 = GraphSageNet1(in_dim=256, hidden_dims=[256, 256])
+        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -484,10 +490,10 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        # self.lr_s = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+        # self.lr_s = [[0, 0.001], [75, 0.0001]]
         # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
 
-        self.lr_s = [[0, 0.1], [33, 0.01], [66, 0.001], [90, 0.0001]]
+        self.lr_s = [[0, 0.01], [60, 0.001], [90, 0.0001]]
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
@@ -644,6 +650,11 @@ if __name__ == '__main__':
     """
     GCNNet       1467144 128 2020-05-06 17:00:55 Epoch:68,lr=0.0010,Train:0.7836-0.9423/0.8190 Test:0.5481-0.7885/2.0015
     GraphSageNet 2490248 128 2020-05-07 07:48:41 Epoch:66,lr=0.0010,Train:0.7226-0.9170/1.0306 Test:0.5595-0.8013/1.8372
+    
+    GraphSageNet 2490248 64 adam 2020-05-09 10:1 Epoch:88,lr=0.0001,Train:0.9726-0.9992/0.0848 Test:0.5028-0.7405/4.6010
+    GraphSageNet 2917256 64  sgd 2020-05-09 08:5 Epoch:90,lr=0.0001,Train:0.6698-0.8901/1.2359 Test:0.5338-0.7826/1.9606
+    
+    GraphSageNet 2917256 64  sgd 
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -658,9 +669,9 @@ if __name__ == '__main__':
 
     # TranTiny.main()
 
-    # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
-    _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GatedGCNNet")
+    _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
+    # _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GraphSageNet2")
     _batch_size = 64
     _image_size = 64
     _sp_size = 4
