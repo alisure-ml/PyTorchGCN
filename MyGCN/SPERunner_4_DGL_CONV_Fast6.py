@@ -419,7 +419,7 @@ class GATNet2(nn.Module):
             pass
         self.gcn_list.append(GATLayer(hidden_dims[-2] * self.n_heads,
                                       hidden_dims[-1] * self.n_heads, 1, 0.0, True, True, True))
-        self.readout_mlp = MLPReadout(hidden_dims[-1], n_classes)
+        self.readout_mlp = MLPReadout(hidden_dims[-1] * self.n_heads, n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -670,6 +670,7 @@ if __name__ == '__main__':
     GraphSageNet 179035 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch: 142, Train: 0.9366/0.1883 Test: 0.8846/0.3609
     GatedGCNNet  191201 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch: 146, Train: 0.8738/0.3655 Test: 0.8477/0.4478
     GCN          168999 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch:  76, Train: 0.9501/0.1402 Test: 0.8573/0.5432
+    GATNet       229328 2Conv 2GCN1 em 4GCN2 4spsize 
     
     GCN          273917 3Conv 2GCN1 em 4GCN2 4spsize 2020-05-08 Epoch: 79, Train: 0.9746/0.0720 Test: 0.8787/0.5194
     GraphSageNet 278743 3Conv 2GCN1 em 4GCN2 4spsize 2020-05-07 Epoch: 51, Train: 0.9637/0.1064 Test: 0.8887/0.4253
@@ -686,9 +687,9 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GatedGCNNet")
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GATNet")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4

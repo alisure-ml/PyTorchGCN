@@ -426,6 +426,58 @@ class GatedGCNNet2(nn.Module):
     pass
 
 
+class GATNet1(nn.Module):
+
+    def __init__(self, in_dim=64, hidden_dims=[19, 19]):
+        super().__init__()
+        self.n_heads = 8
+        self.embedding_h = nn.Linear(in_dim, hidden_dims[0] * self.n_heads)
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims[:-1]:
+            self.gcn_list.append(GATLayer(hidden_dim * self.n_heads, hidden_dim, self.n_heads, 0.0, True, True, True))
+            pass
+        self.gcn_list.append(GATLayer(hidden_dims[-2] * self.n_heads,
+                                      hidden_dims[-1] * self.n_heads, 1, 0.0, True, True, True))
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        for conv in self.gcn_list:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = dgl.mean_nodes(graphs, 'h')
+        return hg
+
+    pass
+
+
+class GATNet2(nn.Module):
+
+    def __init__(self, in_dim=19, hidden_dims=[19, 19, 19, 19], n_classes=10):
+        super().__init__()
+        self.n_heads = 8
+        self.embedding_h = nn.Linear(in_dim * self.n_heads, hidden_dims[0] * self.n_heads)
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims[:-1]:
+            self.gcn_list.append(GATLayer(hidden_dim * self.n_heads, hidden_dim, self.n_heads, 0.0, True, True, True))
+            pass
+        self.gcn_list.append(GATLayer(hidden_dims[-2] * self.n_heads,
+                                      hidden_dims[-1] * self.n_heads, 1, 0.0, True, True, True))
+        self.readout_mlp = MLPReadout(hidden_dims[-1] * self.n_heads, n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        for conv in self.gcn_list:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = dgl.mean_nodes(graphs, 'h')
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class MyGCNNet(nn.Module):
 
     def __init__(self):
@@ -434,17 +486,21 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
         # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
-        self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
-        self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
 
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
         # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
         # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[256, 256, 256, 256], n_classes=200)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "256"])
-        # self.model_gnn1 = GraphSageNet1(in_dim=256, hidden_dims=[256, 256])
-        # self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[512, 512, 512, 512], n_classes=200)
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        self.model_gnn1 = GATNet1(in_dim=128, hidden_dims=[40, 40])
+        self.model_gnn2 = GATNet2(in_dim=40, hidden_dims=[80, 80, 80, 80], n_classes=200)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -490,7 +546,7 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        # self.lr_s = [[0, 0.001], [75, 0.0001]]
+        # self.lr_s = [[0, 0.01], [30, 0.001], [60, 0.0001]]
         # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
 
         self.lr_s = [[0, 0.01], [60, 0.001], [90, 0.0001]]
@@ -650,6 +706,8 @@ if __name__ == '__main__':
     """
     GCNNet       1467144 128 2020-05-06 17:00:55 Epoch:68,lr=0.0010,Train:0.7836-0.9423/0.8190 Test:0.5481-0.7885/2.0015
     GraphSageNet 2490248 128 2020-05-07 07:48:41 Epoch:66,lr=0.0010,Train:0.7226-0.9170/1.0306 Test:0.5595-0.8013/1.8372
+    GatedGCNNet  1637832  64 2020-05-08 13:26:02 Epoch:69,lr=0.0010,Train:0.5654-0.8196/1.6951 Test:0.5079-0.7705/2.0283
+    GATNet       2652328  64 
     
     GraphSageNet 2490248 64 adam 2020-05-09 10:1 Epoch:88,lr=0.0001,Train:0.9726-0.9992/0.0848 Test:0.5028-0.7405/4.6010
     GraphSageNet 2917256 64  sgd 2020-05-09 08:5 Epoch:90,lr=0.0001,Train:0.6698-0.8901/1.2359 Test:0.5338-0.7826/1.9606
@@ -669,9 +727,9 @@ if __name__ == '__main__':
 
     # TranTiny.main()
 
-    _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GraphSageNet2")
+    # _data_root_path = '/mnt/4T/Data/tiny-imagenet-200/tiny-imagenet-200'
+    _data_root_path = '/home/ubuntu/ALISURE/data/tiny-imagenet-200'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet-Tiny/{}".format("GATNet")
     _batch_size = 64
     _image_size = 64
     _sp_size = 4
