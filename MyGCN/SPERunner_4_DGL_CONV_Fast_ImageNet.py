@@ -283,13 +283,13 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M", "256", "256"])
-        self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256, 256])
-        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024], n_classes=1000)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M", "256", "256"])
+        # self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024], n_classes=1000)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64", "M", "128", "128"])
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128, 128])
-        # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 256, 256, 512, 1024], n_classes=1000)
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64", "M", "128", "128"])
+        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128, 128])
+        self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 512, 1024], n_classes=1000)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -335,11 +335,11 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        self.lr_s = [[0, 0.001], [30, 0.00003], [60, 0.00001]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        # self.lr_s = [[0, 0.001], [30, 0.00003], [60, 0.00001]]
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
 
-        # self.lr_s = [[0, 0.1], [33, 0.01], [66, 0.001], [90, 0.0001]]
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        self.lr_s = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -493,7 +493,7 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCNNet 2490248 64 adam 
+    GCNNet 2166696 32 sgd 0.01 
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -508,7 +508,7 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet/{}".format("GCNNet")
-    _batch_size = 16
+    _batch_size = 32
     _image_size = 224
     _sp_size = 7
     _train_print_freq = 100

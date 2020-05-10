@@ -710,9 +710,8 @@ if __name__ == '__main__':
     GATNet       2652328  64 
     
     GraphSageNet 2490248 64 adam 2020-05-09 10:1 Epoch:88,lr=0.0001,Train:0.9726-0.9992/0.0848 Test:0.5028-0.7405/4.6010
-    GraphSageNet 2917256 64  sgd 2020-05-09 08:5 Epoch:90,lr=0.0001,Train:0.6698-0.8901/1.2359 Test:0.5338-0.7826/1.9606
-    
-    GraphSageNet 2917256 64  sgd 
+    GraphSageNet 2917256 64  sgd 0.1 2020-05-09  Epoch:90,lr=0.0001,Train:0.6698-0.8901/1.2359 Test:0.5338-0.7826/1.9606
+    GraphSageNet 2917256 64  sgd 0.01 2020-05-10 Epoch:61,lr=0.0010,Train:0.7862-0.9435/0.7859 Test:0.5798-0.8107/1.8119
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
