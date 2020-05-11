@@ -178,7 +178,7 @@ class MyDataset(Dataset):
         pixel_nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
         batched_pixel_graph = dgl.batch(_pixel_graphs)
 
-        return (images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph, pixel_nodes_num_norm_sqrt)
+        return images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph, pixel_nodes_num_norm_sqrt
 
     pass
 
@@ -325,10 +325,10 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        # self.lr_s = [[0, 0.1], [80, 0.01], [140, 0.001], [180, 0.0001]]
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.BCELoss().to(self.device)
 
@@ -350,9 +350,10 @@ class RunnerSPE(object):
             self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
             epoch_test_loss, epoch_test_mae, epoch_test_score = self.test()
 
-            Tools.print('E:{:02d}, lr:{:.4f}, Train:{:.4f}/{:.4f}/{:.4f} Test:{:.4f}/{:.4f}/{:.4f}'.format(
-                epoch, self.optimizer.param_groups[0]['lr'],
-                epoch_train_mae, epoch_train_score, epoch_loss, epoch_test_mae, epoch_test_score, epoch_test_loss))
+            Tools.print('E:{:02d}, lr:{:.4f}, Train(mae-score-loss):{:.4f}/{:.4f}/{:.4f} Test(mae-score-loss):'
+                        '{:.4f}/{:.4f}/{:.4f}'.format(epoch, self.optimizer.param_groups[0]['lr'],
+                                                      epoch_train_mae, epoch_train_score, epoch_loss,
+                                                      epoch_test_mae, epoch_test_score, epoch_test_loss))
             pass
         pass
 
@@ -378,8 +379,8 @@ class RunnerSPE(object):
                                                         nodes_num_norm_sqrt, pixel_data_where,
                                                         batched_pixel_graph, pixel_nodes_num_norm_sqrt)
             loss = self.loss_class(logits_sigmoid, labels)
-            labels_val = labels.detach().numpy()
-            logits_sigmoid_val = logits_sigmoid.detach().numpy()
+            labels_val = labels.cpu().detach().numpy()
+            logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
             loss.backward()
             self.optimizer.step()
 
@@ -397,7 +398,7 @@ class RunnerSPE(object):
             # Print
             if i % self.train_print_freq == 0:
                 Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}/{:4f}".format(
-                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), mae, epoch_mae/(i+1)))
+                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_mae/(i+1), mae))
                 pass
             pass
 
@@ -405,7 +406,7 @@ class RunnerSPE(object):
         avg_loss, avg_mae = epoch_loss / len(self.train_loader), epoch_mae / len(self.train_loader)
         _avg_prec, _avg_recall = epoch_prec / len(self.train_loader), epoch_recall / len(self.train_loader)
         score = (1 + 0.3) * _avg_prec * _avg_recall / (0.3 * _avg_prec + _avg_recall)
-        return avg_loss, avg_mae, score
+        return avg_loss, avg_mae, score.max()
 
     def test(self):
         self.model.eval()
@@ -431,8 +432,8 @@ class RunnerSPE(object):
                                                             nodes_num_norm_sqrt, pixel_data_where,
                                                             batched_pixel_graph, pixel_nodes_num_norm_sqrt)
                 loss = self.loss_class(logits_sigmoid, labels)
-                labels_val = labels.detach().numpy()
-                logits_sigmoid_val = logits_sigmoid.detach().numpy()
+                labels_val = labels.cpu().detach().numpy()
+                logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
 
                 # Stat
                 nb_data += labels.size(0)
@@ -449,7 +450,7 @@ class RunnerSPE(object):
                 if i % self.test_print_freq == 0:
                     Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}/{:4f}".format(
                         i, len(self.test_loader), epoch_test_loss/(i+1),
-                        loss.detach().item(), mae, epoch_test_mae/(i+1)))
+                        loss.detach().item(), epoch_test_mae/(i+1), mae))
                     pass
                 pass
             pass
@@ -458,7 +459,7 @@ class RunnerSPE(object):
         avg_loss, avg_mae = epoch_test_loss / len(self.test_loader), epoch_test_mae / len(self.test_loader)
         _avg_prec, _avg_recall = epoch_test_prec / len(self.test_loader), epoch_test_recall / len(self.test_loader)
         score = (1 + 0.3) * _avg_prec * _avg_recall / (0.3 * _avg_prec + _avg_recall)
-        return avg_loss, avg_mae, score
+        return avg_loss, avg_mae, score.max()
 
     def _lr(self, epoch):
         for lr in self.lr_s:
@@ -507,31 +508,31 @@ class RunnerSPE(object):
 if __name__ == '__main__':
     """
     """
-    _data_root_path = 'D:\\data\\SOD\\DUTS'
-    _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
-    _batch_size = 12
-    _image_size = 320
-    _sp_size = 4
-    _epochs = 100
-    _train_print_freq = 1
-    _test_print_freq = 1
-    _num_workers = 1
-    _use_gpu = False
-    _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    # _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}-100".format("GATNet")
-    # _batch_size = 64
+    # _data_root_path = 'D:\\data\\SOD\\DUTS'
+    # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
+    # _batch_size = 16
     # _image_size = 320
     # _sp_size = 4
     # _epochs = 100
-    # _train_print_freq = 100
-    # _test_print_freq = 50
-    # _num_workers = 8
-    # _use_gpu = True
-    # _gpu_id = "0"
+    # _train_print_freq = 1
+    # _test_print_freq = 1
+    # _num_workers = 1
+    # _use_gpu = False
     # _gpu_id = "1"
+
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
+    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
+    _batch_size = 16
+    _image_size = 320
+    _sp_size = 4
+    _epochs = 100
+    _train_print_freq = 100
+    _test_print_freq = 50
+    _num_workers = 8
+    _use_gpu = True
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
