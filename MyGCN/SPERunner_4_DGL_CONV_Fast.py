@@ -519,6 +519,58 @@ class GatedGCNNet2(nn.Module):
     pass
 
 
+class GATNet1(nn.Module):
+
+    def __init__(self, in_dim=64, hidden_dims=[19, 19]):
+        super().__init__()
+        self.n_heads = 8
+        self.embedding_h = nn.Linear(in_dim, hidden_dims[0] * self.n_heads)
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims[:-1]:
+            self.gcn_list.append(GATLayer(hidden_dim * self.n_heads, hidden_dim, self.n_heads, 0.0, True, True, True))
+            pass
+        self.gcn_list.append(GATLayer(hidden_dims[-2] * self.n_heads,
+                                      hidden_dims[-1] * self.n_heads, 1, 0.0, True, True, True))
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        for conv in self.gcn_list:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = dgl.mean_nodes(graphs, 'h')
+        return hg
+
+    pass
+
+
+class GATNet2(nn.Module):
+
+    def __init__(self, in_dim=19, hidden_dims=[19, 19, 19, 19], n_classes=10):
+        super().__init__()
+        self.n_heads = 8
+        self.embedding_h = nn.Linear(in_dim * self.n_heads, hidden_dims[0] * self.n_heads)
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims[:-1]:
+            self.gcn_list.append(GATLayer(hidden_dim * self.n_heads, hidden_dim, self.n_heads, 0.0, True, True, True))
+            pass
+        self.gcn_list.append(GATLayer(hidden_dims[-2] * self.n_heads,
+                                      hidden_dims[-1] * self.n_heads, 1, 0.0, True, True, True))
+        self.readout_mlp = MLPReadout(hidden_dims[-1] * self.n_heads, n_classes)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        for conv in self.gcn_list:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = dgl.mean_nodes(graphs, 'h')
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class MyGCNNet(nn.Module):
 
     def __init__(self):
@@ -558,9 +610,14 @@ class MyGCNNet(nn.Module):
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[146, 146], out_dim=146)
         # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146, 146, 146], out_dim=146, n_classes=10)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70, 70, 70], out_dim=70, n_classes=10)
+
         self.model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[70, 70], out_dim=70)
-        self.model_gnn2 = GatedGCNNet2(in_dim=70, hidden_dims=[70, 70, 70, 70, 70, 70], out_dim=70, n_classes=10)
+        self.model_gnn1 = GATNet1(in_dim=64, hidden_dims=[19, 19])
+        self.model_gnn2 = GATNet2(in_dim=19, hidden_dims=[19, 19, 19, 19], n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -761,6 +818,7 @@ if __name__ == '__main__':
     SageNet  2006218 3Conv 2GCN1 4GCN2 4spsize 2020-04-19 00:34:45 Epoch: 75, Train: 0.9940/0.0175 Test: 0.8988/0.5567
     GatedGCN  239889 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 05:33:01 Epoch: 90, Train: 0.9693/0.0877 Test: 0.8932/0.4230
     GatedGCN 4478410 3Conv 2GCN1 4GCN2 4spsize 2020-04-20 13:23:06 Epoch: 77, Train: 0.9970/0.0092 Test: 0.9072/0.5581
+    GATNet    266384 3Conv 2GCN1 4GCN2 4spsize 2020-05-11 08:43:29 Epoch: 93, Train: 0.9454/0.1535 Test: 0.8761/0.4241
     
     # ConvNet
     GCN       177161 1Conv 2GCN1 4GCN2 4spsize 2020-04-20 05:49:03 Epoch: 98, Train: 0.9040/0.2680 Test: 0.8283/0.5756
@@ -800,9 +858,9 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GatedGCNNet")
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV/{}".format("GATNet2")
     _batch_size = 64
     _image_size = 32
     _sp_size = 4
