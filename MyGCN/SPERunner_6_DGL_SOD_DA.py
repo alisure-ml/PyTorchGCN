@@ -4,9 +4,9 @@ import dgl
 import glob
 import time
 import torch
+import random
 import skimage
 import numpy as np
-from PIL import Image
 import torch.nn as nn
 from skimage import io
 import matplotlib.pyplot as plt
@@ -18,6 +18,7 @@ from layers.gcn_layer import GCNLayer
 from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
+from PIL import Image, ImageOps, ImageFilter
 from layers.mlp_readout_layer import MLPReadout
 from torch.utils.data import Dataset, DataLoader
 from layers.gated_gcn_layer import GatedGCNLayer
@@ -83,25 +84,112 @@ class DealSuperPixel(object):
     pass
 
 
+class FixedResize(object):
+
+    def __init__(self, size):
+        self.size = (size, size)
+        pass
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+        img = img.resize(self.size, Image.BILINEAR)
+        mask = mask.resize(self.size, Image.NEAREST)
+        return {'image': img, 'label': mask}
+
+    pass
+
+
+class RandomScaleCrop(object):
+
+    def __init__(self, base_size, crop_size, mask_fill=0):
+        self.base_size = base_size
+        self.crop_size = crop_size
+        self.mask_fill = mask_fill
+        pass
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+
+        # 随机缩放
+        ratio = 7 / 8
+        short_size = random.randint(int(self.base_size * ratio), int(self.base_size / ratio))
+        w, h = img.size
+        if h > w:
+            ow = short_size
+            oh = int(1.0 * h * ow / w)
+        else:
+            oh = short_size
+            ow = int(1.0 * w * oh / h)
+        img = img.resize((ow, oh), Image.BILINEAR)
+        mask = mask.resize((ow, oh), Image.NEAREST)
+
+        # Pad
+        if short_size < self.crop_size:
+            padh = (self.crop_size - oh if oh < self.crop_size else 0) // 2
+            padw = (self.crop_size - ow if ow < self.crop_size else 0) // 2
+            img = ImageOps.expand(img, border=(padw, padh, padw, padh), fill=0)
+            mask = ImageOps.expand(mask, border=(padw, padh, padw, padh), fill=self.mask_fill)
+            pass
+
+        # Random crop
+        w, h = img.size
+        x1 = random.randint(0, w - self.crop_size) if w - self.crop_size > 0 else 0
+        y1 = random.randint(0, h - self.crop_size) if h - self.crop_size > 0 else 0
+        img = img.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+        mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+
+        return {'image': img, 'label': mask}
+
+    pass
+
+
+class RandomGaussianBlur(object):
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+        if random.random() < 0.5:
+            img = img.filter(ImageFilter.GaussianBlur(radius=random.random()))
+        return {'image': img, 'label': mask}
+    pass
+
+
+class RandomHorizontalFlip(object):
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+        if random.random() < 0.5:
+            img = img.transpose(Image.FLIP_LEFT_RIGHT)
+            mask = mask.transpose(Image.FLIP_LEFT_RIGHT)
+        return {'image': img, 'label': mask}
+
+    pass
+
+
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path, is_train=True, image_size=320, sp_size=4, pool_ratio=4):
+    def __init__(self, data_root_path, is_train=True, image_size=320, sp_size=4, pool_ratio=2):
         super().__init__()
         self.sp_size = sp_size
         self.is_train = is_train
         self.pool_ratio = pool_ratio
         self.image_size = image_size
         self.image_size_for_sp = self.image_size // pool_ratio
+
+        # 路径
         self.data_image_path = os.path.join(data_root_path, "DUTS-TR" if self.is_train else "DUTS-TE",
                                             "DUTS-TR-Image" if self.is_train else "DUTS-TE-Image")
         self.data_label_path = os.path.join(data_root_path, "DUTS-TR" if self.is_train else "DUTS-TE",
                                             "DUTS-TR-Mask" if self.is_train else "DUTS-TE-Mask")
 
-        self.transform_train = transforms.Compose([transforms.Resize((self.image_size, self.image_size))])
-        self.transform_test = transforms.Compose([transforms.Resize((self.image_size, self.image_size))])
-        self.transform_train_target = transforms.Compose([transforms.Resize((self.image_size, self.image_size))])
-        self.transform_test_target = transforms.Compose([transforms.Resize((self.image_size, self.image_size))])
+        # 数据增强
+        self.transform_train = transforms.Compose([RandomScaleCrop(self.image_size + 40, self.image_size),
+                                                   RandomHorizontalFlip(), RandomGaussianBlur()])
+        self.transform_test = transforms.Compose([FixedResize(self.image_size + 40)])
 
+        # 准备数据
         self.image_name_list, self.label_name_list = self.get_image_label_name()
         pass
 
@@ -115,18 +203,26 @@ class MyDataset(Dataset):
         return len(self.image_name_list)
 
     def __getitem__(self, idx):
+        # 读数据
+        label = Image.open(self.label_name_list[idx])
         image = Image.open(self.image_name_list[idx]).convert("RGB")
-        image = self.transform_train(image) if self.is_train else self.transform_test(image)
-        target = Image.open(self.label_name_list[idx])
-        target = self.transform_train_target(target) if self.is_train else self.transform_test_target(target)
 
+        # 数据增强
+        sample = {'image': image, 'label': label}
+        sample = self.transform_train(sample) if self.is_train else self.transform_test(sample)
+        image, label = sample['image'], sample['label']
+
+        # 归一化
         _normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         img_data = transforms.Compose([transforms.ToTensor(), _normalize])(image).unsqueeze(dim=0)
 
+        # 超像素
         image_small_data = np.asarray(image.resize((self.image_size_for_sp, self.image_size_for_sp)))
-        label_small_data = np.asarray(target.resize((self.image_size_for_sp, self.image_size_for_sp))) / 255
+        label_small_data = np.asarray(label.resize((self.image_size_for_sp, self.image_size_for_sp))) / 255
         graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_small_data)
-        return graph, pixel_graph, img_data, target, segment
+
+        # 返回
+        return graph, pixel_graph, img_data, label, segment
 
     def get_sp_info(self, image, label):
         # Super Pixel
@@ -308,8 +404,8 @@ class RunnerSPE(object):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
 
-        self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
+        self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
 
         self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True,
                                        image_size=image_size, sp_size=sp_size, pool_ratio=pool_ratio)
@@ -323,10 +419,10 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        # self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.BCELoss().to(self.device)
 
@@ -547,11 +643,11 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    数据增强、真正的测试
+    真正的测试
     """
     _data_root_path = 'D:\\data\\SOD\\DUTS'
     _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
-    _batch_size = 16
+    _batch_size = 8
     _image_size = 320
     _sp_size = 4
     _epochs = 100
@@ -583,7 +679,7 @@ if __name__ == '__main__':
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD/GCNNet-100/epoch_48.pkl")
-    runner.visual()
-    # runner.train(_epochs)
+    # runner.visual()
+    runner.train(_epochs)
 
     pass
