@@ -83,6 +83,42 @@ class DealSuperPixel(object):
     pass
 
 
+class RandomScaleCrop(object):
+    def __init__(self, base_size, crop_size, fill=0):
+        self.base_size = base_size
+        self.crop_size = crop_size
+        self.fill = fill
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+        # random scale (short edge)
+        short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
+        w, h = img.size
+        if h > w:
+            ow = short_size
+            oh = int(1.0 * h * ow / w)
+        else:
+            oh = short_size
+            ow = int(1.0 * w * oh / h)
+        img = img.resize((ow, oh), Image.BILINEAR)
+        mask = mask.resize((ow, oh), Image.NEAREST)
+        # pad crop
+        if short_size < self.crop_size:
+            padh = self.crop_size - oh if oh < self.crop_size else 0
+            padw = self.crop_size - ow if ow < self.crop_size else 0
+            img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
+            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=self.fill)
+        # random crop crop_size
+        w, h = img.size
+        x1 = random.randint(0, w - self.crop_size)
+        y1 = random.randint(0, h - self.crop_size)
+        img = img.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+        mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+
+        return {'image': img, 'label': mask}
+
+
 class MyDataset(Dataset):
 
     def __init__(self, data_root_path, is_train=True, image_size=320, sp_size=4, pool_ratio=4):
@@ -97,8 +133,6 @@ class MyDataset(Dataset):
         self.data_label_path = os.path.join(data_root_path, "DUTS-TR" if self.is_train else "DUTS-TE",
                                             "DUTS-TR-Mask" if self.is_train else "DUTS-TE-Mask")
 
-        # self.transform = transforms.Compose([transforms.RandomCrop(self.image_size),
-        #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
         self.transform_train = transforms.Compose([transforms.Resize((self.image_size, self.image_size))])
         self.transform_test = transforms.Compose([transforms.Resize((self.image_size, self.image_size))])
         self.transform_train_target = transforms.Compose([transforms.Resize((self.image_size, self.image_size))])
@@ -127,8 +161,8 @@ class MyDataset(Dataset):
 
         image_small_data = np.asarray(image.resize((self.image_size_for_sp, self.image_size_for_sp)))
         label_small_data = np.asarray(target.resize((self.image_size_for_sp, self.image_size_for_sp))) / 255
-        graph, pixel_graph = self.get_sp_info(image_small_data, label_small_data)
-        return graph, pixel_graph, img_data
+        graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_small_data)
+        return graph, pixel_graph, img_data, target, segment
 
     def get_sp_info(self, image, label):
         # Super Pixel
@@ -155,17 +189,17 @@ class MyDataset(Dataset):
             pixel_graph.append(small_graph)
             pass
         #################################################################################
-        return graph, pixel_graph
+        return graph, pixel_graph, segment
 
     @staticmethod
     def collate_fn(samples):
-        graphs, pixel_graphs, images = map(list, zip(*samples))
+        graphs, pixel_graphs, images, targets, segments = map(list, zip(*samples))
         images = torch.cat(images)
 
         # 超像素图
         _nodes_num = [graph.number_of_nodes() for graph in graphs]
-        nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        batched_graph = dgl.batch(graphs)
+        nodes_num_norm = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
+        batch_graph = dgl.batch(graphs)
 
         # 像素图
         _pixel_graphs = []
@@ -175,10 +209,10 @@ class MyDataset(Dataset):
                 _pixel_graphs.append(now_graph)
             pass
         _nodes_num = [graph.number_of_nodes() for graph in _pixel_graphs]
-        pixel_nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        batched_pixel_graph = dgl.batch(_pixel_graphs)
+        pixel_nodes_num_norm = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
+        batch_pixel_graph = dgl.batch(_pixel_graphs)
 
-        return images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph, pixel_nodes_num_norm_sqrt
+        return images, batch_graph, nodes_num_norm, batch_pixel_graph, pixel_nodes_num_norm, targets, segments
 
     pass
 
@@ -364,8 +398,8 @@ class RunnerSPE(object):
         epoch_mae = 0.0
         epoch_prec = np.zeros(shape=(th_num,)) + 1e-6
         epoch_recall = np.zeros(shape=(th_num,)) + 1e-6
-        for i, (images, batched_graph, nodes_num_norm_sqrt,
-                batched_pixel_graph, pixel_nodes_num_norm_sqrt) in enumerate(self.train_loader):
+        for i, (images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph,
+                pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(self.train_loader):
             # Data
             images = images.float().to(self.device)
             labels = batched_graph.ndata["label"].to(self.device)
@@ -418,8 +452,8 @@ class RunnerSPE(object):
         epoch_test_prec = np.zeros(shape=(th_num,)) + 1e-6
         epoch_test_recall = np.zeros(shape=(th_num,)) + 1e-6
         with torch.no_grad():
-            for i, (images, batched_graph, nodes_num_norm_sqrt,
-                    batched_pixel_graph, pixel_nodes_num_norm_sqrt) in enumerate(self.test_loader):
+            for i, (images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph,
+                    pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(self.test_loader):
                 # Data
                 images = images.float().to(self.device)
                 labels = batched_graph.ndata["label"].to(self.device)
@@ -460,6 +494,48 @@ class RunnerSPE(object):
         _avg_prec, _avg_recall = epoch_test_prec / len(self.test_loader), epoch_test_recall / len(self.test_loader)
         score = (1 + 0.3) * _avg_prec * _avg_recall / (0.3 * _avg_prec + _avg_recall)
         return avg_loss, avg_mae, score.max()
+
+    def visual(self, model_file=None):
+        if model_file:
+            self.load_model(model_file_name=model_file)
+
+        def cal_sod(pre, segment):
+            result = np.asarray(segment.copy(), dtype=np.float32)
+            for i in range(len(pre)):
+                result[segment == i] = pre[i]
+                pass
+            return result
+
+        self.model.eval()
+        with torch.no_grad():
+            for i, (images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph,
+                    pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(self.test_loader):
+                # Data
+                images = images.float().to(self.device)
+                nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
+                pixel_data_where = batched_pixel_graph.ndata["data_where"].to(self.device)
+                pixel_nodes_num_norm_sqrt = pixel_nodes_num_norm_sqrt.to(self.device)
+
+                # Run
+                logits, logits_sigmoid = self.model.forward(images, batched_graph,
+                                                            nodes_num_norm_sqrt, pixel_data_where,
+                                                            batched_pixel_graph, pixel_nodes_num_norm_sqrt)
+
+                # 可视化
+                labels = batched_graph.ndata["label"]
+                logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
+                cum_add = np.cumsum([0] + batched_graph.batch_num_nodes)
+                for one in range(len(segments)):
+                    tar_sod = cal_sod(labels[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
+                    pre_sod = cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
+
+                    Image.fromarray(np.asarray(tar_sod * 255, dtype=np.uint8)).show()
+                    Image.fromarray(np.asarray(pre_sod * 255, dtype=np.uint8)).show()
+                    targets[one].show()
+                    pass
+                pass
+            pass
+        pass
 
     def _lr(self, epoch):
         for lr in self.lr_s:
@@ -507,32 +583,33 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
+    数据增强、真正的测试
     """
-    # _data_root_path = 'D:\\data\\SOD\\DUTS'
-    # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
-    # _batch_size = 16
-    # _image_size = 320
-    # _sp_size = 4
-    # _epochs = 100
-    # _train_print_freq = 1
-    # _test_print_freq = 1
-    # _num_workers = 1
-    # _use_gpu = False
-    # _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
-    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
+    _data_root_path = 'D:\\data\\SOD\\DUTS'
+    _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
     _batch_size = 16
     _image_size = 320
     _sp_size = 4
     _epochs = 100
-    _train_print_freq = 100
-    _test_print_freq = 50
-    _num_workers = 8
-    _use_gpu = True
-    # _gpu_id = "0"
+    _train_print_freq = 1
+    _test_print_freq = 1
+    _num_workers = 1
+    _use_gpu = False
     _gpu_id = "1"
+
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
+    # _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
+    # _batch_size = 16
+    # _image_size = 320
+    # _sp_size = 4
+    # _epochs = 100
+    # _train_print_freq = 100
+    # _test_print_freq = 50
+    # _num_workers = 8
+    # _use_gpu = True
+    # _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
@@ -541,6 +618,7 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
+    runner.visual()
     runner.train(_epochs)
 
     pass
