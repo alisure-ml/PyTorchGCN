@@ -83,40 +83,40 @@ class DealSuperPixel(object):
     pass
 
 
-class RandomScaleCrop(object):
-    def __init__(self, base_size, crop_size, fill=0):
-        self.base_size = base_size
-        self.crop_size = crop_size
-        self.fill = fill
-
-    def __call__(self, sample):
-        img = sample['image']
-        mask = sample['label']
-        # random scale (short edge)
-        short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
-        w, h = img.size
-        if h > w:
-            ow = short_size
-            oh = int(1.0 * h * ow / w)
-        else:
-            oh = short_size
-            ow = int(1.0 * w * oh / h)
-        img = img.resize((ow, oh), Image.BILINEAR)
-        mask = mask.resize((ow, oh), Image.NEAREST)
-        # pad crop
-        if short_size < self.crop_size:
-            padh = self.crop_size - oh if oh < self.crop_size else 0
-            padw = self.crop_size - ow if ow < self.crop_size else 0
-            img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
-            mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=self.fill)
-        # random crop crop_size
-        w, h = img.size
-        x1 = random.randint(0, w - self.crop_size)
-        y1 = random.randint(0, h - self.crop_size)
-        img = img.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
-        mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
-
-        return {'image': img, 'label': mask}
+# class RandomScaleCrop(object):
+#     def __init__(self, base_size, crop_size, fill=0):
+#         self.base_size = base_size
+#         self.crop_size = crop_size
+#         self.fill = fill
+#
+#     def __call__(self, sample):
+#         img = sample['image']
+#         mask = sample['label']
+#         # random scale (short edge)
+#         short_size = random.randint(int(self.base_size * 0.5), int(self.base_size * 2.0))
+#         w, h = img.size
+#         if h > w:
+#             ow = short_size
+#             oh = int(1.0 * h * ow / w)
+#         else:
+#             oh = short_size
+#             ow = int(1.0 * w * oh / h)
+#         img = img.resize((ow, oh), Image.BILINEAR)
+#         mask = mask.resize((ow, oh), Image.NEAREST)
+#         # pad crop
+#         if short_size < self.crop_size:
+#             padh = self.crop_size - oh if oh < self.crop_size else 0
+#             padw = self.crop_size - ow if ow < self.crop_size else 0
+#             img = ImageOps.expand(img, border=(0, 0, padw, padh), fill=0)
+#             mask = ImageOps.expand(mask, border=(0, 0, padw, padh), fill=self.fill)
+#         # random crop crop_size
+#         w, h = img.size
+#         x1 = random.randint(0, w - self.crop_size)
+#         y1 = random.randint(0, h - self.crop_size)
+#         img = img.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+#         mask = mask.crop((x1, y1, x1 + self.crop_size, y1 + self.crop_size))
+#
+#         return {'image': img, 'label': mask}
 
 
 class MyDataset(Dataset):
@@ -339,7 +339,7 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path, batch_size=64, image_size=320, sp_size=4, train_print_freq=100,
+    def __init__(self, data_root_path, batch_size=64, image_size=320, sp_size=4, pool_ratio=2, train_print_freq=100,
                  test_print_freq=50, root_ckpt_dir="./ckpt2", num_workers=8, use_gpu=True, gpu_id="1"):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -347,10 +347,10 @@ class RunnerSPE(object):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path,
-                                       is_train=True, image_size=image_size, sp_size=sp_size)
-        self.test_dataset = MyDataset(data_root_path=data_root_path,
-                                      is_train=False, image_size=image_size, sp_size=sp_size)
+        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True,
+                                       image_size=image_size, sp_size=sp_size, pool_ratio=pool_ratio)
+        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False,
+                                      image_size=image_size, sp_size=sp_size, pool_ratio=pool_ratio)
 
         self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
                                        num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
@@ -359,10 +359,10 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+        # self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
+        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.BCELoss().to(self.device)
 
@@ -585,30 +585,30 @@ if __name__ == '__main__':
     """
     数据增强、真正的测试
     """
-    _data_root_path = 'D:\\data\\SOD\\DUTS'
-    _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
-    _batch_size = 16
-    _image_size = 320
-    _sp_size = 4
-    _epochs = 100
-    _train_print_freq = 1
-    _test_print_freq = 1
-    _num_workers = 1
-    _use_gpu = False
-    _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
-    # _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
+    # _data_root_path = 'D:\\data\\SOD\\DUTS'
+    # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
     # _batch_size = 16
     # _image_size = 320
     # _sp_size = 4
     # _epochs = 100
-    # _train_print_freq = 100
-    # _test_print_freq = 50
-    # _num_workers = 8
-    # _use_gpu = True
-    # _gpu_id = "0"
+    # _train_print_freq = 1
+    # _test_print_freq = 1
+    # _num_workers = 1
+    # _use_gpu = False
+    # _gpu_id = "1"
+
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
+    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
+    _batch_size = 8
+    _image_size = 320
+    _sp_size = 4
+    _epochs = 100
+    _train_print_freq = 100
+    _test_print_freq = 50
+    _num_workers = 8
+    _use_gpu = True
+    _gpu_id = "0"
     # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
@@ -618,7 +618,7 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.visual()
+    # runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD/GCNNet-100/epoch_48.pkl")
     runner.train(_epochs)
 
     pass
