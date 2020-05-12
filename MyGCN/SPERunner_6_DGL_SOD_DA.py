@@ -41,7 +41,7 @@ def gpu_setup(use_gpu, gpu_id):
 
 class DealSuperPixel(object):
 
-    def __init__(self, image_data, label_data, ds_image_size=224, super_pixel_size=14, slic_sigma=1, slic_max_iter=5):
+    def __init__(self, image_data, label_data, ds_image_size, super_pixel_size, slic_sigma=1, slic_max_iter=5):
         self.ds_image_size = ds_image_size
         self.super_pixel_num = (self.ds_image_size // super_pixel_size) ** 2
 
@@ -185,9 +185,11 @@ class MyDataset(Dataset):
                                             "DUTS-TR-Mask" if self.is_train else "DUTS-TE-Mask")
 
         # 数据增强
-        self.transform_train = transforms.Compose([RandomScaleCrop(self.image_size + 40, self.image_size),
-                                                   RandomHorizontalFlip(), RandomGaussianBlur()])
-        self.transform_test = transforms.Compose([FixedResize(self.image_size + 40)])
+        # self.transform_train = transforms.Compose([RandomScaleCrop(self.image_size + 40, self.image_size),
+        #                                            RandomHorizontalFlip(), RandomGaussianBlur()])
+        # self.transform_test = transforms.Compose([FixedResize(self.image_size + 40)])
+        self.transform_train = transforms.Compose([FixedResize(self.image_size), RandomHorizontalFlip()])
+        self.transform_test = transforms.Compose([FixedResize(self.image_size)])
 
         # 准备数据
         self.image_name_list, self.label_name_list = self.get_image_label_name()
@@ -374,9 +376,13 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
-        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146, 146])
-        self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], n_out=1)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146, 146])
+        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], n_out=1)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M"])
+        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128])
+        self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 256, 128], n_out=1)
         pass
 
     def forward(self, images, batched_graph, nodes_num_norm_sqrt,
@@ -645,30 +651,30 @@ if __name__ == '__main__':
     """
     真正的测试
     """
-    _data_root_path = 'D:\\data\\SOD\\DUTS'
-    _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
-    _batch_size = 8
-    _image_size = 320
-    _sp_size = 4
-    _epochs = 100
-    _train_print_freq = 1
-    _test_print_freq = 1
-    _num_workers = 1
-    _use_gpu = False
-    _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
-    # _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
+    # _data_root_path = 'D:\\data\\SOD\\DUTS'
+    # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
     # _batch_size = 8
     # _image_size = 320
     # _sp_size = 4
     # _epochs = 100
-    # _train_print_freq = 100
-    # _test_print_freq = 50
-    # _num_workers = 8
-    # _use_gpu = True
-    # _gpu_id = "0"
+    # _train_print_freq = 1
+    # _test_print_freq = 1
+    # _num_workers = 1
+    # _use_gpu = False
+    # _gpu_id = "1"
+
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
+    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD_DA/{}".format("GCNNet")
+    _batch_size = 8
+    _image_size = 360
+    _sp_size = 6
+    _epochs = 100
+    _train_print_freq = 100
+    _test_print_freq = 50
+    _num_workers = 8
+    _use_gpu = True
+    _gpu_id = "0"
     # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(

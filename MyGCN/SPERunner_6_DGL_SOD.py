@@ -549,30 +549,30 @@ if __name__ == '__main__':
     """
     数据增强、真正的测试
     """
-    _data_root_path = 'D:\\data\\SOD\\DUTS'
-    _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
-    _batch_size = 16
-    _image_size = 320
-    _sp_size = 4
-    _epochs = 100
-    _train_print_freq = 1
-    _test_print_freq = 1
-    _num_workers = 1
-    _use_gpu = False
-    _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
-    # _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
-    # _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
-    # _batch_size = 8
+    # _data_root_path = 'D:\\data\\SOD\\DUTS'
+    # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
+    # _batch_size = 16
     # _image_size = 320
     # _sp_size = 4
     # _epochs = 100
-    # _train_print_freq = 100
-    # _test_print_freq = 50
-    # _num_workers = 8
-    # _use_gpu = True
-    # _gpu_id = "0"
+    # _train_print_freq = 1
+    # _test_print_freq = 1
+    # _num_workers = 1
+    # _use_gpu = False
+    # _gpu_id = "1"
+
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
+    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD/{}".format("GCNNet")
+    _batch_size = 8
+    _image_size = 320
+    _sp_size = 4
+    _epochs = 100
+    _train_print_freq = 100
+    _test_print_freq = 50
+    _num_workers = 8
+    _use_gpu = True
+    _gpu_id = "0"
     # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
@@ -583,7 +583,7 @@ if __name__ == '__main__':
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     # runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD/GCNNet-100/epoch_48.pkl")
-    runner.visual()
-    # runner.train(_epochs)
+    # runner.visual()
+    runner.train(_epochs)
 
     pass
