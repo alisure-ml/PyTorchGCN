@@ -459,7 +459,7 @@ class RunnerSPE(object):
         score = (1 + 0.3) * _avg_prec * _avg_recall / (0.3 * _avg_prec + _avg_recall)
         return avg_loss, avg_mae, score.max()
 
-    def visual(self, model_file=None):
+    def visual(self, model_file=None, is_train=True):
         if model_file:
             self.load_model(model_file_name=model_file)
 
@@ -470,10 +470,11 @@ class RunnerSPE(object):
                 pass
             return result
 
+        loader = self.train_loader if is_train else self.test_loader
         self.model.eval()
         with torch.no_grad():
             for i, (images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph,
-                    pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(self.test_loader):
+                    pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(loader):
                 # Data
                 images = images.float().to(self.device)
                 nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
@@ -582,8 +583,8 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    # runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD/GCNNet-100/epoch_48.pkl")
+    runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD/GCNNet/epoch_65.pkl")
     # runner.visual()
-    runner.train(_epochs)
+    # runner.train(_epochs)
 
     pass
