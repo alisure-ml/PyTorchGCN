@@ -1,30 +1,14 @@
 import os
-import cv2
-import dgl
 import glob
-import time
 import torch
 import random
-import skimage
-import torchvision
 import numpy as np
 import torch.nn as nn
-from skimage import io
 import torch.optim as optim
-import matplotlib.pyplot as plt
-import torch.nn.functional as F
-from skimage import segmentation
 from alisuretool.Tools import Tools
-from layers.gat_layer import GATLayer
-from layers.gcn_layer import GCNLayer
-from torch.utils.data import DataLoader
-import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from PIL import Image, ImageOps, ImageFilter
-from layers.mlp_readout_layer import MLPReadout
 from torch.utils.data import Dataset, DataLoader
-from layers.gated_gcn_layer import GatedGCNLayer
-from layers.graphsage_layer import GraphSageLayer
 
 
 class FixedResize(object):
@@ -137,7 +121,8 @@ class MyDataset(Dataset):
         tra_img_name_list = glob.glob(os.path.join(self.data_image_path, '*.jpg'))
         tra_lbl_name_list = [os.path.join(self.data_label_path, '{}.png'.format(
             os.path.splitext(os.path.basename(img_path))[0])) for img_path in tra_img_name_list]
-        return tra_img_name_list[:12], tra_lbl_name_list[:12]
+        # return tra_img_name_list[:12], tra_lbl_name_list[:12]
+        return tra_img_name_list, tra_lbl_name_list
 
     def __len__(self):
         return len(self.image_name_list)
@@ -289,12 +274,27 @@ class Runner(object):
 
         pass
 
+    def load_model(self, model_file_name):
+        self.net.load_state_dict(torch.load(model_file_name), strict=False)
+        Tools.print('Load Model: {}'.format(model_file_name))
+        pass
+
     @staticmethod
     def _view_model_param(model):
         total_param = 0
         for param in model.parameters():
             total_param += np.prod(list(param.data.size()))
         return total_param
+
+    @staticmethod
+    def save_checkpoint(model, root_ckpt_dir, epoch):
+        torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
+        for file in glob.glob(root_ckpt_dir + '/*.pkl'):
+            if int(file.split('_')[-1].split('.')[0]) < epoch - 1:
+                os.remove(file)
+                pass
+            pass
+        pass
 
     def info(self):
         Tools.print("batch size={} lr={}".format(self.batch_size, self.lr))
@@ -389,6 +389,32 @@ class Runner(object):
         score = (1 + 0.3) * _avg_prec * _avg_recall / (0.3 * _avg_prec + _avg_recall)
         return avg_loss, avg_mae, score.max()
 
+    def visual(self, model_file=None):
+        if model_file:
+            self.load_model(model_file_name=model_file)
+            pass
+
+        self.net.eval()
+        with torch.no_grad():
+            for batch_idx, (inputs, targets, targets_small) in enumerate(self.test_loader):
+                inputs, targets = inputs.to(self.device), targets.to(self.device)
+                targets_small = targets_small.float().to(self.device)
+                logits, logits_sigmoid = self.net(inputs)
+                labels_val = targets_small.cpu().detach().numpy()
+                logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
+
+                for i in range(targets_small.size(0)):
+                    pre = np.asarray(logits_sigmoid_val[i] * 255, dtype=np.uint8)
+                    Image.fromarray(pre).show()
+
+                    lab = np.asarray(labels_val[i] * 255, dtype=np.uint8)
+                    Image.fromarray(lab).show()
+                    pass
+                pass
+            pass
+
+        pass
+
     @staticmethod
     def _eval_mae(y_pred, y):
         return np.abs(y_pred - y).mean()
@@ -411,15 +437,21 @@ if __name__ == '__main__':
     """
     """
 
-    # os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 1
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 1
 
-    _data_root_path = 'D:\\data\\SOD\\DUTS'
-    runner = Runner(data_root_path=_data_root_path, batch_size=4, lr=0.01,
-                    num_workers=2, train_print_freq=100, test_print_freq=50)
+    # _data_root_path = 'D:\\data\\SOD\\DUTS'
+    _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
+    _root_ckpt_dir = Tools.new_dir("./ckpt3/dgl/6_DGL_VGG16_SOD")
+    runner = Runner(data_root_path=_data_root_path, batch_size=16, lr=0.01,
+                    num_workers=4, train_print_freq=100, test_print_freq=50)
     runner.info()
+
+    # runner.visual(model_file="./ckpt3/dgl/6_DGL_VGG16_SOD/epoch_1.pkl")
+    runner.visual()
 
     for _epoch in range(runner.start_epoch, 100):
         epoch_loss, epoch_train_mae, epoch_train_score = runner.train(_epoch, change_lr=True)
+        runner.save_checkpoint(runner.net, _root_ckpt_dir, _epoch)
         epoch_test_loss, epoch_test_mae, epoch_test_score = runner.test()
         Tools.print('E:{:02d}, Train(mae-score-loss):{:.4f}/{:.4f}/{:.4f} Test(mae-score-loss):'
                     '{:.4f}/{:.4f}/{:.4f}'.format(_epoch, epoch_train_mae, epoch_train_score, epoch_loss,

@@ -339,23 +339,44 @@ class GCNNet1(nn.Module):
 
 class GCNNet2(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, n_out=1):
+    def __init__(self, in_dim, hidden_dims, skip_dim=128, n_out=1):
         super().__init__()
         self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        _in_dim = in_dim
         self.gcn_list = nn.ModuleList()
         for hidden_dim in hidden_dims:
-            self.gcn_list.append(GCNLayer(in_dim, hidden_dim, F.relu, 0.0, True, True, True))
-            in_dim = hidden_dim
+            self.gcn_list.append(GCNLayer(_in_dim, hidden_dim, F.relu, 0.0, True, True, True))
+            _in_dim = hidden_dim
             pass
-        self.readout = nn.Linear(in_dim, n_out, bias=False)
+
+        self.skip_connect_index = [0, (len(hidden_dims)+1)//2, len(hidden_dims)]
+        self.skip_connect_list = nn.ModuleList()
+        for hidden_dim in [in_dim, hidden_dims[self.skip_connect_index[1] - 1],
+                           hidden_dims[self.skip_connect_index[2] - 1]]:
+            self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
+            pass
+
+        self.readout = nn.Linear(len(self.skip_connect_list) * skip_dim, n_out, bias=False)
         pass
 
     def forward(self, graphs, nodes_feat, nodes_num_norm_sqrt):
         hidden_nodes_feat = self.embedding_h(nodes_feat)
+
+        gcn_hidden_nodes_feat = [hidden_nodes_feat]
         for gcn in self.gcn_list:
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+            gcn_hidden_nodes_feat.append(hidden_nodes_feat)
             pass
-        logits = self.readout(hidden_nodes_feat)
+
+        skip_connect = []
+        for sc, index in zip(self.skip_connect_list, self.skip_connect_index):
+            sc_feat = sc(gcn_hidden_nodes_feat[index])
+            skip_connect.append(sc_feat)
+            pass
+
+        out_feat = torch.cat(skip_connect, dim=1)
+        logits = self.readout(out_feat)
         logits = logits.view(-1)
         return logits, torch.sigmoid(logits)
 
@@ -372,7 +393,7 @@ class MyGCNNet(nn.Module):
 
         self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M"])
         self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
-        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 1024, 1024], n_out=1)
+        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 1024, 1024], skip_dim=128, n_out=1)
         pass
 
     def forward(self, images, batched_graph, nodes_num_norm_sqrt,
@@ -396,7 +417,7 @@ class MyGCNNet(nn.Module):
 class RunnerSPE(object):
 
     def __init__(self, data_root_path, batch_size=64, image_size=320, sp_size=4, pool_ratio=2, train_print_freq=100,
-                 test_print_freq=50, root_ckpt_dir="./ckpt2", num_workers=8, use_gpu=True, gpu_id="1"):
+                 test_print_freq=50, root_ckpt_dir="./ckpt2", num_workers=8, use_gpu=True, gpu_id="1", is_sgd=False):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
 
@@ -415,10 +436,14 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-        self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        if is_sgd:
+            self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
+            self.optimizer = torch.optim.SGD(self.model.parameters(),
+                                             lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        else:
+            self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
+            pass
 
         self.loss_class = nn.BCELoss().to(self.device)
 
@@ -642,10 +667,7 @@ if __name__ == '__main__':
     """
     真正的测试
     
-    GCNNet2 2402880 
-    2020-05-17 E:85, lr:0.0001, Train(mae-score-loss):0.1207/0.8441/0.2126 Test(mae-score-loss):0.1413/0.6409/0.2638
-    
-    GCNNet3 2402880 Load Model: ./ckpt3/dgl/6_DGL_SOD_DA/GCNNet-ImageNet/epoch_2.pkl
+    GCNNet3 2402880 Load Model: ./ckpt3/dgl/6_DGL_SOD_DA/GCNNet1/epoch_2.pkl
     2020-05-17 E:85, lr:0.0001, Train(mae-score-loss):0.0926/0.8833/0.1686 Test(mae-score-loss):0.1243/0.6672/0.2504
     """
     # _data_root_path = 'D:\\data\\SOD\\DUTS'
@@ -660,20 +682,20 @@ if __name__ == '__main__':
     # _use_gpu = False
     # _gpu_id = "1"
 
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
-    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD_DA/{}".format("GCNNet3")
+    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect/{}".format("GCNNet2")
     _batch_size = 8
     _image_size = 400
     _sp_size = 4
     _pool_ratio = 4
     _epochs = 100
+    _is_sgd = False
     _train_print_freq = 100
     _test_print_freq = 50
     _num_workers = 8
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
@@ -681,7 +703,7 @@ if __name__ == '__main__':
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, pool_ratio=_pool_ratio,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
-                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
+                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, is_sgd=_is_sgd)
     runner.load_model(model_file_name="./ckpt3/dgl/6_DGL_SOD_DA/GCNNet-ImageNet/epoch_2.pkl")
     # runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD_DA/GCNNet3/epoch_86.pkl")
     # runner.visual()
