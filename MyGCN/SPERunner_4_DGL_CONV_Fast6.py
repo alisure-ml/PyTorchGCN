@@ -670,7 +670,7 @@ if __name__ == '__main__':
     GraphSageNet 179035 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch: 142, Train: 0.9366/0.1883 Test: 0.8846/0.3609
     GatedGCNNet  191201 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch: 146, Train: 0.8738/0.3655 Test: 0.8477/0.4478
     GCN          168999 2Conv 2GCN1 4GCN2 4spsize 2020-05-07 Epoch:  76, Train: 0.9501/0.1402 Test: 0.8573/0.5432
-    GATNet       229328 2Conv 2GCN1 em 4GCN2 4spsize 
+    GATNet       229328 2Conv 2GCN1 em 4GCN2 4spsize 2020-05 Epoch:  94, Train: 0.9327/0.1891 Test: 0.8677/0.4506
     
     GCN          273917 3Conv 2GCN1 em 4GCN2 4spsize 2020-05-08 Epoch: 79, Train: 0.9746/0.0720 Test: 0.8787/0.5194
     GraphSageNet 278743 3Conv 2GCN1 em 4GCN2 4spsize 2020-05-07 Epoch: 51, Train: 0.9637/0.1064 Test: 0.8887/0.4253
