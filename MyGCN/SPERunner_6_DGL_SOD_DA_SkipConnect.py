@@ -667,8 +667,12 @@ if __name__ == '__main__':
     """
     真正的测试
     
-    GCNNet3 2402880 Load Model: ./ckpt3/dgl/6_DGL_SOD_DA/GCNNet1/epoch_2.pkl
-    2020-05-17 E:85, lr:0.0001, Train(mae-score-loss):0.0926/0.8833/0.1686 Test(mae-score-loss):0.1243/0.6672/0.2504
+    GCNNet1 2631616  SGD Load Model: ./ckpt3/dgl/6_DGL_SOD_DA/GCNNet1/epoch_2.pkl
+    
+    
+    GCNNet2 2631616 Adam Load Model: ./ckpt3/dgl/6_DGL_SOD_DA/GCNNet1/epoch_2.pkl
+    
+    
     """
     # _data_root_path = 'D:\\data\\SOD\\DUTS'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
