@@ -67,18 +67,19 @@ class VGG2(nn.Module):
     def _make_layers():
         layers = [
             ConvBlock(3, 64, ks=3, padding=1),  # 224
-            ConvBlock(64, 64, ks=3, padding=1),
             nn.MaxPool2d(kernel_size=2, stride=2),  # 112
             ConvBlock(64, 128, ks=3, padding=1),
             ConvBlock(128, 128, ks=3, padding=1),
             nn.MaxPool2d(kernel_size=2, stride=2),  # 56
 
             GCNBlock(128, 256, ks=1, padding=0),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 28
             GCNBlock(256, 256, ks=1, padding=0),
-            nn.AvgPool2d(kernel_size=7, stride=7),  # 8
+            nn.AvgPool2d(kernel_size=2, stride=2),  # 14
 
             GCNBlock(256, 512, ks=1, padding=0),
             GCNBlock(512, 512, ks=1, padding=0),
+            nn.MaxPool2d(kernel_size=2, stride=2),  # 7
             GCNBlock(512, 1024, ks=1, padding=0),
             GCNBlock(1024, 1024, ks=1, padding=0),
             nn.AdaptiveAvgPool2d(1)
@@ -145,7 +146,7 @@ class Runner(object):
                                              transforms.ToTensor(), normalize])
 
         _train_dir = os.path.join(self.root_path, "train")
-        _test_dir = os.path.join(self.root_path, "val")
+        _test_dir = os.path.join(self.root_path, "val_new")
 
         train_set = torchvision.datasets.ImageFolder(_train_dir, transform=transform_train)
         _train_loader = torch.utils.data.DataLoader(train_set, batch_size=self.batch_size, shuffle=True, num_workers=8)
@@ -243,13 +244,15 @@ class Runner(object):
 
 if __name__ == '__main__':
     """
+    34 46.61
     """
 
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"  # 1
 
-    _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
+    _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
+    # _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
 
-    runner = Runner(root_path=_data_root_path, batch_size=32, lr=0.01)
+    runner = Runner(root_path=_data_root_path, batch_size=64, lr=0.01)
     runner.info()
 
     for _epoch in range(runner.start_epoch, 100):
