@@ -49,7 +49,7 @@ class DealSuperPixel(object):
             image_data, (self.ds_image_size, self.ds_image_size))
 
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter)
+                                         sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
         pass
@@ -351,7 +351,15 @@ class RunnerSPE(object):
         pass
 
     def load_model(self, model_file_name):
-        self.model.load_state_dict(torch.load(model_file_name), strict=False)
+        ckpt = torch.load(model_file_name, map_location=torch.device('cuda:0'))
+
+        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
+        # for c in keys:
+        #     del ckpt[c]
+        #     Tools.print(c)
+        #     pass
+
+        self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
 
@@ -498,6 +506,7 @@ class RunnerSPE(object):
 if __name__ == '__main__':
     """
     https://pypi.tuna.tsinghua.edu.cn/packages/24/19/4804aea17cd136f1705a5e98a00618cb8f6ccc375ad8bfa437408e09d058/torch-1.4.0-cp36-cp36m-manylinux1_x86_64.whl
+    
     GCNNet 2166696 32 sgd 0.01 2020-05-11 Epoch:03,lr=0.0100,Train:0.1530-0.3666/4.2644 Test:0.1470-0.3580/4.3808
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
