@@ -507,7 +507,10 @@ if __name__ == '__main__':
     """
     https://pypi.tuna.tsinghua.edu.cn/packages/24/19/4804aea17cd136f1705a5e98a00618cb8f6ccc375ad8bfa437408e09d058/torch-1.4.0-cp36-cp36m-manylinux1_x86_64.whl
     
-    GCNNet 2166696 32 sgd 0.01 2020-05-11 Epoch:03,lr=0.0100,Train:0.1530-0.3666/4.2644 Test:0.1470-0.3580/4.3808
+    GCNNet  2166696 32 sgd 0.01 2020-05-11 Epoch:03,lr=0.0100,Train:0.1530-0.3666/4.2644 Test:0.1470-0.3580/4.3808
+    
+    Load Model: ./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet2/epoch_3.pkl
+    GCNNet3 4358696 36 sgd 0.01 2020-05-23 Epoch:09,lr=0.0001,Train:0.5551-0.7980/1.9078 Test:0.5512-0.7965/1.9085
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
