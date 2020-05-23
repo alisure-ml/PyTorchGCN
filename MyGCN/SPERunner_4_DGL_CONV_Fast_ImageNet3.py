@@ -95,7 +95,7 @@ class MyDataset(Dataset):
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
-        self.image_size_for_sp = self.image_size // 4
+        self.image_size_for_sp = self.image_size // 2
         self.data_root_path = data_root_path
 
         self.transform_train = transforms.Compose([transforms.Resize(256),
@@ -291,9 +291,13 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128, 128])
         # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 512, 1024], n_classes=1000)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M"])
-        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
-        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 1024, 1024], n_classes=1000)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M"])
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 1024, 1024], n_classes=1000)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256, 256])
+        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -319,7 +323,7 @@ class MyGCNNet(nn.Module):
 class RunnerSPE(object):
 
     def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50,
+                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50, is_sgd=True,
                  test_split="val", root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -339,11 +343,13 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        self.lr_s = [[0, 0.001], [3, 0.0001], [6, 0.00001]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-
-        # self.lr_s = [[0, 0.01], [3, 0.001], [6, 0.0001]]
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        if is_sgd:
+            self.lr_s = [[0, 0.01], [3, 0.001], [6, 0.0001]]
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0],
+                                             momentum=0.9, weight_decay=5e-4)
+        else:
+            self.lr_s = [[0, 0.001], [3, 0.00003], [6, 0.00001]]
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -351,7 +357,15 @@ class RunnerSPE(object):
         pass
 
     def load_model(self, model_file_name):
-        self.model.load_state_dict(torch.load(model_file_name), strict=False)
+        ckpt = torch.load(model_file_name, map_location=self.device)
+
+        keys = [c for c in ckpt if "model_gnn" in c]
+        for c in keys:
+            del ckpt[c]
+            Tools.print(c)
+            pass
+
+        self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
 
@@ -497,7 +511,7 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCNNet2 3439656 24 SGD 0.01 2020-05-21 16:19:36 Epoch:04,Train:0.4001-0.6647/2.7079 Test:0.4116-0.6819/2.6217
+    GCNNet 2166696 32 sgd 0.01 2020-05-11 Epoch:03,lr=0.0100,Train:0.1530-0.3666/4.2644 Test:0.1470-0.3580/4.3808
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -512,26 +526,26 @@ if __name__ == '__main__':
 
     _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet/{}".format("GCNNet2")
-    _batch_size = 24
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet3/{}".format("GCNNet1")
+    _batch_size = 16
     _image_size = 224
-    _sp_size = 4
-    _train_print_freq = 1000
-    _test_print_freq = 500
+    _sp_size = 5
+    _is_sgd = True
+    _train_print_freq = 10000
+    _test_print_freq = 1000
     _num_workers = 16
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, test_split="val",
-                       batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
+                       batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet/GCNNet2/epoch_4.pkl")
+    runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet/GCNNet2/epoch_1.pkl")
     runner.train(10)
 
     pass
