@@ -23,6 +23,7 @@ from layers.mlp_readout_layer import MLPReadout
 from torch.utils.data import Dataset, DataLoader
 from layers.gated_gcn_layer import GatedGCNLayer
 from layers.graphsage_layer import GraphSageLayer
+from torchvision.models import vgg13_bn, vgg16_bn
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -48,8 +49,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
+                                         sigma=slic_sigma, max_iter=slic_max_iter)
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
         pass
@@ -184,43 +187,11 @@ class MyDataset(Dataset):
     pass
 
 
-class ConvBlock(nn.Module):
-
-    def __init__(self, cin, cout, stride=1, padding=1, ks=3, has_relu=True, has_bn=True, bias=True):
-        super().__init__()
-        self.has_relu = has_relu
-        self.has_bn = has_bn
-
-        self.conv = nn.Conv2d(cin, cout, kernel_size=ks, stride=stride, padding=padding, bias=bias)
-        self.bn = nn.BatchNorm2d(cout)
-        self.relu = nn.ReLU(inplace=True)
-        pass
-
-    def forward(self, x):
-        out = self.conv(x)
-        if self.has_bn:
-            out = self.bn(out)
-        if self.has_relu:
-            out = self.relu(out)
-        return out
-
-    pass
-
-
 class CONVNet(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims):
+    def __init__(self, layer_num=14):  # 14, 20
         super().__init__()
-
-        layers = []
-        for index, hidden_dim in enumerate(hidden_dims):
-            if hidden_dim == "M":
-                layers.append(nn.MaxPool2d((2, 2)))
-            else:
-                layers.append(ConvBlock(in_dim, int(hidden_dim), 1, padding=1, ks=3, has_bn=True))
-                in_dim = int(hidden_dim)
-            pass
-        self.features = nn.Sequential(*layers)
+        self.features = vgg13_bn(pretrained=True).features[0: layer_num]
         pass
 
     def forward(self, x):
@@ -254,7 +225,7 @@ class GCNNet1(nn.Module):
 
 class GCNNet2(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, n_classes=200):
+    def __init__(self, in_dim, hidden_dims, n_classes=1000):
         super().__init__()
         self.embedding_h = nn.Linear(in_dim, in_dim)
         self.gcn_list = nn.ModuleList()
@@ -262,11 +233,10 @@ class GCNNet2(nn.Module):
             self.gcn_list.append(GCNLayer(in_dim, hidden_dim, F.relu, 0.0, True, True, True))
             in_dim = hidden_dim
             pass
-        self.readout_mlp = MLPReadout(hidden_dims[-1], n_classes, L=1)
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
-        # hidden_nodes_feat = nodes_feat
         hidden_nodes_feat = self.embedding_h(nodes_feat)
         for gcn in self.gcn_list:
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
@@ -283,17 +253,15 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M", "256", "256"])
-        # self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256, 256])
-        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024], n_classes=1000)
+        # GCNNet C2PC2P 3558464
+        # self.model_conv = CONVNet(layer_num=14)
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
 
-        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "64", "64", "M", "128", "128"])
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128, 128])
-        # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 256, 512, 1024], n_classes=1000)
-
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M", "256", "256"])
+        # GCNNet C2PC2PC2 4477504
+        self.model_conv = CONVNet(layer_num=20)
         self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256])
-        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 1024, 1024], n_classes=1000)
+        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -319,7 +287,7 @@ class MyGCNNet(nn.Module):
 class RunnerSPE(object):
 
     def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50,
+                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50, is_sgd=True,
                  test_split="val", root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -335,15 +303,17 @@ class RunnerSPE(object):
         self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
                                        num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
-                                      num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
+                                      num_workers=4, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
 
-        # self.lr_s = [[0, 0.001], [30, 0.00003], [60, 0.00001]]
-        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-
-        self.lr_s = [[0, 0.01], [3, 0.001], [6, 0.0001]]
-        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        if is_sgd:
+            self.lr_s = [[0, 0.01], [3, 0.001], [6, 0.0001]]
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
+                                             momentum=0.9, weight_decay=5e-4)
+        else:
+            self.lr_s = [[0, 0.001], [3, 0.0002], [6, 0.00004]]
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -351,7 +321,7 @@ class RunnerSPE(object):
         pass
 
     def load_model(self, model_file_name):
-        ckpt = torch.load(model_file_name, map_location=torch.device('cuda:0'))
+        ckpt = torch.load(model_file_name, map_location=self.device)
 
         # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
         # for c in keys:
@@ -363,19 +333,21 @@ class RunnerSPE(object):
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
 
-    def train(self, epochs):
-        for epoch in range(0, epochs):
+    def train(self, epochs, start_epoch=0):
+        for epoch in range(start_epoch, epochs):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
 
             self._lr(epoch)
+            Tools.print('Epoch:{:02d},lr={:.4f}'.format(epoch, self.optimizer.param_groups[0]['lr']))
+
             epoch_loss, epoch_train_acc, epoch_train_acc_k = self._train_epoch()
             self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
             epoch_test_loss, epoch_test_acc, epoch_test_acc_k = self.test()
 
-            Tools.print('Epoch:{:02d},lr={:.4f},Train:{:.4f}-{:.4f}/{:.4f} Test:{:.4f}-{:.4f}/{:.4f}'.format(
-                epoch, self.optimizer.param_groups[0]['lr'],
-                epoch_train_acc, epoch_train_acc_k, epoch_loss, epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
+            Tools.print('Epoch:{:02d}, Train:{:.4f}-{:.4f}/{:.4f} Test:{:.4f}-{:.4f}/{:.4f}'.format(
+                epoch, epoch_train_acc, epoch_train_acc_k,
+                epoch_loss, epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
             pass
         pass
 
@@ -505,45 +477,34 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    https://pypi.tuna.tsinghua.edu.cn/packages/24/19/4804aea17cd136f1705a5e98a00618cb8f6ccc375ad8bfa437408e09d058/torch-1.4.0-cp36-cp36m-manylinux1_x86_64.whl
-    
     GCNNet  2166696 32 sgd 0.01 2020-05-11 Epoch:03,lr=0.0100,Train:0.1530-0.3666/4.2644 Test:0.1470-0.3580/4.3808
     
     Load Model: ./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet2/epoch_3.pkl
     GCNNet3 4358696 36 sgd 0.01 2020-05-23 Epoch:09,lr=0.0001,Train:0.5551-0.7980/1.9078 Test:0.5512-0.7965/1.9085
     """
-    # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
-    # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
-    # _batch_size = 2
-    # _image_size = 224
-    # _sp_size = 9
-    # _train_print_freq = 1
-    # _test_print_freq = 1
-    # _num_workers = 1
-    # _use_gpu = False
-    # _gpu_id = "1"
-
-    # _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
-    _data_root_path = "/media/test/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt3/dgl/4_DGL_CONV-ImageNet2/{}".format("GCNNet3")
-    _batch_size = 36
+    _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
+    # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
+    # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet2/{}".format("GCNNet-C2PC2PC2")
+    _batch_size = 16
     _image_size = 224
-    _sp_size = 4
-    _train_print_freq = 1000
-    _test_print_freq = 50
-    _num_workers = 16
+    _is_sgd = False
+    _sp_size = 3
+    _train_print_freq = 3000
+    _test_print_freq = 1000
+    _num_workers = 12
     _use_gpu = True
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, test_split="val_new",
-                       batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
+    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, test_split="val",
+                       batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet2/epoch_3.pkl")
-    runner.train(10)
+    # runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet4/epoch_3.pkl")
+    runner.train(10, start_epoch=0)
 
     pass

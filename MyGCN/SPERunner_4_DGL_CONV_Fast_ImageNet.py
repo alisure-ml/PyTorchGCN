@@ -48,6 +48,8 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
                                          sigma=slic_sigma, max_iter=slic_max_iter)
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
@@ -319,7 +321,7 @@ class MyGCNNet(nn.Module):
 class RunnerSPE(object):
 
     def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50,
+                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50, is_sgd=True,
                  test_split="val", root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -339,11 +341,13 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        self.lr_s = [[0, 0.001], [3, 0.0001], [6, 0.00001]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-
-        # self.lr_s = [[0, 0.01], [3, 0.001], [6, 0.0001]]
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
+        if is_sgd:
+            self.lr_s = [[0, 0.01], [3, 0.001], [6, 0.0001]]
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
+                                             momentum=0.9, weight_decay=5e-4)
+        else:
+            self.lr_s = [[0, 0.001], [3, 0.0001], [6, 0.00001]]
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -351,23 +355,33 @@ class RunnerSPE(object):
         pass
 
     def load_model(self, model_file_name):
-        self.model.load_state_dict(torch.load(model_file_name), strict=False)
+        ckpt = torch.load(model_file_name, map_location=self.device)
+
+        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
+        # for c in keys:
+        #     del ckpt[c]
+        #     Tools.print(c)
+        #     pass
+
+        self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
 
-    def train(self, epochs):
-        for epoch in range(0, epochs):
+    def train(self, epochs, start_epoch=0):
+        for epoch in range(start_epoch, epochs):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
 
             self._lr(epoch)
+            Tools.print('Epoch:{:02d},lr={:.4f}'.format(epoch, self.optimizer.param_groups[0]['lr']))
+
             epoch_loss, epoch_train_acc, epoch_train_acc_k = self._train_epoch()
             self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
             epoch_test_loss, epoch_test_acc, epoch_test_acc_k = self.test()
 
-            Tools.print('Epoch:{:02d},lr={:.4f},Train:{:.4f}-{:.4f}/{:.4f} Test:{:.4f}-{:.4f}/{:.4f}'.format(
-                epoch, self.optimizer.param_groups[0]['lr'],
-                epoch_train_acc, epoch_train_acc_k, epoch_loss, epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
+            Tools.print('Epoch:{:02d}, Train:{:.4f}-{:.4f}/{:.4f} Test:{:.4f}-{:.4f}/{:.4f}'.format(
+                epoch, epoch_train_acc, epoch_train_acc_k,
+                epoch_loss, epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
             pass
         pass
 
@@ -497,7 +511,7 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCNNet2 3439656 24 SGD 0.01 2020-05-21 16:19:36 Epoch:04,Train:0.4001-0.6647/2.7079 Test:0.4116-0.6819/2.6217
+    GCNNet2 3439656 24 Adam 2020-05-28 18:28:50 Epoch:07,lr=0.0000,Train:0.5574-0.7947/1.8875 Test:0.5402-0.7826/2.0236
     """
     # _data_root_path = 'D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -517,8 +531,8 @@ if __name__ == '__main__':
     _batch_size = 24
     _image_size = 224
     _sp_size = 4
-    _train_print_freq = 1000
-    _test_print_freq = 500
+    _train_print_freq = 3000
+    _test_print_freq = 1000
     _num_workers = 16
     _use_gpu = True
     # _gpu_id = "0"
@@ -531,7 +545,7 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet/GCNNet2/epoch_4.pkl")
-    runner.train(10)
+    runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet/GCNNet2/epoch_5.pkl")
+    runner.train(10, start_epoch=6)
 
     pass
