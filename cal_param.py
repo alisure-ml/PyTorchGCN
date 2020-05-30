@@ -1,6 +1,6 @@
+import torch
 import numpy as np
 import torch.nn as nn
-import torch
 
 
 class Net(nn.Module):
@@ -10,18 +10,345 @@ class Net(nn.Module):
         bias = True
 
         layers = []
-        layers.append(nn.Conv3d(10, 20, kernel_size=3, stride=1, padding=1, bias=bias))
-        layers.append(nn.Conv3d(30, 30, kernel_size=3, stride=1, padding=1, bias=bias))
-        layers.append(nn.Conv3d(30, 30, kernel_size=3, stride=1, padding=1, bias=bias))
-        layers.append(nn.Conv3d(30, 30, kernel_size=3, stride=1, padding=1, bias=bias))
-        layers.append(nn.Conv3d(30, 30, kernel_size=3, stride=1, padding=1, bias=bias))
+        layers.append(nn.Conv3d(3, 64, kernel_size=3, bias=bias))
+
+
+        layers.append(nn.Conv3d(64, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, groups=128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, groups=128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, groups=128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, groups=128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, groups=128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(128, 128, groups=128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=1, bias=bias))
+
+
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(256, 256, groups=256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=1, bias=bias))
+
+
+        layers.append(nn.Conv3d(256, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+        layers.append(nn.Conv3d(512, 512, groups=512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=1, bias=bias))
+
+
+        layers.append(nn.Linear(512, 512, bias=bias))
+        layers.append(nn.Linear(512, 256, bias=bias))
+        layers.append(nn.Linear(256, 3, bias=bias))
 
         self.features = nn.Sequential(*layers)
         pass
 
-    def forward(self, x):
-        e = self.features(x)
-        return e
+    pass
+
+
+class Net2(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        bias = True
+
+        layers = []
+        layers.append(nn.Conv3d(3, 64, kernel_size=3, bias=bias))
+
+
+        layers.append(nn.Conv3d(64, 128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(128, 128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(128, 128, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(128, 128, kernel_size=3, bias=bias))
+
+
+        layers.append(nn.Conv3d(128, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+
+
+        layers.append(nn.Conv3d(256, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+
+        layers.append(nn.Linear(512, 512, bias=bias))
+        layers.append(nn.Linear(512, 256, bias=bias))
+        layers.append(nn.Linear(256, 3, bias=bias))
+
+        self.features = nn.Sequential(*layers)
+        pass
+
+    pass
+
+
+class Net3(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        bias = True
+
+        layers = []
+        layers.append(nn.Conv3d(3, 64, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(64, 128, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(128, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(256, 256, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(256, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+        layers.append(nn.Conv3d(512, 512, kernel_size=3, bias=bias))
+
+        layers.append(nn.Linear(512, 512, bias=bias))
+        layers.append(nn.Linear(512, 256, bias=bias))
+        layers.append(nn.Linear(256, 3, bias=bias))
+
+        self.features = nn.Sequential(*layers)
+        pass
 
     pass
 
@@ -34,7 +361,12 @@ def view_model_param(model):
 
 
 if __name__ == '__main__':
-    model = Net().to(torch.device("cpu"))
+    """
+    resnet:281548163
+    vGG：59903747
+    light:22127747
+    """
+    model = Net3().to(torch.device("cpu"))
     num = view_model_param(model)
     print(num)
     pass

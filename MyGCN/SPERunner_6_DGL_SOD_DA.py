@@ -415,7 +415,7 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        # self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0003], [75, 0.0001]]
+        # self.lr_s = [[0, 0.001], [50, 0.0003], [75, 0.0001]]
         # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
         self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)

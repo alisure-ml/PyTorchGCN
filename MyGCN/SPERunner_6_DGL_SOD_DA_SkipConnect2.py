@@ -214,7 +214,7 @@ class MyDataset(Dataset):
         graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_small_data)
 
         # 返回
-        return graph, pixel_graph, img_data, label, segment
+        return graph, pixel_graph, img_data, label_small_data, segment
 
     def get_sp_info(self, image, label):
         # Super Pixel
@@ -339,7 +339,7 @@ class GCNNet1(nn.Module):
 
 class GCNNet2(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, skip_dim=128, n_out=1):
+    def __init__(self, in_dim, hidden_dims, skip_which, skip_dim=128, n_out=1):
         super().__init__()
         self.embedding_h = nn.Linear(in_dim, in_dim)
 
@@ -350,10 +350,152 @@ class GCNNet2(nn.Module):
             _in_dim = hidden_dim
             pass
 
-        self.skip_connect_index = [0, (len(hidden_dims)+1)//2, len(hidden_dims)]
+        sk_hidden_dims = [in_dim] + [hidden_dims[which-1] for which in skip_which]
+        self.skip_connect_index = [0] + skip_which
         self.skip_connect_list = nn.ModuleList()
-        for hidden_dim in [in_dim, hidden_dims[self.skip_connect_index[1] - 1],
-                           hidden_dims[self.skip_connect_index[2] - 1]]:
+        for hidden_dim in sk_hidden_dims:
+            self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
+            pass
+
+        self.readout = nn.Linear(len(self.skip_connect_list) * skip_dim, n_out, bias=False)
+        pass
+
+    def forward(self, graphs, nodes_feat, nodes_num_norm_sqrt):
+        hidden_nodes_feat = self.embedding_h(nodes_feat)
+
+        gcn_hidden_nodes_feat = [hidden_nodes_feat]
+        for gcn in self.gcn_list:
+            hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+            gcn_hidden_nodes_feat.append(hidden_nodes_feat)
+            pass
+
+        skip_connect = []
+        for sc, index in zip(self.skip_connect_list, self.skip_connect_index):
+            sc_feat = sc(gcn_hidden_nodes_feat[index])
+            skip_connect.append(sc_feat)
+            pass
+
+        out_feat = torch.cat(skip_connect, dim=1)
+        logits = self.readout(out_feat)
+        logits = logits.view(-1)
+        return logits, torch.sigmoid(logits)
+
+    pass
+
+
+class GraphSageNet1(nn.Module):
+
+    def __init__(self, in_dim, hidden_dims):
+        super().__init__()
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims:
+            self.gcn_list.append(GraphSageLayer(in_dim, hidden_dim, F.relu, 0.0, "meanpool", True))
+            in_dim = hidden_dim
+            pass
+        pass
+
+    def forward(self, graphs, nodes_feat, nodes_num_norm_sqrt):
+        hidden_nodes_feat = nodes_feat
+        for gcn in self.gcn_list:
+            hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+            pass
+        graphs.ndata['h'] = hidden_nodes_feat
+        hg = dgl.mean_nodes(graphs, 'h')
+        return hg
+
+    pass
+
+
+class GraphSageNet2(nn.Module):
+
+    def __init__(self, in_dim, hidden_dims, skip_which, skip_dim=128, n_out=1):
+        super().__init__()
+        self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        _in_dim = in_dim
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims:
+            self.gcn_list.append(GraphSageLayer(_in_dim, hidden_dim, F.relu, 0.0, "meanpool", True))
+            _in_dim = hidden_dim
+            pass
+
+        sk_hidden_dims = [in_dim] + [hidden_dims[which-1] for which in skip_which]
+        self.skip_connect_index = [0] + skip_which
+        self.skip_connect_list = nn.ModuleList()
+        for hidden_dim in sk_hidden_dims:
+            self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
+            pass
+
+        self.readout = nn.Linear(len(self.skip_connect_list) * skip_dim, n_out, bias=False)
+        pass
+
+    def forward(self, graphs, nodes_feat, nodes_num_norm_sqrt):
+        hidden_nodes_feat = self.embedding_h(nodes_feat)
+
+        gcn_hidden_nodes_feat = [hidden_nodes_feat]
+        for gcn in self.gcn_list:
+            hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+            gcn_hidden_nodes_feat.append(hidden_nodes_feat)
+            pass
+
+        skip_connect = []
+        for sc, index in zip(self.skip_connect_list, self.skip_connect_index):
+            sc_feat = sc(gcn_hidden_nodes_feat[index])
+            skip_connect.append(sc_feat)
+            pass
+
+        out_feat = torch.cat(skip_connect, dim=1)
+        logits = self.readout(out_feat)
+        logits = logits.view(-1)
+        return logits, torch.sigmoid(logits)
+
+    pass
+
+
+class GATNet1(nn.Module):
+
+    def __init__(self, in_dim=64, hidden_dims=[19, 19]):
+        super().__init__()
+        self.n_heads = 8
+        self.embedding_h = nn.Linear(in_dim, hidden_dims[0] * self.n_heads)
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims[:-1]:
+            self.gcn_list.append(GATLayer(hidden_dim * self.n_heads, hidden_dim, self.n_heads, 0.0, True, True, True))
+            pass
+        self.gcn_list.append(GATLayer(hidden_dims[-2] * self.n_heads,
+                                      hidden_dims[-1] * self.n_heads, 1, 0.0, True, True, True))
+        pass
+
+    def forward(self, graphs, nodes_feat, nodes_num_norm_sqrt):
+        h = self.embedding_h(nodes_feat)
+        for conv in self.gcn_list:
+            h = conv(graphs, h, nodes_num_norm_sqrt)
+        graphs.ndata['h'] = h
+        hg = dgl.mean_nodes(graphs, 'h')
+        return hg
+
+    pass
+
+
+class GATNet2(nn.Module):
+
+    def __init__(self, in_dim, hidden_dims, skip_which, skip_dim=128, n_out=1):
+        super().__init__()
+        self.n_heads = 8
+        self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        _in_dim = in_dim
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims[:-1]:
+            self.gcn_list.append(GATLayer(_in_dim, hidden_dim, self.n_heads, 0.0, True, True, True))
+            _in_dim = hidden_dim * self.n_heads
+            pass
+        self.gcn_list.append(GATLayer(_in_dim, hidden_dims[-1]*self.n_heads, 1, 0.0, True, True, True))
+
+        sk_hidden_dims = [in_dim] + [hidden_dims[which-1] * self.n_heads for which in skip_which]
+        self.skip_connect_index = [0] + skip_which
+        self.skip_connect_list = nn.ModuleList()
+        for hidden_dim in sk_hidden_dims:
             self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
             pass
 
@@ -388,12 +530,30 @@ class MyGCNNet(nn.Module):
     def __init__(self):
         super().__init__()
         # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[146, 146])
-        # self.model_gnn2 = GCNNet2(in_dim=146, hidden_dims=[146, 146, 146, 146], n_out=1)
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024],
+        #                           skip_which=[2, 4, 6], skip_dim=128, n_out=1)
 
-        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128", "M"])
-        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
-        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[512, 512, 1024, 1024], skip_dim=128, n_out=1)
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024],
+        #                           skip_which=[2, 4, 6], skip_dim=128, n_out=1)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 256, 512, 512, 512, 1024, 1024, 1024],
+        #                           skip_which=[3, 6, 9], skip_dim=128, n_out=1)
+
+        self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
+        self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024],
+                                        skip_which=[2, 4, 6], skip_dim=128, n_out=1)
+
+        # self.model_conv = CONVNet(in_dim=3, hidden_dims=["64", "64", "M", "128", "128"])
+        # self.model_gnn1 = GATNet1(in_dim=128, hidden_dims=[256 // 8, 256 // 8])
+        # self.model_gnn2 = GATNet2(in_dim=256, hidden_dims=[256 // 8, 256 // 8, 512 // 8,
+        #                                                    512 // 8, 1024 // 8, 1024 // 8],
+        #                           skip_which=[2, 4, 6], skip_dim=128, n_out=1)
         pass
 
     def forward(self, images, batched_graph, nodes_num_norm_sqrt,
@@ -416,8 +576,9 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path, batch_size=64, image_size=320, sp_size=4, pool_ratio=2, train_print_freq=100,
-                 test_print_freq=50, root_ckpt_dir="./ckpt2", num_workers=8, use_gpu=True, gpu_id="1", is_sgd=False):
+    def __init__(self, data_root_path, batch_size=64, image_size=320, sp_size=4,
+                 pool_ratio=2, train_print_freq=100, test_print_freq=100, root_ckpt_dir="./ckpt2",
+                 num_workers=8, use_gpu=True, gpu_id="1", is_sgd=False, set_diff_lr=False):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
 
@@ -435,23 +596,55 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-
-        if is_sgd:
-            self.lr_s = [[0, 0.01], [50, 0.001], [80, 0.0001]]
-            self.optimizer = torch.optim.SGD(self.model.parameters(),
-                                             lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
-        else:
-            self.lr_s = [[0, 0.001], [50, 0.0003], [75, 0.0001]]
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][0], weight_decay=0.0)
-            pass
+        self.lr_s, self.optimizer = self._set_optimizer(is_sgd, set_diff_lr)
 
         self.loss_class = nn.BCELoss().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
         pass
 
-    def load_model(self, model_file_name):
-        self.model.load_state_dict(torch.load(model_file_name), strict=False)
+    def _set_optimizer(self, is_sgd, set_diff_lr):
+        if set_diff_lr:
+            all_params = self.model.parameters()
+            conv_params = self.model.model_conv.parameters()
+            gnn1_params = self.model.model_gnn1.parameters()
+            base_params = filter(lambda p: id(p) not in list(map(id, conv_params)
+                                                             ) + list(map(id, gnn1_params)), all_params)
+            params = [{'params': base_params}, {'params': conv_params}, {'params': gnn1_params}]
+        else:
+            params = self.model.parameters()
+            pass
+
+        if is_sgd:
+            lr_s = [[0, [0.01]], [15, [0.001]], [25, [0.0001]]]
+            if set_diff_lr:
+                lr_s = [[0, [0.01, 0.0001, 0.001]], [15, [0.001, 0.0001, 0.0002]], [25, [0.0001, 0.0001, 0.0001]]]
+        else:
+            lr_s = [[0, [0.001]], [20, [0.0001]]]
+            if set_diff_lr:
+                lr_s = [[0, [0.001, 0.0005, 0.001]], [20, [0.0001, 0.0001, 0.0001]]]
+            pass
+
+        if is_sgd:
+            optimizer = torch.optim.SGD(params, lr=lr_s[0][1][0], momentum=0.9, weight_decay=5e-4)
+        else:
+            optimizer = torch.optim.Adam(params, lr=lr_s[0][1][0], weight_decay=0.0)
+            pass
+
+        return lr_s, optimizer
+
+    def load_model(self, model_file_name, ignore=None):
+        ckpt = torch.load(model_file_name, map_location=self.device)
+
+        if ignore:
+            keys = [c for c in ckpt for ig in ignore if ig in c]
+            for c in keys:
+                del ckpt[c]
+                Tools.print("Remove {}".format(c))
+                pass
+            pass
+
+        self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
 
@@ -461,24 +654,38 @@ class RunnerSPE(object):
             Tools.print("Start Epoch {}".format(epoch))
 
             self._lr(epoch)
-            epoch_loss, epoch_train_mae, epoch_train_score = self._train_epoch()
-            self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
-            epoch_test_loss, epoch_test_mae, epoch_test_score = self.test()
+            for param_group in self.optimizer.param_groups:
+                Tools.print('E:{:2d}, lr:{:.4f}'.format(epoch, param_group['lr']))
 
-            Tools.print('E:{:02d}, lr:{:.4f}, Train(mae-score-loss):{:.4f}/{:.4f}/{:.4f} Test(mae-score-loss):'
-                        '{:.4f}/{:.4f}/{:.4f}'.format(epoch, self.optimizer.param_groups[0]['lr'],
-                                                      epoch_train_mae, epoch_train_score, epoch_loss,
-                                                      epoch_test_mae, epoch_test_score, epoch_test_loss))
+            train_loss, train_mae, train_score, train_mae2, train_score2, train_mae3, train_score3 = self._train_epoch()
+            self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
+            test_loss, test_mae, test_score, test_mae2, test_score2, test_mae3, test_score3 = self.test()
+
+            Tools.print('E:{:2d}, Train mae-score={:.4f}/{:.4f} '
+                        'final-mse-score={:.4f}/{:.4f}-{:.4f}/{:.4f} loss={:.4f}'.format(
+                epoch, train_mae, train_score, train_mae2, train_score2, train_mae3, train_score3, train_loss))
+            Tools.print('E:{:2d}, Test  mae-score={:.4f}/{:.4f} '
+                        'final-mse-score={:.4f}/{:.4f}-{:.4f}/{:.4f} loss={:.4f}'.format(
+                epoch, test_mae, test_score, test_mae2, test_score2, test_mae3, test_score3, test_loss))
             pass
         pass
 
-    def _train_epoch(self):
+    def _train_epoch(self, is_print_result=False):
         self.model.train()
         th_num = 100
+
+        # 统计
         epoch_loss, nb_data = 0, 0
         epoch_mae = 0.0
         epoch_prec = np.zeros(shape=(th_num,)) + 1e-6
         epoch_recall = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_mae2 = 0.0
+        epoch_prec2 = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_recall2 = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_mae3 = 0.0
+        epoch_prec3 = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_recall3 = np.zeros(shape=(th_num,)) + 1e-6
+
         for i, (images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph,
                 pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(self.train_loader):
             # Data
@@ -500,41 +707,88 @@ class RunnerSPE(object):
             self.optimizer.step()
 
             # Stat
-            nb_data += labels.size(0)
+            nb_data += images.size(0)
             epoch_loss += loss.detach().item()
 
+            # cal 1
             mae = self._eval_mae(logits_sigmoid_val, labels_val)
             prec, recall = self._eval_pr(logits_sigmoid_val, labels_val, th_num)
-
             epoch_mae += mae
             epoch_prec += prec
             epoch_recall += recall
 
+            # cal 2
+            cum_add = np.cumsum([0] + batched_graph.batch_num_nodes)
+            for one in range(len(segments)):
+                tar_sod = self._cal_sod(labels[cum_add[one]: cum_add[one + 1]].tolist(), segments[one])
+                pre_sod = self._cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one + 1]].tolist(), segments[one])
+
+                mae2 = self._eval_mae(pre_sod, tar_sod)
+                prec2, recall2 = self._eval_pr(pre_sod, tar_sod, th_num)
+                epoch_mae2 += mae2
+                epoch_prec2 += prec2
+                epoch_recall2 += recall2
+
+                mae3 = self._eval_mae(pre_sod, targets[one])
+                prec3, recall3 = self._eval_pr(pre_sod, targets[one], th_num)
+                epoch_mae3 += mae3
+                epoch_prec3 += prec3
+                epoch_recall3 += recall3
+                pass
+
             # Print
             if i % self.train_print_freq == 0:
-                Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}/{:4f}".format(
-                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_mae/(i+1), mae))
+                Tools.print("{:4d}-{:4d} loss={:.4f}/{:.4f} mse={:.4f}/{:.4f} final-mse={:.4f}-{:.4f}".format(
+                    i, len(self.train_loader), epoch_loss / (i + 1), loss.detach().item(),
+                    mae, epoch_mae / (i + 1), epoch_mae2 / nb_data, epoch_mae3 / nb_data))
                 pass
             pass
 
         # 结果
         avg_loss, avg_mae = epoch_loss / len(self.train_loader), epoch_mae / len(self.train_loader)
-        _avg_prec, _avg_recall = epoch_prec / len(self.train_loader), epoch_recall / len(self.train_loader)
-        score = (1 + 0.3) * _avg_prec * _avg_recall / (0.3 * _avg_prec + _avg_recall)
-        return avg_loss, avg_mae, score.max()
+        avg_prec, avg_recall = epoch_prec / len(self.train_loader), epoch_recall / len(self.train_loader)
+        score = (1 + 0.3) * avg_prec * avg_recall / (0.3 * avg_prec + avg_recall)
 
-    def test(self):
+        # 结果2
+        avg_mae2, avg_prec2, avg_recall2 = epoch_mae2/nb_data, epoch_prec2/nb_data, epoch_recall2/nb_data
+        score2 = (1 + 0.3) * avg_prec2 * avg_recall2 / (0.3 * avg_prec2 + avg_recall2)
+
+        # 结果3
+        avg_mae3, avg_prec3, avg_recall3 = epoch_mae3/nb_data, epoch_prec3/nb_data, epoch_recall3/nb_data
+        score3 = (1 + 0.3) * avg_prec3 * avg_recall3 / (0.3 * avg_prec3 + avg_recall3)
+
+        if is_print_result:
+            Tools.print('Train mae-score={:.4f}/{:.4f} final-mse-score={:.4f}/{:.4f}-{:.4f}/{:.4f} loss={:.4f}'.format(
+                avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max(), avg_loss))
+            pass
+
+        return avg_loss, avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max()
+
+    def test(self, model_file=None, is_print_result=False, is_train_loader=False):
+        if model_file:
+            self.load_model(model_file_name=model_file)
+
         self.model.eval()
 
         Tools.print()
         th_num = 100
+
+        # 统计
         epoch_test_loss, nb_data = 0, 0
         epoch_test_mae = 0.0
         epoch_test_prec = np.zeros(shape=(th_num,)) + 1e-6
         epoch_test_recall = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_test_mae2 = 0.0
+        epoch_test_prec2 = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_test_recall2 = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_test_mae3 = 0.0
+        epoch_test_prec3 = np.zeros(shape=(th_num,)) + 1e-6
+        epoch_test_recall3 = np.zeros(shape=(th_num,)) + 1e-6
+
+        loader = self.train_loader if is_train_loader else self.test_loader
         with torch.no_grad():
             for i, (images, batched_graph, nodes_num_norm_sqrt, batched_pixel_graph,
-                    pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(self.test_loader):
+                    pixel_nodes_num_norm_sqrt, targets, segments) in enumerate(loader):
                 # Data
                 images = images.float().to(self.device)
                 labels = batched_graph.ndata["label"].to(self.device)
@@ -551,41 +805,66 @@ class RunnerSPE(object):
                 logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
 
                 # Stat
-                nb_data += labels.size(0)
+                nb_data += images.size(0)
                 epoch_test_loss += loss.detach().item()
 
+                # cal 1
                 mae = self._eval_mae(logits_sigmoid_val, labels_val)
                 prec, recall = self._eval_pr(logits_sigmoid_val, labels_val, th_num)
-
                 epoch_test_mae += mae
                 epoch_test_prec += prec
                 epoch_test_recall += recall
 
+                # cal 2
+                cum_add = np.cumsum([0] + batched_graph.batch_num_nodes)
+                for one in range(len(segments)):
+                    tar_sod = self._cal_sod(labels[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
+                    pre_sod = self._cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
+
+                    mae2 = self._eval_mae(pre_sod, tar_sod)
+                    prec2, recall2 = self._eval_pr(pre_sod, tar_sod, th_num)
+                    epoch_test_mae2 += mae2
+                    epoch_test_prec2 += prec2
+                    epoch_test_recall2 += recall2
+
+                    mae3 = self._eval_mae(pre_sod, targets[one])
+                    prec3, recall3 = self._eval_pr(pre_sod, targets[one], th_num)
+                    epoch_test_mae3 += mae3
+                    epoch_test_prec3 += prec3
+                    epoch_test_recall3 += recall3
+                    pass
+
                 # Print
                 if i % self.test_print_freq == 0:
-                    Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}/{:4f}".format(
-                        i, len(self.test_loader), epoch_test_loss/(i+1),
-                        loss.detach().item(), epoch_test_mae/(i+1), mae))
+                    Tools.print("{:4d}-{:4d} loss={:.4f}/{:.4f} mse={:.4f}/{:.4f} final-mse={:.4f}-{:.4f}".format(
+                        i, len(loader), epoch_test_loss/(i+1), loss.detach().item(),
+                        mae, epoch_test_mae/(i+1), epoch_test_mae2/nb_data, epoch_test_mae3/nb_data))
                     pass
                 pass
             pass
 
-        # 结果
-        avg_loss, avg_mae = epoch_test_loss / len(self.test_loader), epoch_test_mae / len(self.test_loader)
-        _avg_prec, _avg_recall = epoch_test_prec / len(self.test_loader), epoch_test_recall / len(self.test_loader)
-        score = (1 + 0.3) * _avg_prec * _avg_recall / (0.3 * _avg_prec + _avg_recall)
-        return avg_loss, avg_mae, score.max()
+        # 结果1
+        avg_loss, avg_mae = epoch_test_loss / len(loader), epoch_test_mae / len(loader)
+        avg_prec, avg_recall = epoch_test_prec / len(loader), epoch_test_recall / len(loader)
+        score = (1 + 0.3) * avg_prec * avg_recall / (0.3 * avg_prec + avg_recall)
 
-    def visual(self, model_file=None, is_train=True):
+        # 结果2
+        avg_mae2, avg_prec2, avg_recall2 = epoch_test_mae2/nb_data, epoch_test_prec2/nb_data, epoch_test_recall2/nb_data
+        score2 = (1 + 0.3) * avg_prec2 * avg_recall2 / (0.3 * avg_prec2 + avg_recall2)
+
+        # 结果3
+        avg_mae3, avg_prec3, avg_recall3 = epoch_test_mae3/nb_data, epoch_test_prec3/nb_data, epoch_test_recall3/nb_data
+        score3 = (1 + 0.3) * avg_prec3 * avg_recall3 / (0.3 * avg_prec3 + avg_recall3)
+
+        if is_print_result:
+            Tools.print('Test mae-score={:.4f}/{:.4f} final-mse-score={:.4f}/{:.4f}-{:.4f}/{:.4f} loss={:.4f}'.format(
+                avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max(), avg_loss))
+            pass
+        return avg_loss, avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max()
+
+    def visual(self, model_file=None, is_train=False):
         if model_file:
             self.load_model(model_file_name=model_file)
-
-        def cal_sod(pre, segment):
-            result = np.asarray(segment.copy(), dtype=np.float32)
-            for i in range(len(pre)):
-                result[segment == i] = pre[i]
-                pass
-            return result
 
         loader = self.train_loader if is_train else self.test_loader
         self.model.eval()
@@ -608,8 +887,8 @@ class RunnerSPE(object):
                 logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
                 cum_add = np.cumsum([0] + batched_graph.batch_num_nodes)
                 for one in range(len(segments)):
-                    tar_sod = cal_sod(labels[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
-                    pre_sod = cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
+                    tar_sod = self._cal_sod(labels[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
+                    pre_sod = self._cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
 
                     Image.fromarray(np.asarray(tar_sod * 255, dtype=np.uint8)).show()
                     Image.fromarray(np.asarray(pre_sod * 255, dtype=np.uint8)).show()
@@ -619,11 +898,19 @@ class RunnerSPE(object):
             pass
         pass
 
+    @staticmethod
+    def _cal_sod(pre, segment):
+        result = np.asarray(segment.copy(), dtype=np.float32)
+        for i in range(len(pre)):
+            result[segment == i] = pre[i]
+            pass
+        return result
+
     def _lr(self, epoch):
         for lr in self.lr_s:
             if lr[0] == epoch:
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = lr[1]
+                for index, param_group in enumerate(self.optimizer.param_groups):
+                    param_group['lr'] = lr[1][index]
                 pass
             pass
         pass
@@ -665,14 +952,24 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    真正的测试
-    
-    GCNNet1 2631616  SGD Load Model: ./ckpt3/dgl/6_DGL_SOD_DA/GCNNet1/epoch_2.pkl
-    2020-05-19 08:26:39 E:93, lr:0.0001, Train(mae-score-loss):0.0880/0.8871/0.1632 Test(mae-score-loss):0.1191/0.6716/0.2531
-    
     GCNNet2 2631616 Adam Load Model: ./ckpt3/dgl/6_DGL_SOD_DA/GCNNet1/epoch_2.pkl
-    2020-05-19 08:34:30 E:92, lr:0.0001, Train(mae-score-loss):0.0479/0.9327/0.1017 Test(mae-score-loss):0.1054/0.6685/0.3105
+    2020-05-19 E:92, lr:0.0001, Train(mae-score-loss):0.0479/0.9327/0.1017 Test(mae-score-loss):0.1054/0.6685/0.3105
+    2020-05-19 10:18:00 Train mae-score=0.0454/0.9349 final-mse-score=0.0453/0.9188-0.0565/0.9188 loss=0.0994
+    2020-05-19 10:06:04  Test mae-score=0.1054/0.6685 final-mse-score=0.1064/0.6476-0.1158/0.6476 loss=0.3105
     
+    GCNNet1 2797120 Adam Load Model: ./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect/GCNNet2/epoch_92.pkl
+    2020-05-21 18:17:56 E:49, lr:0.0001
+    Train mae-score=0.0423/0.9383 final-mse-score=0.0439/0.9207-0.0547/0.9207 loss=0.0910 
+    Test  mae-score=0.0937/0.6989 final-mse-score=0.0968/0.6754-0.1060/0.6754 loss=0.2554
+    
+    GCNNet2 2863424 Adam Load Model: ./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect/GCNNet2/epoch_92.pkl
+    2020-05-21 17:52:22 E:40, lr:0.0001
+    Train mae-score=0.0458/0.9348 final-mse-score=0.0475/0.9176-0.0582/0.9176 loss=0.0963 
+    Test  mae-score=0.0947/0.6989 final-mse-score=0.0979/0.6735-0.1071/0.6735 loss=0.2547
+    
+    GraphSageNet1 2867008 Adam 
+    
+    GATNet1  Adam
     """
     # _data_root_path = 'D:\\data\\SOD\\DUTS'
     # _root_ckpt_dir = "ckpt3\\dgl\\my\\{}".format("GCNNet")
@@ -687,30 +984,32 @@ if __name__ == '__main__':
     # _gpu_id = "1"
 
     _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
-    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect/{}".format("GCNNet2")
-    _batch_size = 8
-    _image_size = 400
+    _root_ckpt_dir = "./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect2/{}".format("GraphSageNet1")
+    _batch_size = 4
+    _image_size = 320
     _sp_size = 4
     _pool_ratio = 4
-    _epochs = 100
+    _epochs = 30
     _is_sgd = False
+    _set_diff_lr = False
     _train_print_freq = 100
-    _test_print_freq = 50
+    _test_print_freq = 100
     _num_workers = 8
     _use_gpu = True
     _gpu_id = "0"
     # _gpu_id = "1"
-
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, pool_ratio=_pool_ratio,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
-                       train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
+                       train_print_freq=_train_print_freq, test_print_freq=_test_print_freq, set_diff_lr=_set_diff_lr,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, is_sgd=_is_sgd)
-    # runner.load_model(model_file_name="./ckpt3/dgl/6_DGL_SOD_DA/GCNNet-ImageNet/epoch_2.pkl")
-    runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect/GCNNet2/epoch_92.pkl")
+    # runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet3/epoch_9.pkl", ignore=["model_gnn2"])
+    # runner.visual(model_file="./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect2/GCNNet1/epoch_49.pkl")
     # runner.visual()
-    # runner.train(_epochs)
+    runner.train(_epochs)
+    # runner.test(model_file="./ckpt3/dgl/6_DGL_SOD_DA_SkipConnect/GCNNet2/epoch_92.pkl",
+    #             is_print_result=True, is_train_loader=True)
 
     pass
