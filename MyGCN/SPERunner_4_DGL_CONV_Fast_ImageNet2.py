@@ -254,14 +254,14 @@ class MyGCNNet(nn.Module):
     def __init__(self):
         super().__init__()
         # GCNNet C2PC2P 3558464
-        # self.model_conv = CONVNet(layer_num=14)
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
-        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
+        self.model_conv = CONVNet(layer_num=14)
+        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
+        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
 
         # GCNNet C2PC2PC2 4477504
-        self.model_conv = CONVNet(layer_num=20)
-        self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256])
-        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
+        # self.model_conv = CONVNet(layer_num=20)
+        # self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -488,14 +488,14 @@ if __name__ == '__main__':
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet2/{}".format("GCNNet-C2PC2PC2")
     _batch_size = 16
     _image_size = 224
-    _is_sgd = False
-    _sp_size = 3
-    _train_print_freq = 3000
+    _is_sgd = True
+    _sp_size = 4
+    _train_print_freq = 500
     _test_print_freq = 1000
     _num_workers = 12
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
