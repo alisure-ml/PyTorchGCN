@@ -249,17 +249,74 @@ class GCNNet2(nn.Module):
     pass
 
 
+class GraphSageNet1(nn.Module):
+
+    def __init__(self, in_dim, hidden_dims):
+        super().__init__()
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims:
+            self.gcn_list.append(GraphSageLayer(in_dim, hidden_dim, F.relu, 0.0, "meanpool", True))
+            in_dim = hidden_dim
+            pass
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        hidden_nodes_feat = nodes_feat
+        for gcn in self.gcn_list:
+            hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+            pass
+        graphs.ndata['h'] = hidden_nodes_feat
+        hg = dgl.mean_nodes(graphs, 'h')
+        return hg
+
+    pass
+
+
+class GraphSageNet2(nn.Module):
+
+    def __init__(self, in_dim, hidden_dims, n_classes=10):
+        super().__init__()
+        self.embedding_h = nn.Linear(in_dim, in_dim)
+        self.gcn_list = nn.ModuleList()
+        for hidden_dim in hidden_dims:
+            self.gcn_list.append(GraphSageLayer(in_dim, hidden_dim, F.relu, 0.0, "meanpool", True))
+            in_dim = hidden_dim
+            pass
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
+        pass
+
+    def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
+        hidden_nodes_feat = self.embedding_h(nodes_feat)
+        for gcn in self.gcn_list:
+            hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
+            pass
+
+        graphs.ndata['h'] = hidden_nodes_feat
+        hg = dgl.mean_nodes(graphs, 'h')
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # GCNNet C2PC2P 3558464
-        self.model_conv = CONVNet(layer_num=14)
-        self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
-        self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
 
-        # GCNNet C2PC2PC2 4477504
-        # self.model_conv = CONVNet(layer_num=20)
+        # self.model_conv = CONVNet(layer_num=14)  # GCNNet C2PC2P 3558464
+        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
+
+        # self.model_conv = CONVNet(layer_num=20)  # GCNNet C2PC2PC2 4477504
+        # self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256])
+        # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
+
+        self.model_conv = CONVNet(layer_num=14)  # GraphSageNet C2PC2P
+        self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[256, 256])
+        self.model_gnn2 = GraphSageNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
+
+        # self.model_conv = CONVNet(layer_num=20)  # GraphSageNet C2PC2PC2
         # self.model_gnn1 = GCNNet1(in_dim=256, hidden_dims=[256, 256])
         # self.model_gnn2 = GCNNet2(in_dim=256, hidden_dims=[256, 256, 512, 512, 1024, 1024], n_classes=1000)
         pass
