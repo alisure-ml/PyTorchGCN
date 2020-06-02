@@ -48,8 +48,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter, multichannel=False)
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter, multichannel=False)
+                                         sigma=slic_sigma, max_iter=slic_max_iter, multichannel=False, start_label=0)
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
         pass
@@ -458,35 +460,35 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # C0 85376
+        # C0 30656
         # self.model_conv = None
         # self.model_gnn1 = GCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
-        # C1 90176
-        self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
-        self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
+        # C1 35456
+        # self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
+        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
-        # C0 159104
+        # C0 55232
         # self.model_conv = None
         # self.model_gnn1 = GraphSageNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[128, 128, 128, 128], out_dim=128, n_classes=10)
+        # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
-        # C1 163904
+        # C1 60032
         # self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
         # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[128, 128, 128, 128], out_dim=128, n_classes=10)
+        # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
-        # C0 384512
+        # C0 131520
         # self.model_conv = None
         # self.model_gnn1 = GatedGCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[128, 128, 128, 128], out_dim=128, n_classes=10)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
-        # C1 389312
-        # self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[128, 128, 128, 128], out_dim=128, n_classes=10)
+        # C1 136320
+        self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
+        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
+        self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -705,7 +707,8 @@ if __name__ == '__main__':
         C0 85376 GCNNet 
     """
 
-    _data_root_path = '/home/ubuntu/ALISURE/data/mnist'
+    # _data_root_path = '/home/ubuntu/ALISURE/data/mnist'
+    _data_root_path = "/private/alishuo/mnist"
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-mnist3-Adam/{}".format("GCNNet-C1")
     _batch_size = 64
     _image_size = 28
@@ -714,8 +717,8 @@ if __name__ == '__main__':
     _test_print_freq = 100
     _num_workers = 6
     _use_gpu = True
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))

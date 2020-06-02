@@ -1,6 +1,9 @@
 import torch
 import numpy as np
 import torch.nn as nn
+from torchvision.models.resnet import resnet50
+from torchvision.models.vgg import vgg16_bn, vgg16
+from torchvision.models.alexnet import alexnet
 
 
 class Net(nn.Module):
@@ -353,6 +356,18 @@ class Net3(nn.Module):
     pass
 
 
+class NetVgg16(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        vgg = vgg16()
+        self.features = vgg.features
+        self.classifier = nn.Linear(512, 10, bias=False)
+        pass
+
+    pass
+
+
 def view_model_param(model):
     total_param = 0
     for param in model.parameters():
@@ -365,8 +380,14 @@ if __name__ == '__main__':
     resnet:281548163
     vGG：59903747
     light:22127747
+    resnet50 25557032
+    vgg16 138357544
+    vgg16_bn 138365992
+    vgg16 14719808
+    vgg16_bn 14728256
+    alexnet 61100840
     """
-    model = Net3().to(torch.device("cpu"))
+    model = alexnet().to(torch.device("cpu"))
     num = view_model_param(model)
     print(num)
     pass
