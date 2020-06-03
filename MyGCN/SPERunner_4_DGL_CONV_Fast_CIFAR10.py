@@ -339,7 +339,8 @@ class GatedGCNNet2(nn.Module):
             in_dim = hidden_dim
             pass
 
-        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
+        # self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
+        self.readout_mlp = MLPReadout(hidden_dims[-1], n_classes)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -363,7 +364,7 @@ class MyGCNNet(nn.Module):
     def __init__(self):
         super().__init__()
         ###############
-        # 2020-06-02 09:16:26 Epoch: 78, Train: 0.6444/1.0034 Test: 0.5666/1.2883
+        # 2020-06-03 03:20:43 Epoch: 79, Train: 0.6453/1.0056 Test: 0.5741/1.2538
         # self.model_conv = CONVNet(out_dim=64)  # 110464
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128])
         # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
@@ -378,9 +379,9 @@ class MyGCNNet(nn.Module):
 
         ###############
         # 2020-06-02 08:52:37 Epoch: 80, Train: 0.8126/0.5311 Test: 0.7068/0.9594
-        self.model_conv = CONVNet(out_dim=64)  # 200576
-        self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[128, 128])
-        self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+        # self.model_conv = CONVNet(out_dim=64)  # 200576
+        # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[128, 128])
+        # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
         ###############
         # self.model_conv = CONVNet(layer_num=6)  # 239296
@@ -392,19 +393,21 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 128])
         # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        #
+        # 2020-06-03 00:08:59 Epoch: 58, Train: 0.8852/0.3230 Test: 0.7734/0.7938
         # self.model_conv = CONVNet(out_dim=64)  # 480064
         # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128])
         # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # self.model_conv = CONVNet(layer_num=6)  # 518784
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128])
-        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+        # 528170
+        self.model_conv = CONVNet(layer_num=6)
+        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128])
+        self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # self.model_conv = CONVNet(layer_num=13)  # 794176
+        # 794176 2020-06-03 21:13:09 Epoch: 77, Train: 0.9908/0.0276 Test: 0.9080/0.4314
+        # 803562 2020-06-03 21:38:26 Epoch: 78, Train: 0.9857/0.0401 Test: 0.9081/0.4227
+        # self.model_conv = CONVNet(layer_num=13)
         # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
         # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
-
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -614,7 +617,7 @@ if __name__ == '__main__':
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV_CIFAR10/{}".format("GCNNet3")
     _batch_size = 64
     _image_size = 32
-    _sp_size = 3
+    _sp_size = 4
     _is_sgd = False
     _epochs = 100
     _train_print_freq = 200

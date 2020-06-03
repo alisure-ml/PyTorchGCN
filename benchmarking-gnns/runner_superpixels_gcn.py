@@ -183,13 +183,14 @@ class Runner(object):
 
 
 if __name__ == '__main__':
-    now_use_gpu = False
+    now_use_gpu = True
     now_gpu_id = "0"
     now_model_name = "GCN"  # GCN GatedGCN GAT GraphSage GIN MoNet DiffPool MLP MLPGated
-    now_dataset_name = "CIFAR10"  # MNIST CIFAR10
+    now_dataset_name = "MNIST"  # MNIST CIFAR10
     now_run_name = "{}_{}_demo".format(now_dataset_name, now_model_name)
-    now_data_file = "D:\data\GCN\{}.pkl".format(now_dataset_name)
+    # now_data_file = "D:\data\GCN\{}.pkl".format(now_dataset_name)
     # now_data_file = "/mnt/4T/ALISURE/GCN/{}.pkl".format(now_dataset_name)
+    now_data_file = "/media/test/ALISURE/GCN/{}.pkl".format(now_dataset_name)
 
     now_batch_size = 128
     now_dataset = SuperPixDataset(now_dataset_name, data_file=now_data_file)
