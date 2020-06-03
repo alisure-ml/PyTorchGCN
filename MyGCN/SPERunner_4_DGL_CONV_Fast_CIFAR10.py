@@ -92,12 +92,12 @@ class DealSuperPixel(object):
 
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True, image_size=32, sp_size=4):
+    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True, image_size=32, sp_size=4, down_ratio=1):
         super().__init__()
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
-        self.image_size_for_sp = self.image_size // 1
+        self.image_size_for_sp = self.image_size // down_ratio
         self.data_root_path = data_root_path
 
         self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
@@ -227,7 +227,7 @@ class GCNNet2(nn.Module):
             self.gcn_list.append(GCNLayer(in_dim, hidden_dim, F.relu, 0.0, True, True, True))
             in_dim = hidden_dim
             pass
-        self.readout_mlp = MLPReadout(hidden_dims[-1], n_classes)
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -276,7 +276,7 @@ class GraphSageNet2(nn.Module):
             self.gcn_list.append(GraphSageLayer(in_dim, hidden_dim, F.relu, 0.0, "meanpool", True))
             in_dim = hidden_dim
             pass
-        self.readout_mlp = MLPReadout(hidden_dims[-1], n_classes)
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -339,8 +339,7 @@ class GatedGCNNet2(nn.Module):
             in_dim = hidden_dim
             pass
 
-        # self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
-        self.readout_mlp = MLPReadout(hidden_dims[-1], n_classes)
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -361,53 +360,60 @@ class GatedGCNNet2(nn.Module):
 
 class MyGCNNet(nn.Module):
 
-    def __init__(self):
+    def __init__(self, model_conv=None, model_gnn1=None, model_gnn2=None):
         super().__init__()
-        ###############
-        # 2020-06-03 03:20:43 Epoch: 79, Train: 0.6453/1.0056 Test: 0.5741/1.2538
-        # self.model_conv = CONVNet(out_dim=64)  # 110464
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128])
-        # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+        if model_gnn1 and model_gnn2:
+            self.model_conv = model_conv
+            self.model_gnn1 = model_gnn1
+            self.model_gnn2 = model_gnn2
+        else:
+            ###############
+            # 2020-06-03 03:20:43 Epoch: 79, Train: 0.6453/1.0056 Test: 0.5741/1.2538
+            # self.model_conv = CONVNet(out_dim=64)  # 110464
+            # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128])
+            # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # self.model_conv = CONVNet(layer_num=6)  # 149184
-        # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128])
-        # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            # self.model_conv = CONVNet(layer_num=6)  # 149184
+            # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128])
+            # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # self.model_conv = CONVNet(layer_num=13)  # 379328
-        # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128])
-        # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            # self.model_conv = CONVNet(layer_num=13)  # 379328
+            # self.model_gnn1 = GCNNet1(in_dim=128, hidden_dims=[128, 128])
+            # self.model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        ###############
-        # 2020-06-02 08:52:37 Epoch: 80, Train: 0.8126/0.5311 Test: 0.7068/0.9594
-        # self.model_conv = CONVNet(out_dim=64)  # 200576
-        # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[128, 128])
-        # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            ###############
+            # 2020-06-02 08:52:37 Epoch: 80, Train: 0.8126/0.5311 Test: 0.7068/0.9594
+            # self.model_conv = CONVNet(out_dim=64)  # 200576
+            # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[128, 128])
+            # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        ###############
-        # self.model_conv = CONVNet(layer_num=6)  # 239296
-        # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[128, 128])
-        # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            ###############
+            # self.model_conv = CONVNet(layer_num=6)  # 239296
+            # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[128, 128])
+            # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # 2020-06-01 00:47:31 Epoch: 186, Train: 0.9864/0.0446 Test: 0.9080/0.3570
-        # self.model_conv = CONVNet(layer_num=13)  # 477632
-        # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 128])
-        # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            # 2020-06-01 00:47:31 Epoch: 186, Train: 0.9864/0.0446 Test: 0.9080/0.3570
+            # self.model_conv = CONVNet(layer_num=13)  # 477632
+            # self.model_gnn1 = GraphSageNet1(in_dim=128, hidden_dims=[128, 128])
+            # self.model_gnn2 = GraphSageNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # 2020-06-03 00:08:59 Epoch: 58, Train: 0.8852/0.3230 Test: 0.7734/0.7938
-        # self.model_conv = CONVNet(out_dim=64)  # 480064
-        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128])
-        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            # 2020-06-03 00:08:59 Epoch: 58, Train: 0.8852/0.3230 Test: 0.7734/0.7938
+            # self.model_conv = CONVNet(out_dim=64)  # 480064
+            # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128])
+            # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # 528170
-        self.model_conv = CONVNet(layer_num=6)
-        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128])
-        self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            # 528170
+            # self.model_conv = CONVNet(layer_num=6)
+            # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[128, 128])
+            # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
 
-        # 794176 2020-06-03 21:13:09 Epoch: 77, Train: 0.9908/0.0276 Test: 0.9080/0.4314
-        # 803562 2020-06-03 21:38:26 Epoch: 78, Train: 0.9857/0.0401 Test: 0.9081/0.4227
-        # self.model_conv = CONVNet(layer_num=13)
-        # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
-        # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            # 794176 2020-06-03 21:13:09 Epoch: 77, Train: 0.9908/0.0276 Test: 0.9080/0.4314
+            # 803562 2020-06-03 21:38:26 Epoch: 78, Train: 0.9857/0.0401 Test: 0.9081/0.4227
+            # self.model_conv = CONVNet(layer_num=13)
+            # self.model_gnn1 = GatedGCNNet1(in_dim=128, hidden_dims=[128, 128])
+            # self.model_gnn2 = GatedGCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+            pass
+
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -432,7 +438,8 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10',
+    def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10', down_ratio=1,
+                 model_conv=None, model_gnn1=None, model_gnn2=None,
                  batch_size=64, image_size=32, sp_size=4, train_print_freq=100, test_print_freq=50,
                  is_sgd=True, root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
         self.train_print_freq = train_print_freq
@@ -441,9 +448,9 @@ class RunnerSPE(object):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path,
+        self.train_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio,
                                        is_train=True, image_size=image_size, sp_size=sp_size)
-        self.test_dataset = MyDataset(data_root_path=data_root_path,
+        self.test_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio,
                                       is_train=False, image_size=image_size, sp_size=sp_size)
 
         self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
@@ -451,7 +458,11 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet().to(self.device)
+        if model_gnn1 and model_gnn2:
+            self.model = MyGCNNet(model_conv=model_conv, model_gnn1=model_gnn1, model_gnn2=model_gnn2).to(self.device)
+        else:
+            self.model = MyGCNNet().to(self.device)
+
         if is_sgd:
             self.lr_s = [[0, 0.1], [80, 0.01], [140, 0.001], [180, 0.0001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][0], momentum=0.9, weight_decay=5e-4)
@@ -617,9 +628,6 @@ if __name__ == '__main__':
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV_CIFAR10/{}".format("GCNNet3")
     _batch_size = 64
     _image_size = 32
-    _sp_size = 4
-    _is_sgd = False
-    _epochs = 100
     _train_print_freq = 200
     _test_print_freq = 100
     _num_workers = 16
@@ -627,10 +635,19 @@ if __name__ == '__main__':
     _gpu_id = "0"
     # _gpu_id = "1"
 
+    #
+    _is_sgd = False
+    _epochs = 100
+    _sp_size = 4
+    _down_ratio = 1
+    _model_conv = CONVNet(layer_num=6)  # 149184
+    _model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[128, 128])
+    _model_gnn2 = GCNNet2(in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10)
+
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
-
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
+    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, down_ratio=_down_ratio,
+                       model_conv=_model_conv, model_gnn1=_model_gnn1,  model_gnn2=_model_gnn2,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
