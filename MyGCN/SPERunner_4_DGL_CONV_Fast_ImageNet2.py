@@ -611,12 +611,14 @@ if __name__ == '__main__':
     
     Load Model: ./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet2/epoch_3.pkl
     GCNNet3 4358696 36 sgd 0.01 2020-05-23 Epoch:09,lr=0.0001,Train:0.5551-0.7980/1.9078 Test:0.5512-0.7965/1.9085
+    
+    2020-06-02 21:45:23 Epoch:04, Train:0.2958-0.5602/3.3328 Test:0.2768-0.5402/3.5083
     """
     # _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet2/{}".format("GraphSageNet-C2PC2PC2")
-    _batch_size = 12
+    # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet2/{}".format("GCNNet-C2PC2PC2")
+    _batch_size = 24
     _image_size = 224
     _is_sgd = True
     _sp_size = 4
@@ -630,7 +632,7 @@ if __name__ == '__main__':
     Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, test_split="val_new",
+    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, test_split="val",
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)

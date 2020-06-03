@@ -608,8 +608,7 @@ class RunnerSPE(object):
             all_params = self.model.parameters()
             conv_params = self.model.model_conv.parameters()
             gnn1_params = self.model.model_gnn1.parameters()
-            base_params = filter(lambda p: id(p) not in list(map(id, conv_params)
-                                                             ) + list(map(id, gnn1_params)), all_params)
+            base_params = filter(lambda p: id(p) not in list(map(id, conv_params)) + list(map(id, gnn1_params)), all_params)
             params = [{'params': base_params}, {'params': conv_params}, {'params': gnn1_params}]
         else:
             params = self.model.parameters()
