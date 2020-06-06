@@ -460,7 +460,8 @@ class MyGCNNet(nn.Module):
 
     def __init__(self):
         super().__init__()
-        # C0 30656
+        # C0 30656 2020-06-06 01:53:42 Epoch:37,lr=0.0004,Train:0.9440-0.9986/0.1739 Test:0.9536-0.9988/0.1505
+        # C0 30656 2020-06-06 05:36:11 Epoch:36,lr=0.0001,Train:0.9384-0.9982/0.1934 Test:0.9540-0.9984/0.1490
         # self.model_conv = None
         # self.model_gnn1 = GCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
@@ -470,7 +471,7 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GCNNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
-        # C0 55232
+        # C0 55232 2020-06-06 00:15:15 Epoch:34,lr=0.0004,Train:0.9756-0.9998/0.0751 Test:0.9774-0.9999/0.0697
         # self.model_conv = None
         # self.model_gnn1 = GraphSageNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
@@ -480,15 +481,15 @@ class MyGCNNet(nn.Module):
         # self.model_gnn1 = GraphSageNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
-        # C0 131520
-        # self.model_conv = None
-        # self.model_gnn1 = GatedGCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
+        # C0 131520 2020-06-06 02:04:08 Epoch:37,lr=0.0004,Train:0.9860-1.0000/0.0430 Test:0.9842-0.9999/0.0492
+        self.model_conv = None
+        self.model_gnn1 = GatedGCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
+        self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
         # C1 136320
-        self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
-        self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
+        # self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
+        # self.model_gnn1 = GatedGCNNet1(in_dim=64, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
         pass
 
     def forward(self, images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt, pixel_data_where,
@@ -534,11 +535,11 @@ class RunnerSPE(object):
 
         self.model = MyGCNNet().to(self.device)
 
-        self.lr_s = [[0, 0.001], [15, 0.002], [30, 0.0004]]
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=0.0)
+        # self.lr_s = [[0, 0.001], [15, 0.002], [30, 0.0004]]
+        # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=0.0)
 
-        # self.lr_s = [[0, 0.1], [10, 0.01], [20, 0.001], [30, 0.0001]]
-        # self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1], momentum=0.9, weight_decay=5e-4)
+        self.lr_s = [[0, 0.1], [50, 0.01], [100, 0.001], [130, 0.0001]]
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1], momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
 
@@ -703,8 +704,6 @@ if __name__ == '__main__':
         C0 384512 GatedGCNNet 2020-05-29 23:21:09 Epoch:34,lr=0.0004,Train:0.9913-1.0000/0.0278 Test:0.9866-0.9998/0.0429
         C1 389312 GatedGCNNet 2020-05-29 22:38:14 Epoch:33,lr=0.0004,Train:0.9985-1.0000/0.0050 Test:0.9966-1.0000/0.0116
         
-    SGD
-        C0 85376 GCNNet 
     """
 
     # _data_root_path = '/home/ubuntu/ALISURE/data/mnist'
@@ -712,7 +711,7 @@ if __name__ == '__main__':
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-mnist3-Adam/{}".format("GCNNet-C1")
     _batch_size = 64
     _image_size = 28
-    _sp_size = 3
+    _sp_size = 4
     _train_print_freq = 100
     _test_print_freq = 100
     _num_workers = 6
@@ -727,6 +726,6 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.train(45)
+    runner.train(150)
 
     pass
