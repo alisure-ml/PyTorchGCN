@@ -527,7 +527,7 @@ if __name__ == '__main__':
     _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
     # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet/{}".format("GCNNet2")
+    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet/{}".format("GCNNet")
     _batch_size = 24
     _image_size = 224
     _sp_size = 4
@@ -545,7 +545,7 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet/GCNNet2/epoch_5.pkl")
-    runner.train(10, start_epoch=6)
+    # runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet/GCNNet2/epoch_5.pkl")
+    runner.train(10, start_epoch=0)
 
     pass
