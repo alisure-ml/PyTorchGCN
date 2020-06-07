@@ -49,10 +49,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
-        #                                  compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter)
+        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
+                                         compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -730,8 +730,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _model_conv, _model_gnn1, _model_gnn2 = None, None, None
-    # _data_root_path = '/private/alishuo/cifar10'
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/private/alishuo/cifar10'
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV_CIFAR10/{}".format("GCNNet3")
     _image_size = 32
     _train_print_freq = 200
@@ -769,12 +769,16 @@ if __name__ == '__main__':
     # _model_conv = CONVNet(layer_num=6, pretrained=False)
     _model_conv = CONVNet(layer_num=13, pretrained=False)
     _model_gnn1 = GCNNet1(128, [128, 128], readout=_readout1)
-    _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    # _model_gnn1 = GCNNet1(128, [128], readout=_readout1)
+    # _model_gnn1 = GCNNet1(128, [128, 128, 128], readout=_readout1)
+    # _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    # _model_gnn2 = GCNNet2(128, [128, 128], 10, readout=_readout2)
+    _model_gnn2 = GCNNet2(128, [128, 128, 128, 128, 128, 128], 10, readout=_readout2)
     # _model_gnn1 = GraphSageNet1(128, [128, 128], readout=_readout1)
     # _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} is_sgd:{} epochs:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _is_sgd, _epochs, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
