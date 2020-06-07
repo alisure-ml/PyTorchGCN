@@ -49,10 +49,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
-                                         compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
+        #                                  compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
+        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+                                         sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -208,26 +208,21 @@ class CONVNet(nn.Module):
     pass
 
 
-def readout_fn(readout, graphs, feat, k=30):
+def readout_fn(readout, graphs, feat):
     if readout == "mean":
         return dgl.mean_nodes(graphs, feat)
     if readout == "max":
         return dgl.max_nodes(graphs, feat)
-    if readout == "sum":
-        return dgl.sum_nodes(graphs, feat)
-    if readout == "topk":
-        return dgl.topk_nodes(graphs, feat, k)
     return dgl.mean_nodes(graphs, feat)
 
 
 class GCNNet1(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, readout="mean", readout_k=30):
+    def __init__(self, in_dim, hidden_dims, readout="mean"):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
         self.readout = readout
-        self.readout_k = readout_k
 
         self.gcn_list = nn.ModuleList()
         _in_dim = self.in_dim
@@ -236,8 +231,8 @@ class GCNNet1(nn.Module):
             _in_dim = hidden_dim
             pass
 
-        Tools.print("#GNN1={} in_dim={} hidden_dims={} readout={} readout_k={}".format(
-            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout, self.readout_k))
+        Tools.print("GCNNet1 #GNN1={} in_dim={} hidden_dims={} readout={}".format(
+            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout))
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -246,7 +241,7 @@ class GCNNet1(nn.Module):
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
             pass
         graphs.ndata['h'] = hidden_nodes_feat
-        hg = readout_fn(self.readout, graphs, 'h', k=self.readout_k)
+        hg = readout_fn(self.readout, graphs, 'h')
         return hg
 
     pass
@@ -254,12 +249,11 @@ class GCNNet1(nn.Module):
 
 class GCNNet2(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, n_classes=10, readout="mean", readout_k=30):
+    def __init__(self, in_dim, hidden_dims, n_classes=10, readout="mean"):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
         self.readout = readout
-        self.readout_k = readout_k
 
         self.embedding_h = nn.Linear(in_dim, in_dim)
         self.gcn_list = nn.ModuleList()
@@ -270,8 +264,8 @@ class GCNNet2(nn.Module):
             pass
         self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
 
-        Tools.print("#GNN2={} in_dim={} hidden_dims={} readout={} readout_k={}".format(
-            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout, self.readout_k))
+        Tools.print("GCNNet2 #GNN2={} in_dim={} hidden_dims={} readout={}".format(
+            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout))
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -280,7 +274,7 @@ class GCNNet2(nn.Module):
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
             pass
         graphs.ndata['h'] = hidden_nodes_feat
-        hg = readout_fn(self.readout, graphs, 'h', k=self.readout_k)
+        hg = readout_fn(self.readout, graphs, 'h')
         logits = self.readout_mlp(hg)
         return logits
 
@@ -289,12 +283,12 @@ class GCNNet2(nn.Module):
 
 class GraphSageNet1(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, readout="mean", readout_k=30):
+    def __init__(self, in_dim, hidden_dims, readout="mean"):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
         self.readout = readout
-        self.readout_k = readout_k
+
         self.gcn_list = nn.ModuleList()
         _in_dim = self.in_dim
         for hidden_dim in hidden_dims:
@@ -302,8 +296,8 @@ class GraphSageNet1(nn.Module):
             _in_dim = hidden_dim
             pass
 
-        Tools.print("#GNN1={} in_dim={} hidden_dims={} readout={} readout_k={}".format(
-            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout, self.readout_k))
+        Tools.print("GraphSageNet1 #GNN1={} in_dim={} hidden_dims={} readout={}".format(
+            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout))
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -312,7 +306,7 @@ class GraphSageNet1(nn.Module):
             hidden_nodes_feat = gcn(graphs, hidden_nodes_feat, nodes_num_norm_sqrt)
             pass
         graphs.ndata['h'] = hidden_nodes_feat
-        hg = readout_fn(self.readout, graphs, 'h', k=self.readout_k)
+        hg = readout_fn(self.readout, graphs, 'h')
         return hg
 
     pass
@@ -320,12 +314,12 @@ class GraphSageNet1(nn.Module):
 
 class GraphSageNet2(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, n_classes=10, readout="mean", readout_k=30):
+    def __init__(self, in_dim, hidden_dims, n_classes=10, readout="mean"):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
         self.readout = readout
-        self.readout_k = readout_k
+
         self.embedding_h = nn.Linear(in_dim, in_dim)
         self.gcn_list = nn.ModuleList()
         _in_dim = self.in_dim
@@ -335,8 +329,8 @@ class GraphSageNet2(nn.Module):
             pass
         self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
 
-        Tools.print("#GNN2={} in_dim={} hidden_dims={} readout={} readout_k={}".format(
-            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout, self.readout_k))
+        Tools.print("GraphSageNet2 #GNN2={} in_dim={} hidden_dims={} readout={}".format(
+            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout))
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -346,7 +340,7 @@ class GraphSageNet2(nn.Module):
             pass
 
         graphs.ndata['h'] = hidden_nodes_feat
-        hg = readout_fn(self.readout, graphs, 'h', k=self.readout_k)
+        hg = readout_fn(self.readout, graphs, 'h')
         logits = self.readout_mlp(hg)
         return logits
 
@@ -355,12 +349,11 @@ class GraphSageNet2(nn.Module):
 
 class GatedGCNNet1(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, readout="mean", readout_k=30):
+    def __init__(self, in_dim, hidden_dims, readout="mean"):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
         self.readout = readout
-        self.readout_k = readout_k
 
         self.in_dim_edge = 1
         self.embedding_h = nn.Linear(in_dim, in_dim)
@@ -373,8 +366,8 @@ class GatedGCNNet1(nn.Module):
             _in_dim = hidden_dim
             pass
 
-        Tools.print("#GNN1={} in_dim={} hidden_dims={} readout={} readout_k={}".format(
-            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout, self.readout_k))
+        Tools.print("GatedGCNNet1 #GNN1={} in_dim={} hidden_dims={} readout={}".format(
+            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout))
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -386,7 +379,7 @@ class GatedGCNNet1(nn.Module):
             pass
 
         graphs.ndata['h'] = h
-        hg = readout_fn(self.readout, graphs, 'h', k=self.readout_k)
+        hg = readout_fn(self.readout, graphs, 'h')
         return hg
 
     pass
@@ -394,12 +387,11 @@ class GatedGCNNet1(nn.Module):
 
 class GatedGCNNet2(nn.Module):
 
-    def __init__(self, in_dim, hidden_dims, n_classes=200, readout="mean", readout_k=30):
+    def __init__(self, in_dim, hidden_dims, n_classes=200, readout="mean"):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
         self.readout = readout
-        self.readout_k = readout_k
 
         self.in_dim_edge = 1
         self.embedding_h = nn.Linear(in_dim, in_dim)
@@ -414,8 +406,8 @@ class GatedGCNNet2(nn.Module):
 
         self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
 
-        Tools.print("#GNN2={} in_dim={} hidden_dims={} readout={} readout_k={}".format(
-            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout, self.readout_k))
+        Tools.print("GatedGCNNet2 #GNN2={} in_dim={} hidden_dims={} readout={}".format(
+            len(self.hidden_dims), self.in_dim, self.hidden_dims, self.readout))
         pass
 
     def forward(self, graphs, nodes_feat, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt):
@@ -427,7 +419,7 @@ class GatedGCNNet2(nn.Module):
             pass
 
         graphs.ndata['h'] = h
-        hg = readout_fn(self.readout, graphs, 'h', k=self.readout_k)
+        hg = readout_fn(self.readout, graphs, 'h')
         logits = self.readout_mlp(hg)
         return logits
 
@@ -518,7 +510,7 @@ class MyGCNNet(nn.Module):
 class RunnerSPE(object):
 
     def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10', down_ratio=1, is_aug=True,
-                 model_conv=None, model_gnn1=None, model_gnn2=None,
+                 model_conv=None, model_gnn1=None, model_gnn2=None, lr=[[0, 0.1], [50, 0.01], [100, 0.001]],
                  slic_compactness=10, slic_sigma=1, slic_max_iter=5,
                  batch_size=64, image_size=32, sp_size=4, train_print_freq=100, test_print_freq=50,
                  is_sgd=True, root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
@@ -547,12 +539,11 @@ class RunnerSPE(object):
         else:
             self.model = MyGCNNet().to(self.device)
 
+        self.lr_s = lr
         if is_sgd:
-            self.lr_s = [[0, 0.1], [50, 0.01], [100, 0.001], [130, 0.0001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(),
                                              lr=self.lr_s[0][1], momentum=0.9, weight_decay=5e-4)
         else:
-            self.lr_s = [[0, 0.01], [50, 0.001], [100, 0.0001]]
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=0.0)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
@@ -707,47 +698,91 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    sp_size, sp_ratio, network
+    2020-06-06 19:40:47 #Conv=13 pretrained=False
+    2020-06-06 19:40:47 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max readout_k=32
+    2020-06-06 19:40:47 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max readout_k=32
+    2020-06-06 19:40:47 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
+    2020-06-06 19:40:47 sp-num:64 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 20:44:39 Epoch: 109, Train: 0.9887/0.0395 Test: 0.9128/0.3102
+    
+    2020-06-06 19:59:23 #Conv=13 pretrained=False
+    2020-06-06 19:59:23 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max
+    2020-06-06 19:59:23 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-06 19:59:23 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
+    2020-06-06 19:59:23 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 09:36:02 Epoch: 61, Train: 0.9697/0.0932 Test: 0.9030/0.3226
+    
+    2020-06-06 19:59:47 #Conv=13 pretrained=False
+    2020-06-06 19:59:47 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
+    2020-06-06 19:59:47 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
+    2020-06-06 19:59:47 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
+    2020-06-06 19:59:47 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 08:52:39 Epoch: 56, Train: 0.9660/0.1044 Test: 0.9117/0.2753
+    
+    2020-06-06 21:15:19 #Conv=13 pretrained=False
+    2020-06-06 21:15:19 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
+    2020-06-06 21:15:19 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-06 21:15:19 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
+    2020-06-06 21:15:19 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 12:27:52 Epoch: 67, Train: 0.9736/0.0824 Test: 0.9070/0.3284
     """
 
     _use_gpu = True
-    _gpu_id = "0"
-    # _gpu_id = "1"
 
     # _model_conv, _model_gnn1, _model_gnn2 = None, None, None
-    _data_root_path = '/private/alishuo/cifar10'
+    # _data_root_path = '/private/alishuo/cifar10'
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV_CIFAR10/{}".format("GCNNet3")
     _image_size = 32
     _train_print_freq = 200
     _test_print_freq = 100
-    _num_workers = 4
+    _num_workers = 8
 
     # 0 Batch size
     _batch_size = 64
 
     # 1 Optimizer
-    _is_sgd, _epochs = True, 200  # False, 100
+    _is_sgd, _epochs = True, 150
+    # _lr = [[0, 0.1], [50, 0.01], [100, 0.001]]
+    # _is_sgd, _epochs = False, 100
+    # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
 
     # 2 Aug Data
-    _is_aug = True
+    _is_aug = False
 
     # 3 SP
     _slic_compactness, _slic_sigma, _slic_max_iter = 10, 1, 5
-    _sp_size, _down_ratio = 2, 2  # 4, 1
-    _sp_num = (_image_size // _down_ratio // _sp_size) ** 2
+    _sp_size, _down_ratio = 2, 2
+    # _sp_size, _down_ratio = 4, 1
 
     # 4 GNN Number + Conv Number + Readout(mean, max, sum, topk)
-    _model_conv = CONVNet(layer_num=6, pretrained=False)
-    _model_gnn1 = GCNNet1(64, [128, 128], readout="mean", readout_k=_sp_num // 2)
-    _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout="mean", readout_k=_sp_num // 2)
+    #
+    _readout1, _readout2 = "max", "max"
+    _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
+    # _readout1, _readout2 = "max", "mean"
+    # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
+    # _readout1, _readout2 = "mean", "max"
+    # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
+    # _readout1, _readout2 = "mean", "mean"
+    # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
+    #
+    # _model_conv = CONVNet(layer_num=6, pretrained=False)
+    _model_conv = CONVNet(layer_num=13, pretrained=False)
+    _model_gnn1 = GCNNet1(128, [128, 128], readout=_readout1)
+    _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    # _model_gnn1 = GraphSageNet1(128, [128, 128], readout=_readout1)
+    # _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     Tools.print("ckpt:{} is_sgd:{} epochs:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _is_sgd, _epochs, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
-    Tools.print("sp-num:{} down_ratio:{} slic_max_iter:{} slic_sigma:{} slic_compactness:{} is_aug:{}".format(
-        _sp_num, _down_ratio, _slic_max_iter, _slic_sigma, _slic_compactness, _is_aug))
+    Tools.print("down_ratio:{} slic_max_iter:{} slic_sigma:{} slic_compactness:{} is_aug:{}".format(
+        _down_ratio, _slic_max_iter, _slic_sigma, _slic_compactness, _is_aug))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, down_ratio=_down_ratio,
-                       model_conv=_model_conv, model_gnn1=_model_gnn1,  model_gnn2=_model_gnn2,
+                       model_conv=_model_conv, model_gnn1=_model_gnn1,  model_gnn2=_model_gnn2, lr=_lr,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, is_aug=_is_aug,

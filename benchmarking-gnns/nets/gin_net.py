@@ -16,6 +16,7 @@ class GINNet(nn.Module):
     
     def __init__(self, net_params):
         super().__init__()
+        self.n_layers = 2
         self.embedding_h = nn.Linear(net_params.in_dim, net_params.hidden_dim)
 
         self.ginlayers = torch.nn.ModuleList()

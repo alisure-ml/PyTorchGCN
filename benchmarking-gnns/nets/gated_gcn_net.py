@@ -16,9 +16,9 @@ class GatedGCNNet(nn.Module):
     
     def __init__(self, net_params):
         super().__init__()
-        self.readout = net_params['readout']
-        self.edge_feat = net_params['edge_feat']
-        self.device = net_params['device']
+        self.readout = net_params.readout
+        self.edge_feat = net_params.edge_feat
+        self.device = net_params.device
         
         self.embedding_h = nn.Linear(net_params.in_dim, net_params.hidden_dim)
         self.embedding_e = nn.Linear(net_params.in_dim_edge, net_params.hidden_dim)

@@ -16,7 +16,7 @@ from layers.mlp_readout_layer import MLPReadout
 class GATNet(nn.Module):
     def __init__(self, net_params):
         super().__init__()
-        self.readout = net_params['readout']
+        self.readout = net_params.readout
 
         self.embedding_h = nn.Linear(net_params.in_dim, net_params.hidden_dim * net_params.n_heads)
         self.in_feat_dropout = nn.Dropout(net_params.in_feat_dropout)

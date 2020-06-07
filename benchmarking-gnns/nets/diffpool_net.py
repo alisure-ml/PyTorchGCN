@@ -29,9 +29,9 @@ class DiffPoolNet(nn.Module):
 
     def __init__(self, net_params):
         super().__init__()
-        self.device = net_params['device']
-        self.concat = net_params['cat']
-        self.batch_size = net_params['batch_size']
+        self.device = net_params.device
+        self.concat = net_params.cat
+        self.batch_size = net_params.batch_size
         self.link_pred_loss = []
         self.entropy_loss = []
         
