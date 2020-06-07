@@ -700,9 +700,6 @@ if __name__ == '__main__':
         
         C0 384512 GatedGCNNet 2020-05-29 23:21:09 Epoch:34,lr=0.0004,Train:0.9913-1.0000/0.0278 Test:0.9866-0.9998/0.0429
         C1 389312 GatedGCNNet 2020-05-29 22:38:14 Epoch:33,lr=0.0004,Train:0.9985-1.0000/0.0050 Test:0.9966-1.0000/0.0116
-        
-    SGD
-        C0 85376 GCNNet 
     """
 
     _data_root_path = '/home/ubuntu/ALISURE/data/mnist'

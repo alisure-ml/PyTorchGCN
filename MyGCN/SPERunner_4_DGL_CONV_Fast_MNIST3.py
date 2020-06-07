@@ -462,9 +462,10 @@ class MyGCNNet(nn.Module):
         super().__init__()
         # C0 30656 2020-06-06 01:53:42 Epoch:37,lr=0.0004,Train:0.9440-0.9986/0.1739 Test:0.9536-0.9988/0.1505
         # C0 30656 2020-06-06 05:36:11 Epoch:36,lr=0.0001,Train:0.9384-0.9982/0.1934 Test:0.9540-0.9984/0.1490
-        # self.model_conv = None
-        # self.model_gnn1 = GCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
-        # self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
+        # C0 30656 2020-06-07 21:03:10 Epoch:133,lr=0.0001,Train:0.9512-0.9990/0.1554 Test:0.9617-0.9991/0.1228
+        self.model_conv = None
+        self.model_gnn1 = GCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
+        self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
         # C1 35456
         # self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
@@ -472,6 +473,7 @@ class MyGCNNet(nn.Module):
         # self.model_gnn2 = GCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
         # C0 55232 2020-06-06 00:15:15 Epoch:34,lr=0.0004,Train:0.9756-0.9998/0.0751 Test:0.9774-0.9999/0.0697
+        # C0 55232 2020-06-07 20:48:20 Epoch:133,lr=0.0001,Train:0.9770-0.9997/0.0763 Test:0.9790-0.9996/0.0679
         # self.model_conv = None
         # self.model_gnn1 = GraphSageNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
         # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
@@ -482,9 +484,10 @@ class MyGCNNet(nn.Module):
         # self.model_gnn2 = GraphSageNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
         # C0 131520 2020-06-06 02:04:08 Epoch:37,lr=0.0004,Train:0.9860-1.0000/0.0430 Test:0.9842-0.9999/0.0492
-        self.model_conv = None
-        self.model_gnn1 = GatedGCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
-        self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
+        # C0 131520 2020-06-07 14:35:05 Epoch:103,lr=0.0010,Train:0.9750-0.9997/0.0825 Test:0.9786-1.0000/0.0680
+        # self.model_conv = None
+        # self.model_gnn1 = GatedGCNNet1(in_dim=1, hidden_dims=[64, 64], out_dim=64)
+        # self.model_gnn2 = GatedGCNNet2(in_dim=64, hidden_dims=[64, 64, 64, 64], out_dim=64, n_classes=10)
 
         # C1 136320
         # self.model_conv = CONVNet(in_dim=1, hidden_dims=[], out_dim=64)
@@ -538,7 +541,7 @@ class RunnerSPE(object):
         # self.lr_s = [[0, 0.001], [15, 0.002], [30, 0.0004]]
         # self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=0.0)
 
-        self.lr_s = [[0, 0.1], [50, 0.01], [100, 0.001], [130, 0.0001]]
+        self.lr_s = [[0, 0.01], [50, 0.001], [100, 0.0001]]
         self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1], momentum=0.9, weight_decay=5e-4)
 
         self.loss_class = nn.CrossEntropyLoss().to(self.device)
@@ -704,6 +707,10 @@ if __name__ == '__main__':
         C0 384512 GatedGCNNet 2020-05-29 23:21:09 Epoch:34,lr=0.0004,Train:0.9913-1.0000/0.0278 Test:0.9866-0.9998/0.0429
         C1 389312 GatedGCNNet 2020-05-29 22:38:14 Epoch:33,lr=0.0004,Train:0.9985-1.0000/0.0050 Test:0.9966-1.0000/0.0116
         
+    SGD
+        C0 30656 GCNNet 2020-06-07 21:03:10 Epoch:133,lr=0.0001,Train:0.9512-0.9990/0.1554 Test:0.9617-0.9991/0.1228
+        C0 55232 GraphSageNet 2020-06-07 20:48:20 Epoch:133,lr=0.0001,Train:0.9770-0.9997/0.0763 Test:0.9790-0.9996/0.0679
+        C0 131520 GatedGCNNet 2020-06-07 14:35:05 Epoch:103,lr=0.0010,Train:0.9750-0.9997/0.0825 Test:0.9786-1.0000/0.0680
     """
 
     # _data_root_path = '/home/ubuntu/ALISURE/data/mnist'
