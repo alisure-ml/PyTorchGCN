@@ -49,10 +49,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
-                                         compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
+        #                                  compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
+        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+                                         sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -819,13 +819,51 @@ if __name__ == '__main__':
     2020-06-08 00:04:49 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
     2020-06-08 00:04:54 Total param: 412864
     2020-06-08 13:22:48 Epoch: 51, Train: 0.9543/0.1379 Test: 0.9045/0.3113
+    
+    
+    
+    ####################################################################
+    5
+    ####################################################################
+    2020-06-07 23:55:51 #Conv=13 pretrained=False
+    2020-06-07 23:55:51 GatedGCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max
+    2020-06-07 23:55:51 GatedGCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
+    2020-06-07 23:55:51 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:6 gpu:1
+    2020-06-07 23:55:51 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 23:55:54 Total param: 794176
+    2020-06-08 16:02:30 Epoch: 61, Train: 0.9699/0.0906 Test: 0.9103/0.2937
+    
+    2020-06-07 23:55:56 #Conv=13 pretrained=False
+    2020-06-07 23:55:56 GatedGCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max
+    2020-06-07 23:55:56 GatedGCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-07 23:55:56 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:6 gpu:1
+    2020-06-07 23:55:56 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 23:55:59 Total param: 794176
+    2020-06-08 15:07:03 Epoch: 57, Train: 0.9641/0.1101 Test: 0.9054/0.3132
+    
+    2020-06-07 23:56:02 #Conv=13 pretrained=False
+    2020-06-07 23:56:02 GatedGCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
+    2020-06-07 23:56:02 GatedGCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
+    2020-06-07 23:56:02 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:6 gpu:1
+    2020-06-07 23:56:02 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 23:56:05 Total param: 794176
+    2020-06-08 21:16:15 Epoch: 80, Train: 0.9795/0.0614 Test: 0.9129/0.3053
+    
+    2020-06-07 23:56:05 #Conv=13 pretrained=False
+    2020-06-07 23:56:05 GatedGCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
+    2020-06-07 23:56:05 GatedGCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-07 23:56:05 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:6 gpu:1
+    2020-06-07 23:56:05 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-07 23:56:10 Total param: 794176
+    2020-06-08 14:33:09 Epoch: 55, Train: 0.9630/0.1130 Test: 0.9053/0.3121
     """
 
     _use_gpu = True
 
     # _model_conv, _model_gnn1, _model_gnn2 = None, None, None
-    _data_root_path = '/private/alishuo/cifar10'
+    # _data_root_path = '/private/alishuo/cifar10'
     # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = "/home/ubuntu/ALISURE/data/cifar"
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV_CIFAR10/{}".format("GCNNet3")
     _image_size = 32
     _train_print_freq = 200
@@ -864,8 +902,10 @@ if __name__ == '__main__':
     # _model_conv = CONVNet(layer_num=13, pretrained=False)
     # _model_gnn1 = GCNNet1(64, [128, 128], readout=_readout1)
     # _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
-    _model_gnn1 = GraphSageNet1(64, [128, 128], readout=_readout1)
-    _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    # _model_gnn1 = GraphSageNet1(64, [128, 128], readout=_readout1)
+    # _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    _model_gnn1 = GatedGCNNet1(64, [128, 128], readout=_readout1)
+    _model_gnn2 = GatedGCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
 
     _gpu_id = "0"
     # _gpu_id = "1"
