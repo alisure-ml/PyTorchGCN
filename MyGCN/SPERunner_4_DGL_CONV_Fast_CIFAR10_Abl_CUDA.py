@@ -698,15 +698,11 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    ####################################################################
-    1
-    ####################################################################
     2020-06-06 19:40:47 #Conv=13 pretrained=False
-    2020-06-06 19:40:47 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max
-    2020-06-06 19:40:47 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
+    2020-06-06 19:40:47 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max readout_k=32
+    2020-06-06 19:40:47 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max readout_k=32
     2020-06-06 19:40:47 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
     2020-06-06 19:40:47 sp-num:64 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:27:46 Total param: 379328
     2020-06-07 20:44:39 Epoch: 109, Train: 0.9887/0.0395 Test: 0.9128/0.3102
     
     2020-06-06 19:59:23 #Conv=13 pretrained=False
@@ -714,7 +710,6 @@ if __name__ == '__main__':
     2020-06-06 19:59:23 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
     2020-06-06 19:59:23 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
     2020-06-06 19:59:23 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:27:46 Total param: 379328
     2020-06-07 09:36:02 Epoch: 61, Train: 0.9697/0.0932 Test: 0.9030/0.3226
     
     2020-06-06 19:59:47 #Conv=13 pretrained=False
@@ -722,7 +717,6 @@ if __name__ == '__main__':
     2020-06-06 19:59:47 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
     2020-06-06 19:59:47 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
     2020-06-06 19:59:47 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:27:46 Total param: 379328
     2020-06-07 08:52:39 Epoch: 56, Train: 0.9660/0.1044 Test: 0.9117/0.2753
     
     2020-06-06 21:15:19 #Conv=13 pretrained=False
@@ -730,58 +724,7 @@ if __name__ == '__main__':
     2020-06-06 21:15:19 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
     2020-06-06 21:15:19 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
     2020-06-06 21:15:19 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:27:46 Total param: 379328
     2020-06-07 12:27:52 Epoch: 67, Train: 0.9736/0.0824 Test: 0.9070/0.3284
-    
-    
-    
-    ####################################################################
-    2
-    ####################################################################
-    2020-06-07 21:25:50 #Conv=13 pretrained=False
-    2020-06-07 21:25:50 GraphSageNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max
-    2020-06-07 21:25:50 GraphSageNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
-    2020-06-07 21:25:50 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
-    2020-06-07 21:25:50 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:25:55 Total param: 477632
-    2020-06-08 13:37:12 Epoch: 70, Train: 0.9755/0.0745 Test: 0.9124/0.2953
-    
-    2020-06-07 21:25:58 #Conv=13 pretrained=False
-    2020-06-07 21:25:58 GraphSageNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max
-    2020-06-07 21:25:58 GraphSageNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
-    2020-06-07 21:25:58 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
-    2020-06-07 21:25:58 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:26:03 Total param: 477632
-    2020-06-08 23:36:12 Epoch: 113, Train: 0.9919/0.0301 Test: 0.9056/0.3902
-    
-    2020-06-07 21:26:27 #Conv=13 pretrained=False
-    2020-06-07 21:26:27 GraphSageNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
-    2020-06-07 21:26:27 GraphSageNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
-    2020-06-07 21:26:27 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
-    2020-06-07 21:26:27 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:26:32 Total param: 477632
-    2020-06-08 21:01:27 Epoch: 102, Train: 0.9894/0.0354 Test: 0.9137/0.3240
-    
-    2020-06-07 21:26:32 #Conv=13 pretrained=False
-    2020-06-07 21:26:32 GraphSageNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
-    2020-06-07 21:26:32 GraphSageNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
-    2020-06-07 21:26:32 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
-    2020-06-07 21:26:32 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
-    2020-06-07 21:26:39 Total param: 477632
-    2020-06-08 11:35:34 Epoch: 61, Train: 0.9746/0.0788 Test: 0.9110/0.3129
-    
-    
-    
-    ####################################################################
-    3
-    ####################################################################
-    2020-06-07 21:27:39 #Conv=13 pretrained=False
-    2020-06-07 21:27:39 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=max
-    2020-06-07 21:27:39 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
-    2020-06-07 21:27:39 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:1
-    2020-06-07 21:27:39 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:False
-    2020-06-07 21:27:46 Total param: 379328
-    2020-06-08 17:37:21 Epoch: 88, Train: 1.0000/0.0035 Test: 0.8665/0.5050
     """
 
     _use_gpu = True
@@ -809,23 +752,23 @@ if __name__ == '__main__':
 
     # 3 SP
     _slic_compactness, _slic_sigma, _slic_max_iter = 10, 1, 5
-    # _sp_size, _down_ratio = 2, 2
-    _sp_size, _down_ratio = 4, 1
+    _sp_size, _down_ratio = 2, 2
+    # _sp_size, _down_ratio = 4, 1
 
     # 4 GNN Number + Conv Number + Readout(mean, max, sum, topk)
     #
-    # _readout1, _readout2 = "max", "max"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+    _readout1, _readout2 = "max", "max"
+    _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
     # _readout1, _readout2 = "max", "mean"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+    # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
     # _readout1, _readout2 = "mean", "max"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
-    _readout1, _readout2 = "mean", "mean"
-    _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+    # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
+    # _readout1, _readout2 = "mean", "mean"
+    # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
     #
-    _model_conv = CONVNet(layer_num=6, pretrained=False)
-    # _model_conv = CONVNet(layer_num=13, pretrained=False)
-    _model_gnn1 = GCNNet1(64, [128, 128], readout=_readout1)
+    # _model_conv = CONVNet(layer_num=6, pretrained=False)
+    _model_conv = CONVNet(layer_num=13, pretrained=False)
+    _model_gnn1 = GCNNet1(128, [128, 128], readout=_readout1)
     _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
     # _model_gnn1 = GraphSageNet1(128, [128, 128], readout=_readout1)
     # _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
