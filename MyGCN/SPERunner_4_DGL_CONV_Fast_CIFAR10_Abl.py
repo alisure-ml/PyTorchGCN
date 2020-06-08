@@ -782,13 +782,50 @@ if __name__ == '__main__':
     2020-06-07 21:27:39 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:False
     2020-06-07 21:27:46 Total param: 379328
     2020-06-08 17:37:21 Epoch: 88, Train: 1.0000/0.0035 Test: 0.8665/0.5050
+    
+    
+    
+    ####################################################################
+    4
+    ####################################################################
+    2020-06-08 00:04:27 #Conv=13 pretrained=False
+    2020-06-08 00:04:27 GCNNet1 #GNN1=1 in_dim=128 hidden_dims=[128] readout=mean
+    2020-06-08 00:04:27 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-08 00:04:27 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
+    2020-06-08 00:04:27 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-08 00:04:30 Total param: 362560
+    2020-06-08 14:45:17 Epoch: 57, Train: 0.9665/0.1022 Test: 0.9040/0.3101
+    
+    2020-06-08 00:04:34 #Conv=13 pretrained=False
+    2020-06-08 00:04:34 GCNNet1 #GNN1=3 in_dim=128 hidden_dims=[128, 128, 128] readout=mean
+    2020-06-08 00:04:34 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-08 00:04:34 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
+    2020-06-08 00:04:34 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-08 00:04:37 Total param: 396096
+    2020-06-08 14:33:44 Epoch: 56, Train: 0.9652/0.1067 Test: 0.9064/0.3105
+    
+    2020-06-08 00:04:45 #Conv=13 pretrained=False
+    2020-06-08 00:04:45 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
+    2020-06-08 00:04:45 GCNNet2 #GNN2=2 in_dim=128 hidden_dims=[128, 128] readout=mean
+    2020-06-08 00:04:45 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
+    2020-06-08 00:04:45 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-08 00:04:48 Total param: 345792
+    2020-06-08 13:39:24 Epoch: 53, Train: 0.9570/0.1329 Test: 0.9013/0.3103
+    
+    2020-06-08 00:04:49 #Conv=13 pretrained=False
+    2020-06-08 00:04:49 GCNNet1 #GNN1=2 in_dim=128 hidden_dims=[128, 128] readout=mean
+    2020-06-08 00:04:49 GCNNet2 #GNN2=6 in_dim=128 hidden_dims=[128, 128, 128, 128, 128, 128] readout=mean
+    2020-06-08 00:04:49 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:2 workers:8 gpu:0
+    2020-06-08 00:04:49 down_ratio:2 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-08 00:04:54 Total param: 412864
+    2020-06-08 13:22:48 Epoch: 51, Train: 0.9543/0.1379 Test: 0.9045/0.3113
     """
 
     _use_gpu = True
 
     # _model_conv, _model_gnn1, _model_gnn2 = None, None, None
-    # _data_root_path = '/private/alishuo/cifar10'
-    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    _data_root_path = '/private/alishuo/cifar10'
+    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV_CIFAR10/{}".format("GCNNet3")
     _image_size = 32
     _train_print_freq = 200
@@ -805,7 +842,7 @@ if __name__ == '__main__':
     # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
 
     # 2 Aug Data
-    _is_aug = False
+    _is_aug = True
 
     # 3 SP
     _slic_compactness, _slic_sigma, _slic_max_iter = 10, 1, 5
@@ -825,13 +862,13 @@ if __name__ == '__main__':
     #
     _model_conv = CONVNet(layer_num=6, pretrained=False)
     # _model_conv = CONVNet(layer_num=13, pretrained=False)
-    _model_gnn1 = GCNNet1(64, [128, 128], readout=_readout1)
-    _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
-    # _model_gnn1 = GraphSageNet1(128, [128, 128], readout=_readout1)
-    # _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    # _model_gnn1 = GCNNet1(64, [128, 128], readout=_readout1)
+    # _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    _model_gnn1 = GraphSageNet1(64, [128, 128], readout=_readout1)
+    _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     Tools.print("ckpt:{} is_sgd:{} epochs:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _is_sgd, _epochs, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
