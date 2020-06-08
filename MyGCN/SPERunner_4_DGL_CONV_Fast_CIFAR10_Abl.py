@@ -49,10 +49,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
-        #                                  compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter)
+        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
+                                         compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
