@@ -39,166 +39,47 @@ def gpu_setup(use_gpu, gpu_id):
     return device
 
 
-class DealSuperPixel(object):
+class ConvBlock(nn.Module):
 
-    def __init__(self, image_data, ds_image_size=224, super_pixel_size=14,
-                 slic_compactness=10, slic_sigma=1, slic_max_iter=5):
-        self.ds_image_size = ds_image_size
-        self.super_pixel_num = (self.ds_image_size // super_pixel_size) ** 2
-
-        self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
-            image_data, (self.ds_image_size, self.ds_image_size))
-
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
-                                         compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
-
-        _measure_region_props = skimage.measure.regionprops(self.segment + 1)
-        self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
-        pass
-
-    def run(self):
-        edge_index, edge_w, pixel_adj = [], [], []
-        for i in range(self.segment.max() + 1):
-            # 计算邻接矩阵
-            _now_adj = skimage.morphology.dilation(self.segment == i, selem=skimage.morphology.square(3))
-
-            _adj_dis = []
-            for sp_id in np.unique(self.segment[_now_adj]):
-                if sp_id != i:
-                    edge_index.append([i, sp_id])
-                    _adj_dis.append(1/(np.sqrt((self.region_props[i][0][0] - self.region_props[sp_id][0][0]) ** 2 +
-                                               (self.region_props[i][0][1] - self.region_props[sp_id][0][1]) ** 2) + 1))
-                pass
-            edge_w.extend(_adj_dis / np.sum(_adj_dis, axis=0))
-
-            # 计算单个超像素中的邻接矩阵
-            _now_where = self.region_props[i][1]
-            pixel_data_where = np.concatenate([[[0]] * len(_now_where), _now_where], axis=-1)
-            _a = np.tile([_now_where], (len(_now_where), 1, 1))
-            _dis = np.sum(np.power(_a - np.transpose(_a, (1, 0, 2)), 2), axis=-1)
-            _dis[_dis == 0] = 111
-            _dis = _dis <= 2
-            pixel_edge_index = np.argwhere(_dis)
-            pixel_edge_w = np.ones(len(pixel_edge_index))
-            pixel_adj.append([pixel_data_where, pixel_edge_index, pixel_edge_w])
-            pass
-
-        sp_adj = [np.asarray(edge_index), np.asarray(edge_w)]
-        return self.segment, sp_adj, pixel_adj
-
-    pass
-
-
-class MyDataset(Dataset):
-
-    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True, image_size=32,
-                 sp_size=4, slic_compactness=10, slic_sigma=1, slic_max_iter=5, down_ratio=1, is_aug=True):
+    def __init__(self, cin, cout, stride=1, padding=1, ks=3, has_relu=True, has_bn=True, bias=True):
         super().__init__()
-        self.sp_size = sp_size
-        self.slic_compactness = slic_compactness
-        self.slic_sigma = slic_sigma
-        self.slic_max_iter = slic_max_iter
+        self.has_relu = has_relu
+        self.has_bn = has_bn
 
-        self.is_aug = is_aug
-
-        self.is_train = is_train
-        self.image_size = image_size
-        self.image_size_for_sp = self.image_size // down_ratio
-        self.data_root_path = data_root_path
-
-        self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
-        self.transform = self.transform if self.is_aug else None
-        self.data_set = datasets.CIFAR10(root=self.data_root_path, train=self.is_train, transform=self.transform)
+        self.conv = nn.Conv2d(cin, cout, kernel_size=ks, stride=stride, padding=padding, bias=bias)
+        self.bn = nn.BatchNorm2d(cout)
+        self.relu = nn.ReLU(inplace=True)
         pass
 
-    def __len__(self):
-        return len(self.data_set)
-
-    def __getitem__(self, idx):
-        img, target = self.data_set.__getitem__(idx)
-        normalize = transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-        img_data = transforms.Compose([transforms.ToTensor(), normalize])(np.asarray(img)).unsqueeze(dim=0)
-
-        img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
-        graph, pixel_graph = self.get_sp_info(img_small_data)
-        return graph, pixel_graph, img_data, target
-
-    def get_sp_info(self, img):
-        # Super Pixel
-        #################################################################################
-        deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=self.image_size_for_sp,
-                                          super_pixel_size=self.sp_size, slic_compactness=self.slic_compactness,
-                                          slic_sigma=self.slic_sigma, slic_max_iter=self.slic_max_iter)
-        segment, sp_adj, pixel_adj = deal_super_pixel.run()
-        #################################################################################
-        # Graph
-        #################################################################################
-        graph = dgl.DGLGraph()
-        graph.add_nodes(len(pixel_adj))
-        graph.add_edges(sp_adj[0][:, 0], sp_adj[0][:, 1])
-        graph.edata['feat'] = torch.from_numpy(sp_adj[1]).unsqueeze(1).float()
-        #################################################################################
-        # Small Graph
-        #################################################################################
-        pixel_graph = []
-        for super_pixel in pixel_adj:
-            small_graph = dgl.DGLGraph()
-            small_graph.add_nodes(len(super_pixel[0]))
-            small_graph.ndata['data_where'] = torch.from_numpy(super_pixel[0]).long()
-            small_graph.add_edges(super_pixel[1][:, 0], super_pixel[1][:, 1])
-            small_graph.edata['feat'] = torch.from_numpy(super_pixel[2]).unsqueeze(1).float()
-            pixel_graph.append(small_graph)
-            pass
-        #################################################################################
-        return graph, pixel_graph
-
-    @staticmethod
-    def collate_fn(samples):
-        graphs, pixel_graphs, images, labels = map(list, zip(*samples))
-        images = torch.cat(images)
-        labels = torch.tensor(np.array(labels))
-
-        # 超像素图
-        _nodes_num = [graph.number_of_nodes() for graph in graphs]
-        _edges_num = [graph.number_of_edges() for graph in graphs]
-        nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
-        batched_graph = dgl.batch(graphs)
-
-        # 像素图
-        _pixel_graphs = []
-        for super_pixel_i, pixel_graph in enumerate(pixel_graphs):
-            for now_graph in pixel_graph:
-                now_graph.ndata["data_where"][:, 0] = super_pixel_i
-                _pixel_graphs.append(now_graph)
-            pass
-        _nodes_num = [graph.number_of_nodes() for graph in _pixel_graphs]
-        _edges_num = [graph.number_of_edges() for graph in _pixel_graphs]
-        pixel_nodes_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _nodes_num]).sqrt()
-        pixel_edges_num_norm_sqrt = torch.cat([torch.zeros((num, 1)).fill_(1./num) for num in _edges_num]).sqrt()
-        batched_pixel_graph = dgl.batch(_pixel_graphs)
-
-        return (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt,
-                batched_pixel_graph, pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt)
+    def forward(self, x):
+        out = self.conv(x)
+        if self.has_bn:
+            out = self.bn(out)
+        if self.has_relu:
+            out = self.relu(out)
+        return out
 
     pass
 
 
 class CONVNet(nn.Module):
 
-    def __init__(self, layer_num=6, out_dim=None, pretrained=True):  # 6, 13
+    def __init__(self, in_dim, hidden_dims, no_conv_dim=None):
         super().__init__()
-        self.pretrained = pretrained
-        if out_dim:
-            layers = [nn.Conv2d(3, out_dim, kernel_size=1, padding=0), nn.ReLU(inplace=True)]
-            self.features = nn.Sequential(*layers)
-        else:
-            self.features = vgg13_bn(pretrained=self.pretrained).features[0: layer_num]
 
-        Tools.print("#Conv={} pretrained={}".format(len(self.features), self.pretrained))
+        layers = []
+        for index, hidden_dim in enumerate(hidden_dims):
+            if hidden_dim == "M":
+                layers.append(nn.MaxPool2d((2, 2)))
+            else:
+                layers.append(ConvBlock(in_dim, int(hidden_dim), 1, padding=1, ks=3, has_bn=True))
+                in_dim = int(hidden_dim)
+            pass
+
+        if no_conv_dim:
+            layers = [nn.Conv2d(3, no_conv_dim, kernel_size=1, padding=0), nn.ReLU(inplace=True)]
+
+        self.features = nn.Sequential(*layers)
         pass
 
     def forward(self, x):
@@ -509,182 +390,16 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10', down_ratio=1, is_aug=True,
-                 model_conv=None, model_gnn1=None, model_gnn2=None, lr=[[0, 0.1], [50, 0.01], [100, 0.001]],
-                 slic_compactness=10, slic_sigma=1, slic_max_iter=5,
-                 batch_size=64, image_size=32, sp_size=4, train_print_freq=100, test_print_freq=50,
-                 is_sgd=True, root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
-        self.train_print_freq = train_print_freq
-        self.test_print_freq = test_print_freq
-
+    def __init__(self, model_conv=None, model_gnn1=None, model_gnn2=None, use_gpu=True, gpu_id="1"):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
-        self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
-
-        self.train_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio,
-                                       is_train=True, image_size=image_size,
-                                       sp_size=sp_size, slic_compactness=slic_compactness,
-                                       slic_sigma=slic_sigma, slic_max_iter=slic_max_iter, is_aug=is_aug)
-        self.test_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio,
-                                      is_train=False, image_size=image_size,
-                                      sp_size=sp_size, slic_compactness=slic_compactness,
-                                      slic_sigma=slic_sigma, slic_max_iter=slic_max_iter, is_aug=is_aug)
-
-        self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
-                                       num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
-        self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
-                                      num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         if model_gnn1 and model_gnn2:
             self.model = MyGCNNet(model_conv=model_conv, model_gnn1=model_gnn1, model_gnn2=model_gnn2).to(self.device)
         else:
             self.model = MyGCNNet().to(self.device)
 
-        self.lr_s = lr
-        if is_sgd:
-            self.optimizer = torch.optim.SGD(self.model.parameters(),
-                                             lr=self.lr_s[0][1], momentum=0.9, weight_decay=5e-4)
-        else:
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=0.0)
-
-        self.loss_class = nn.CrossEntropyLoss().to(self.device)
-
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
         pass
-
-    def load_model(self, model_file_name):
-        ckpt = torch.load(model_file_name, map_location=self.device)
-
-        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
-        # for c in keys:
-        #     del ckpt[c]
-        #     Tools.print(c)
-        #     pass
-
-        self.model.load_state_dict(ckpt, strict=False)
-        Tools.print('Load Model: {}'.format(model_file_name))
-        pass
-
-    def train(self, epochs, start_epoch=0):
-        for epoch in range(start_epoch, epochs):
-            Tools.print()
-            Tools.print("Start Epoch {}".format(epoch))
-
-            self._lr(epoch)
-            Tools.print('Epoch:{:02d},lr={:.4f}'.format(epoch, self.optimizer.param_groups[0]['lr']))
-
-            epoch_loss, epoch_train_acc = self._train_epoch()
-            self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
-            epoch_test_loss, epoch_test_acc = self.test()
-
-            Tools.print('Epoch: {:02d}, Train: {:.4f}/{:.4f} Test: {:.4f}/{:.4f}'.format(
-                epoch, epoch_train_acc, epoch_loss, epoch_test_acc, epoch_test_loss))
-            pass
-        pass
-
-    def _train_epoch(self):
-        self.model.train()
-        epoch_loss, epoch_train_acc, nb_data = 0, 0, 0
-        for i, (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt, batched_pixel_graph,
-                pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt) in enumerate(self.train_loader):
-            # Data
-            images = images.float().to(self.device)
-            labels = labels.long().to(self.device)
-            edges_feat = batched_graph.edata['feat'].to(self.device)
-            nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
-            edges_num_norm_sqrt = edges_num_norm_sqrt.to(self.device)
-            pixel_data_where = batched_pixel_graph.ndata["data_where"].to(self.device)
-            pixel_edges_feat = batched_pixel_graph.edata['feat'].to(self.device)
-            pixel_nodes_num_norm_sqrt = pixel_nodes_num_norm_sqrt.to(self.device)
-            pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
-
-            # Run
-            self.optimizer.zero_grad()
-            logits = self.model.forward(images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt,
-                                        pixel_data_where, batched_pixel_graph, pixel_edges_feat,
-                                        pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt)
-            loss = self.loss_class(logits, labels)
-            loss.backward()
-            self.optimizer.step()
-
-            # Stat
-            nb_data += labels.size(0)
-            epoch_loss += loss.detach().item()
-            epoch_train_acc += self._accuracy(logits, labels)
-
-            # Print
-            if i % self.train_print_freq == 0:
-                Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                    i, len(self.train_loader), epoch_loss/(i+1), loss.detach().item(), epoch_train_acc/nb_data))
-                pass
-            pass
-
-        epoch_train_acc /= nb_data
-        epoch_loss /= (len(self.train_loader) + 1)
-        return epoch_loss, epoch_train_acc
-
-    def test(self):
-        self.model.eval()
-
-        Tools.print()
-        epoch_test_loss, epoch_test_acc, nb_data = 0, 0, 0
-        with torch.no_grad():
-            for i, (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt, batched_pixel_graph,
-                    pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt) in enumerate(self.test_loader):
-                # Data
-                images = images.float().to(self.device)
-                labels = labels.long().to(self.device)
-                edges_feat = batched_graph.edata['feat'].to(self.device)
-                nodes_num_norm_sqrt = nodes_num_norm_sqrt.to(self.device)
-                edges_num_norm_sqrt = edges_num_norm_sqrt.to(self.device)
-                pixel_data_where = batched_pixel_graph.ndata["data_where"].to(self.device)
-                pixel_edges_feat = batched_pixel_graph.edata['feat'].to(self.device)
-                pixel_nodes_num_norm_sqrt = pixel_nodes_num_norm_sqrt.to(self.device)
-                pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
-
-                # Run
-                logits = self.model.forward(images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt,
-                                            pixel_data_where, batched_pixel_graph, pixel_edges_feat,
-                                            pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt)
-                loss = self.loss_class(logits, labels)
-
-                # Stat
-                nb_data += labels.size(0)
-                epoch_test_loss += loss.detach().item()
-                epoch_test_acc += self._accuracy(logits, labels)
-
-                # Print
-                if i % self.test_print_freq == 0:
-                    Tools.print("{}-{} loss={:4f}/{:4f} acc={:4f}".format(
-                        i, len(self.test_loader), epoch_test_loss/(i+1), loss.detach().item(), epoch_test_acc/nb_data))
-                    pass
-                pass
-            pass
-
-        return epoch_test_loss / (len(self.test_loader) + 1), epoch_test_acc / nb_data
-
-    def _lr(self, epoch):
-        # [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
-        for lr in self.lr_s:
-            if lr[0] == epoch:
-                for param_group in self.optimizer.param_groups:
-                    param_group['lr'] = lr[1]
-                pass
-            pass
-        pass
-
-    @staticmethod
-    def _save_checkpoint(model, root_ckpt_dir, epoch):
-        torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
-        for file in glob.glob(root_ckpt_dir + '/*.pkl'):
-            if int(file.split('_')[-1].split('.')[0]) < epoch - 1:
-                os.remove(file)
-                pass
-            pass
-        pass
-
-    @staticmethod
-    def _accuracy(scores, targets):
-        return (scores.detach().argmax(dim=1) == targets).float().sum().item()
 
     @staticmethod
     def _view_model_param(model):
@@ -950,39 +665,33 @@ if __name__ == '__main__':
 
     # 4 GNN Number + Conv Number + Readout(mean, max, sum, topk)
     #
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
-    #
-    # _readout1, _readout2 = "max", "max"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
-    # _readout1, _readout2 = "max", "mean"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
-    # _readout1, _readout2 = "mean", "max"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
     _readout1, _readout2 = "mean", "mean"
     _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
 
-    _model_conv = CONVNet(layer_num=6, pretrained=False)
-    # _model_conv = CONVNet(layer_num=13, pretrained=False)
-    # _model_gnn1 = GCNNet1(64, [128, 128], readout=_readout1)
-    # _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
-    _model_gnn1 = GraphSageNet1(64, [128, 128], readout=_readout1)
-    _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
-    # _model_gnn1 = GatedGCNNet1(64, [128, 128], readout=_readout1)
-    # _model_gnn2 = GatedGCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    # _model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], no_conv_dim=64)  # C0
+    # _model_conv = CONVNet(in_dim=3, hidden_dims=[64], no_conv_dim=None)  # C1
+    _model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64], no_conv_dim=None)  # C2
+    # _model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, 64], no_conv_dim=None)  # C3
+    # _model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 128], no_conv_dim=None)  # C2P1C1
+    # _model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 128, 128], no_conv_dim=None)  # C2P1C2
+    # _model_conv = CONVNet(in_dim=3, hidden_dims=[64, 64, "M", 128, 128, 128], no_conv_dim=None)  # C2P1C3
+
+    g1 = [256, 256]
+    g2 = [512, 512, 512, 512]
+    # _model_gnn1 = GCNNet1(64, g1, readout=_readout1)
+    # _model_gnn2 = GCNNet2(g1[-1], g2, 10, readout=_readout2)
+    # _model_gnn1 = GraphSageNet1(64, g1, readout=_readout1)
+    # _model_gnn2 = GraphSageNet2(g1[-1], g2, 10, readout=_readout2)
+    _model_gnn1 = GatedGCNNet1(64, g1, readout=_readout1)
+    _model_gnn2 = GatedGCNNet2(g1[-1], g2, 10, readout=_readout2)
 
     _gpu_id = "0"
-    # _gpu_id = "1"
 
     Tools.print("ckpt:{} is_sgd:{} epochs:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
         _root_ckpt_dir, _is_sgd, _epochs, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
     Tools.print("down_ratio:{} slic_max_iter:{} slic_sigma:{} slic_compactness:{} is_aug:{}".format(
         _down_ratio, _slic_max_iter, _slic_sigma, _slic_compactness, _is_aug))
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, down_ratio=_down_ratio,
-                       model_conv=_model_conv, model_gnn1=_model_gnn1,  model_gnn2=_model_gnn2, lr=_lr,
-                       batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
-                       train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
-                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, is_aug=_is_aug,
-                       slic_compactness=_slic_compactness, slic_sigma=_slic_sigma, slic_max_iter=_slic_max_iter)
-    runner.train(_epochs, start_epoch=0)
+    runner = RunnerSPE(model_conv=_model_conv, model_gnn1=_model_gnn1,  model_gnn2=_model_gnn2,
+                       use_gpu=_use_gpu, gpu_id=_gpu_id)
     pass
