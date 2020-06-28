@@ -506,7 +506,7 @@ class RunnerSPE(object):
 if __name__ == '__main__':
     """
     Adam 153344 has_residual:True is_normalize:True has_bn:True improved:True is_sgd:False weight_decay:0.0    Epoch: 79, Train:0.9354-0.9995/0.1828 Test:0.8559-0.9953/0.5030
-    SGD  153344 has_residual:True is_normalize:True has_bn:True improved:True is_sgd:True  weight_decay:0.0005 
+    SGD  153344 has_residual:True is_normalize:True has_bn:True improved:True is_sgd:True  weight_decay:0.0005 Epoch:101, Train:0.8676-0.9955/0.3903 Test:0.8377-0.9937/0.4716
     SGD  395840 has_residual:True is_normalize:True has_bn:True improved:True is_sgd:True  weight_decay:0.0005 Epoch:116, Train:0.9468-0.9991/0.1577 Test:0.8927-0.9959/0.3575
     """
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
@@ -535,8 +535,8 @@ if __name__ == '__main__':
     _has_residual = True
     _is_normalize = True
 
-    # _sp_size, _down_ratio, _conv_layer_num = 4, 1, 6
-    _sp_size, _down_ratio, _conv_layer_num = 2, 2, 13
+    _sp_size, _down_ratio, _conv_layer_num = 4, 1, 6
+    # _sp_size, _down_ratio, _conv_layer_num = 2, 2, 13
 
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} down_ratio:{} conv_layer_num:{} workers:{} "
                 "gpu:{} has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
