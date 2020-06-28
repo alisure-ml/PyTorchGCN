@@ -291,7 +291,9 @@ class MyGCNNet(nn.Module):
         super().__init__()
         self.model_conv = CONVNet(layer_num=conv_layer_num)  # 14, 20
 
-        self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[-2].num_features,
+        assert conv_layer_num == 14 or conv_layer_num == 20
+        in_dim_which = -3 if conv_layer_num == 14 else -2
+        self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[in_dim_which].num_features,
                                   hidden_dims=[256, 256],
                                   has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
         self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1],
@@ -513,16 +515,16 @@ if __name__ == '__main__':
     _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
     # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}".format("GCNNet-C2PC2PC2")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}".format("GCNNet-C2PC2P")
     _batch_size = 32
     _image_size = 224
     _train_print_freq = 2000
     _test_print_freq = 1000
-    _num_workers = 24
+    _num_workers = 40
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     # _epochs = 90
     # _is_sgd = False
