@@ -49,10 +49,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
-                                         compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num, start_label=0,
+        #                                  compactness=slic_compactness, sigma=slic_sigma, max_iter=slic_max_iter)
+        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+                                         sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -627,6 +627,7 @@ class RunnerSPE(object):
 
         Tools.print()
         epoch_test_loss, epoch_test_acc, nb_data = 0, 0, 0
+        time_count = 0
         with torch.no_grad():
             for i, (images, labels, batched_graph, nodes_num_norm_sqrt, edges_num_norm_sqrt, batched_pixel_graph,
                     pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt) in enumerate(self.test_loader):
@@ -642,9 +643,11 @@ class RunnerSPE(object):
                 pixel_edges_num_norm_sqrt = pixel_edges_num_norm_sqrt.to(self.device)
 
                 # Run
+                start_time = time.time()
                 logits = self.model.forward(images, batched_graph, edges_feat, nodes_num_norm_sqrt, edges_num_norm_sqrt,
                                             pixel_data_where, batched_pixel_graph, pixel_edges_feat,
                                             pixel_nodes_num_norm_sqrt, pixel_edges_num_norm_sqrt)
+                time_count += time.time() - start_time
                 loss = self.loss_class(logits, labels)
 
                 # Stat
@@ -659,6 +662,8 @@ class RunnerSPE(object):
                     pass
                 pass
             pass
+        Tools.print("all time:{} avg time:{} {}/s".format(time_count, time_count / len(self.test_loader) / 64,
+                                                          1 / (time_count / len(self.test_loader) / 64)))
 
         return epoch_test_loss / (len(self.test_loader) + 1), epoch_test_acc / nb_data
 
@@ -858,6 +863,43 @@ if __name__ == '__main__':
     2020-06-08 14:33:09 Epoch: 55, Train: 0.9630/0.1130 Test: 0.9053/0.3121
     
     
+    
+    ####################################################################
+    6
+    ####################################################################
+    2020-06-08 23:59:54 #Conv=6 pretrained=False
+    2020-06-08 23:59:54 GCNNet1 #GNN1=2 in_dim=64 hidden_dims=[128, 128] readout=max
+    2020-06-08 23:59:54 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
+    2020-06-08 23:59:54 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:4 workers:8 gpu:0
+    2020-06-08 23:59:54 down_ratio:1 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-08 23:59:59 Total param: 149184
+    2020-06-09 18:23:40 Epoch: 87, Train: 0.9022/0.2813 Test: 0.8592/0.4163
+    
+    2020-06-09 00:00:03 #Conv=6 pretrained=False
+    2020-06-09 00:00:03 GCNNet1 #GNN1=2 in_dim=64 hidden_dims=[128, 128] readout=max
+    2020-06-09 00:00:03 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-09 00:00:03 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:4 workers:8 gpu:0
+    2020-06-09 00:00:03 down_ratio:1 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-09 00:00:09 Total param: 149184
+    2020-06-09 22:38:15 Epoch: 105, Train: 0.9085/0.2583 Test: 0.8567/0.4379
+    
+    2020-06-09 00:00:10 #Conv=6 pretrained=False
+    2020-06-09 00:00:10 GCNNet1 #GNN1=2 in_dim=64 hidden_dims=[128, 128] readout=mean
+    2020-06-09 00:00:10 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=max
+    2020-06-09 00:00:10 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:4 workers:8 gpu:1
+    2020-06-09 00:00:10 down_ratio:1 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-09 00:00:15 Total param: 149184
+    2020-06-09 21:55:36 Epoch: 95, Train: 0.9080/0.2694 Test: 0.8615/0.4140
+    
+    2020-06-09 00:00:13 #Conv=6 pretrained=False
+    2020-06-09 00:00:13 GCNNet1 #GNN1=2 in_dim=64 hidden_dims=[128, 128] readout=mean
+    2020-06-09 00:00:13 GCNNet2 #GNN2=4 in_dim=128 hidden_dims=[128, 128, 128, 128] readout=mean
+    2020-06-09 00:00:13 ckpt:./ckpt2/dgl/4_DGL_CONV_CIFAR10/GCNNet3 is_sgd:True epochs:150 batch size:64 image size:32 sp size:4 workers:8 gpu:1
+    2020-06-09 00:00:13 down_ratio:1 slic_max_iter:5 slic_sigma:1 slic_compactness:10 is_aug:True
+    2020-06-09 00:00:18 Total param: 149184
+    2020-06-09 15:00:35 Epoch: 66, Train: 0.9127/0.2518 Test: 0.8578/0.4450
+    
+    
     ####################################################################
     7
     ####################################################################
@@ -918,8 +960,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _model_conv, _model_gnn1, _model_gnn2 = None, None, None
-    _data_root_path = '/private/alishuo/cifar10'
-    # _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # _data_root_path = '/private/alishuo/cifar10'
+    _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = "/home/ubuntu/ALISURE/data/cifar"
     _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV_CIFAR10/{}".format("GCNNet3")
     _image_size = 32
@@ -946,43 +988,72 @@ if __name__ == '__main__':
     # _sp_size, _down_ratio = 2, 1
     # _sp_size, _down_ratio = 3, 1
     # _sp_size, _down_ratio = 5, 1
-    _sp_size, _down_ratio = 6, 1
+    # _sp_size, _down_ratio = 6, 1
 
     # 4 GNN Number + Conv Number + Readout(mean, max, sum, topk)
     #
     # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
     #
     # _readout1, _readout2 = "max", "max"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+    # _lr = [[0, 0.1], [30, 0.01], [60, 0.001]]
     # _readout1, _readout2 = "max", "mean"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+    # _lr = [[0, 0.1], [30, 0.01], [60, 0.001]]
     # _readout1, _readout2 = "mean", "max"
-    # _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+    # _lr = [[0, 0.1], [30, 0.01], [60, 0.001]]
     _readout1, _readout2 = "mean", "mean"
     _lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
 
     _model_conv = CONVNet(layer_num=6, pretrained=False)
     # _model_conv = CONVNet(layer_num=13, pretrained=False)
-    # _model_gnn1 = GCNNet1(64, [128, 128], readout=_readout1)
-    # _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
-    _model_gnn1 = GraphSageNet1(64, [128, 128], readout=_readout1)
-    _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    _model_gnn1 = GCNNet1(64, [128, 128], readout=_readout1)
+    _model_gnn2 = GCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
+    # _model_gnn1 = GraphSageNet1(64, [128, 128], readout=_readout1)
+    # _model_gnn2 = GraphSageNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
     # _model_gnn1 = GatedGCNNet1(64, [128, 128], readout=_readout1)
     # _model_gnn2 = GatedGCNNet2(128, [128, 128, 128, 128], 10, readout=_readout2)
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
-    Tools.print("ckpt:{} is_sgd:{} epochs:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
-        _root_ckpt_dir, _is_sgd, _epochs, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
-    Tools.print("down_ratio:{} slic_max_iter:{} slic_sigma:{} slic_compactness:{} is_aug:{}".format(
-        _down_ratio, _slic_max_iter, _slic_sigma, _slic_compactness, _is_aug))
+    # Tools.print("ckpt:{} is_sgd:{} epochs:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
+    #     _root_ckpt_dir, _is_sgd, _epochs, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
+    # Tools.print("down_ratio:{} slic_max_iter:{} slic_sigma:{} slic_compactness:{} is_aug:{}".format(
+    #     _down_ratio, _slic_max_iter, _slic_sigma, _slic_compactness, _is_aug))
+    #
+    # runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, down_ratio=_down_ratio,
+    #                    model_conv=_model_conv, model_gnn1=_model_gnn1, model_gnn2=_model_gnn2, lr=_lr,
+    #                    batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
+    #                    train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
+    #                    num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, is_aug=_is_aug,
+    #                    slic_compactness=_slic_compactness, slic_sigma=_slic_sigma, slic_max_iter=_slic_max_iter)
+    # runner.train(_epochs, start_epoch=0)
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, down_ratio=_down_ratio,
-                       model_conv=_model_conv, model_gnn1=_model_gnn1,  model_gnn2=_model_gnn2, lr=_lr,
-                       batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
-                       train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
-                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, is_aug=_is_aug,
-                       slic_compactness=_slic_compactness, slic_sigma=_slic_sigma, slic_max_iter=_slic_max_iter)
-    runner.train(_epochs, start_epoch=0)
+    # Time
+    # _sp_size, _down_ratio = 4, 1
+    # d_1 = [[64, 64], [64, 64], [64, 64],
+    #        [128, 128], [128, 128], [128, 128],
+    #        [256, 256], [256, 256], [256, 256]]
+    # d_2 = [[64, 64, 64, 64], [64, 64, 128, 128], [128, 128, 128, 128],
+    #        [128, 128, 128, 128], [128, 128, 256, 256], [256, 256, 256, 256],
+    #        [256, 256, 256, 256], [256, 256, 512, 512], [512, 512, 512, 512]]
+    _sp_sizes, _down_ratio = [2, 3, 4, 5, 6], 1
+    d_1 = [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]]
+    d_2 = [[128, 128, 128, 128], [128, 128, 128, 128], [128, 128, 128, 128], [128, 128, 128, 128], [128, 128, 128, 128]]
+    for _sp_size, _d_1, _d_2 in zip(_sp_sizes, d_1, d_2):
+        _model_gnn1 = GCNNet1(64, _d_1, readout=_readout1)
+        _model_gnn2 = GCNNet2(_d_1[-1], _d_2, 10, readout=_readout2)
+
+        Tools.print("ckpt:{} is_sgd:{} epochs:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
+            _root_ckpt_dir, _is_sgd, _epochs, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
+        Tools.print("down_ratio:{} slic_max_iter:{} slic_sigma:{} slic_compactness:{} is_aug:{}".format(
+            _down_ratio, _slic_max_iter, _slic_sigma, _slic_compactness, _is_aug))
+
+        runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, down_ratio=_down_ratio,
+                           model_conv=_model_conv, model_gnn1=_model_gnn1,  model_gnn2=_model_gnn2, lr=_lr,
+                           batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
+                           train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
+                           num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, is_aug=_is_aug,
+                           slic_compactness=_slic_compactness, slic_sigma=_slic_sigma, slic_max_iter=_slic_max_iter)
+        # runner.train(_epochs, start_epoch=0)
+        runner.test()
     pass
