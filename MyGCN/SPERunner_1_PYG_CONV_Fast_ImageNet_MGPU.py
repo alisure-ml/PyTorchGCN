@@ -116,18 +116,12 @@ class MyDataset(Dataset):
         return len(self.data_set)
 
     def __getitem__(self, idx):
-        # start = time.time()
         img, target = self.data_set.__getitem__(idx)
-        # Tools.print("__getitem__ {}".format(time.time() - start))
-
         _normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         img_data = transforms.Compose([transforms.ToTensor(), _normalize])(np.asarray(img)).unsqueeze(dim=0)
 
-        # start = time.time()
         img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
         graph, pixel_graph = self.get_sp_info(img_small_data, target)
-        # Tools.print("get_sp_info {}".format(time.time() - start))
-
         return graph, pixel_graph, img_data, target
 
     def get_sp_info(self, img, target):
@@ -158,8 +152,6 @@ class MyDataset(Dataset):
 
     @staticmethod
     def collate_fn(samples):
-        start = time.time()
-
         gpu_num = torch.cuda.device_count()
         one_num = len(samples) // gpu_num
         samples_list = [samples[i * one_num:(i + 1) * one_num] for i in range(gpu_num)] if one_num > 0 else [samples]
@@ -189,30 +181,7 @@ class MyDataset(Dataset):
             pixel_graphs_list.append(batched_pixel_graph)
             pass
 
-        Tools.print("collate_fn {}".format(time.time() - start))
         return images_list, labels_list, graphs_list, pixel_graphs_list
-
-    @staticmethod
-    def collate_fn2(samples):
-        start = time.time()
-        graphs, pixel_graphs, images, labels = map(list, zip(*samples))
-        images = torch.cat(images)
-        labels = torch.tensor(np.array(labels))
-
-        # 超像素图
-        batched_graph = Batch.from_data_list(graphs)
-
-        # 像素图
-        _pixel_graphs = []
-        for super_pixel_i, pixel_graph in enumerate(pixel_graphs):
-            for now_graph in pixel_graph:
-                now_graph.data_where[:, 0] = super_pixel_i
-                _pixel_graphs.append(now_graph)
-            pass
-        batched_pixel_graph = Batch.from_data_list(_pixel_graphs)
-
-        Tools.print("collate_fn {}".format(time.time() - start))
-        return images, labels, batched_graph, batched_pixel_graph
 
     pass
 
@@ -470,15 +439,10 @@ class RunnerSPE(object):
     def _train_epoch(self):
         self.model.train()
 
-        start = time.time()
-
         epoch_loss, epoch_train_acc, epoch_train_acc_k, nb_data = 0, 0, 0, 0
         for i, (images_list, labels_list, batched_graph_list, batched_pixel_graph_list) in enumerate(self.train_loader):
             # Run
             self.optimizer.zero_grad()
-
-            Tools.print("train_loader {}".format(time.time() - start))
-            start2 = time.time()
 
             # Data
             inputs = []
@@ -503,6 +467,7 @@ class RunnerSPE(object):
                 pass
 
             logits = self.model.forward(inputs)
+            # logits = self.model.forward(images, batched_graph, batched_pixel_graph)
 
             loss = self.loss_class(logits, labels)
             loss.backward()
@@ -521,10 +486,6 @@ class RunnerSPE(object):
                     i, len(self.train_loader), epoch_loss/(i+1),
                     loss.detach().item(), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data))
                 pass
-
-            Tools.print("train_time {}".format(time.time() - start2))
-            start = time.time()
-
             pass
         return epoch_loss/(len(self.train_loader)+1), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data
 
@@ -626,7 +587,7 @@ if __name__ == '__main__':
     # _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
     _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Time/{}".format("GCNNet-C2PC2P")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}".format("GCNNet-C2PC2P")
     _batch_size = 64
     _image_size = 224
     _train_print_freq = 100
@@ -635,7 +596,6 @@ if __name__ == '__main__':
     _use_gpu = True
 
     _gpu_id = "0"
-    # _gpu_id = "1"
 
     # _epochs = 30
     # _is_sgd = False
