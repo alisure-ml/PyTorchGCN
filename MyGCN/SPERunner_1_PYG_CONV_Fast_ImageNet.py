@@ -95,8 +95,11 @@ class MyDataset(Dataset):
         self.image_size_for_sp = self.image_size // down_ratio
         self.data_root_path = data_root_path
 
-        self.transform_train = transforms.Compose([transforms.RandomResizedCrop(self.image_size),
+        self.transform_train = transforms.Compose([transforms.Resize(256),
+                                                   transforms.RandomCrop(self.image_size),
                                                    transforms.RandomHorizontalFlip()])
+        # self.transform_train = transforms.Compose([transforms.RandomResizedCrop(self.image_size),
+        #                                            transforms.RandomHorizontalFlip()])
         self.transform_test = transforms.Compose([transforms.Resize(256),
                                                   transforms.CenterCrop(self.image_size)])
 
@@ -192,7 +195,7 @@ class GCNNet1(nn.Module):
         self.has_bn = has_bn
         self.improved = improved
 
-        self.embedding_h = nn.Linear(in_dim, in_dim)
+        # self.embedding_h = nn.Linear(in_dim, in_dim)
 
         self.gcn_list = nn.ModuleList()
         _in_dim = in_dim
@@ -212,7 +215,8 @@ class GCNNet1(nn.Module):
         pass
 
     def forward(self, data):
-        hidden_nodes_feat = self.embedding_h(data.x)
+        # hidden_nodes_feat = self.embedding_h(data.x)
+        hidden_nodes_feat = data.x
         for gcn, bn in zip(self.gcn_list, self.bn_list):
             h_in = hidden_nodes_feat
             hidden_nodes_feat = gcn(h_in, data.edge_index)
@@ -345,11 +349,11 @@ class RunnerSPE(object):
                               has_bn=has_bn, normalize=normalize, residual=residual, improved=improved).to(self.device)
 
         if is_sgd:
-            self.lr_s = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+            self.lr_s = [[0, 0.01], [15, 0.001], [25, 0.0001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
-            self.lr_s = [[0, 0.001], [30, 0.0001], [60, 0.00001]]
+            self.lr_s = [[0, 0.001], [15, 0.0001], [25, 0.00001]]
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
@@ -512,13 +516,13 @@ if __name__ == '__main__':
     """
     
     """
-    _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
+    # _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
+    _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}".format("GCNNet-C2PC2P")
     _batch_size = 32
     _image_size = 224
-    _train_print_freq = 2000
+    _train_print_freq = 100
     _test_print_freq = 1000
     _num_workers = 40
     _use_gpu = True
@@ -526,11 +530,11 @@ if __name__ == '__main__':
     # _gpu_id = "0"
     _gpu_id = "1"
 
-    # _epochs = 90
+    # _epochs = 30
     # _is_sgd = False
     # _weight_decay = 0.0
 
-    _epochs = 90
+    _epochs = 30
     _is_sgd = True
     _weight_decay = 5e-4
 

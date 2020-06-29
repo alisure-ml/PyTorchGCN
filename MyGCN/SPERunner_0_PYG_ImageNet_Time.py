@@ -6,17 +6,19 @@ import torch
 import skimage
 import numpy as np
 import torch.nn as nn
+from itertools import chain
 import torch.nn.functional as F
 from skimage import segmentation
 from alisuretool.Tools import Tools
 import torch_geometric.transforms as T
+import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.models import vgg13_bn, vgg16_bn
-from torch_geometric.nn import GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling
+from torch_geometric.nn import DataParallel, GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -46,6 +48,7 @@ class DealSuperPixel(object):
         #                                  sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
                                          sigma=slic_sigma, max_iter=slic_max_iter)
+
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
         pass
@@ -85,19 +88,20 @@ class DealSuperPixel(object):
 
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path='D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC',
+    def __init__(self, data_root_path='D:\\data\\ImageNet\\ILSVRC2015\\Data\\CLS-LOC', down_ratio=4,
                  is_train=True, image_size=224, sp_size=11, train_split="train", test_split="val"):
         super().__init__()
         self.sp_size = sp_size
         self.is_train = is_train
         self.image_size = image_size
-        self.image_size_for_sp = self.image_size // 4
+        self.image_size_for_sp = self.image_size // down_ratio
         self.data_root_path = data_root_path
 
         self.transform_train = transforms.Compose([transforms.Resize(256),
                                                    transforms.RandomCrop(self.image_size),
-                                                   # transforms.RandomResizedCrop(self.image_size),
                                                    transforms.RandomHorizontalFlip()])
+        # self.transform_train = transforms.Compose([transforms.RandomResizedCrop(self.image_size),
+        #                                            transforms.RandomHorizontalFlip()])
         self.transform_test = transforms.Compose([transforms.Resize(256),
                                                   transforms.CenterCrop(self.image_size)])
 
@@ -106,25 +110,31 @@ class MyDataset(Dataset):
         _transform = self.transform_train if self.is_train else self.transform_test
 
         self.data_set = datasets.ImageFolder(root=_train_dir if self.is_train else _test_dir, transform=_transform)
-        # self.data_set.samples = self.data_set.samples[0: 6]
         pass
 
     def __len__(self):
         return len(self.data_set)
 
     def __getitem__(self, idx):
+        # start = time.time()
         img, target = self.data_set.__getitem__(idx)
+        # Tools.print("__getitem__ {}".format(time.time() - start))
+
         _normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         img_data = transforms.Compose([transforms.ToTensor(), _normalize])(np.asarray(img)).unsqueeze(dim=0)
 
+        # start = time.time()
         img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
         graph, pixel_graph = self.get_sp_info(img_small_data, target)
+        # Tools.print("get_sp_info {}".format(time.time() - start))
+
         return graph, pixel_graph, img_data, target
 
     def get_sp_info(self, img, target):
         # Super Pixel
         #################################################################################
-        deal_super_pixel = DealSuperPixel(img, ds_image_size=self.image_size_for_sp, super_pixel_size=self.sp_size)
+        deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=self.image_size_for_sp,
+                                          super_pixel_size=self.sp_size)
         segment, sp_adj, pixel_adj = deal_super_pixel.run()
         #################################################################################
         # Graph
@@ -148,6 +158,43 @@ class MyDataset(Dataset):
 
     @staticmethod
     def collate_fn(samples):
+        gpu_num = 2
+
+        start = time.time()
+
+        one_num = len(samples) // gpu_num
+        samples_list = [samples[i * one_num:(i + 1) * one_num] for i in range(gpu_num)] if one_num > 0 else [samples]
+
+        graphs_list, pixel_graphs_list, images_list, labels_list = [], [], [], []
+        for samples_now in samples_list:
+            graphs, pixel_graphs, images, labels = map(list, zip(*samples_now))
+
+            images = torch.cat(images)
+            labels = torch.tensor(np.array(labels))
+
+            # 超像素图
+            batched_graph = Batch.from_data_list(graphs)
+
+            # 像素图
+            _pixel_graphs = []
+            for super_pixel_i, pixel_graph in enumerate(pixel_graphs):
+                for now_graph in pixel_graph:
+                    now_graph.data_where[:, 0] = super_pixel_i
+                    _pixel_graphs.append(now_graph)
+                pass
+            batched_pixel_graph = Batch.from_data_list(_pixel_graphs)
+
+            images_list.append(images)
+            labels_list.append(labels)
+            graphs_list.append(batched_graph)
+            pixel_graphs_list.append(batched_pixel_graph)
+            pass
+
+        Tools.print("collate_fn {}".format(time.time() - start))
+        return images_list, labels_list, graphs_list, pixel_graphs_list
+
+    @staticmethod
+    def collate_fn2(samples):
         start = time.time()
         graphs, pixel_graphs, images, labels = map(list, zip(*samples))
         images = torch.cat(images)
@@ -165,71 +212,449 @@ class MyDataset(Dataset):
             pass
         batched_pixel_graph = Batch.from_data_list(_pixel_graphs)
 
-        Tools.print("{}".format(time.time() - start))
-        start = time.time()
+        Tools.print("collate_fn {}".format(time.time() - start))
         return images, labels, batched_graph, batched_pixel_graph
+
+    pass
+
+
+class CONVNet(nn.Module):
+
+    def __init__(self, layer_num=14):  # 14, 20
+        super().__init__()
+        self.features = vgg13_bn(pretrained=True).features[0: layer_num]
+        pass
+
+    def forward(self, x):
+        e = self.features(x)
+        return e
+    pass
+
+
+class GCNNet1(nn.Module):
+
+    def __init__(self, in_dim=128, hidden_dims=[128, 128, 128, 128],
+                 has_bn=False, normalize=False, residual=False, improved=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+        self.residual = residual
+        self.normalize = normalize
+        self.has_bn = has_bn
+        self.improved = improved
+
+        # self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = in_dim
+        for hidden_dim in self.hidden_dims:
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=self.normalize, improved=self.improved))
+            _in_dim = hidden_dim
+            pass
+
+        if self.has_bn:
+            self.bn_list = nn.ModuleList()
+            for hidden_dim in self.hidden_dims:
+                self.bn_list.append(nn.BatchNorm1d(hidden_dim))
+                pass
+            pass
+
+        self.relu = nn.ReLU()
+        pass
+
+    def forward(self, data):
+        # hidden_nodes_feat = self.embedding_h(data.x)
+        hidden_nodes_feat = data.x
+        for gcn, bn in zip(self.gcn_list, self.bn_list):
+            h_in = hidden_nodes_feat
+            hidden_nodes_feat = gcn(h_in, data.edge_index)
+
+            if self.has_bn:
+                hidden_nodes_feat = bn(hidden_nodes_feat)
+
+            hidden_nodes_feat = self.relu(hidden_nodes_feat)
+
+            if self.residual and h_in.size()[-1] == hidden_nodes_feat.size()[-1]:
+                hidden_nodes_feat = h_in + hidden_nodes_feat
+            pass
+
+        hg = global_mean_pool(hidden_nodes_feat, data.batch)
+        return hg
+
+    pass
+
+
+class GCNNet2(nn.Module):
+
+    def __init__(self, in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=1000,
+                 has_bn=False, normalize=False, residual=False, improved=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+        self.normalize = normalize
+        self.residual = residual
+        self.has_bn = has_bn
+        self.improved = improved
+
+        self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = in_dim
+        for hidden_dim in self.hidden_dims:
+            self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=self.normalize, improved=self.improved))
+            _in_dim = hidden_dim
+            pass
+
+        if self.has_bn:
+            self.bn_list = nn.ModuleList()
+            for hidden_dim in self.hidden_dims:
+                self.bn_list.append(nn.BatchNorm1d(hidden_dim))
+                pass
+            pass
+
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
+        self.relu = nn.ReLU()
+        pass
+
+    def forward(self, data):
+        hidden_nodes_feat = self.embedding_h(data.x)
+        for gcn, bn in zip(self.gcn_list, self.bn_list):
+            h_in = hidden_nodes_feat
+            hidden_nodes_feat = gcn(h_in, data.edge_index)
+
+            if self.has_bn:
+                hidden_nodes_feat = bn(hidden_nodes_feat)
+
+            hidden_nodes_feat = self.relu(hidden_nodes_feat)
+
+            if self.residual and h_in.size()[-1] == hidden_nodes_feat.size()[-1]:
+                hidden_nodes_feat = h_in + hidden_nodes_feat
+            pass
+
+        hg = global_mean_pool(hidden_nodes_feat, data.batch)
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
+class MyGCNNet(nn.Module):
+
+    def __init__(self, conv_layer_num=14, has_bn=False, normalize=False, residual=False, improved=False):
+        super().__init__()
+        self.model_conv = CONVNet(layer_num=conv_layer_num)  # 14, 20
+
+        assert conv_layer_num == 14 or conv_layer_num == 20
+        in_dim_which = -3 if conv_layer_num == 14 else -2
+        self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[in_dim_which].num_features,
+                                  hidden_dims=[256, 256],
+                                  has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
+        self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1],
+                                  hidden_dims=[512, 512, 1024, 1024], n_classes=1000,
+                                  has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
+        pass
+
+    def forward(self, images, batched_graph, batched_pixel_graph):
+        # model 1
+        conv_feature = self.model_conv(images)
+
+        # model 2
+        data_where = batched_pixel_graph.data_where
+        pixel_nodes_feat = conv_feature[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
+        batched_pixel_graph.x = pixel_nodes_feat
+        gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
+
+        # model 3
+        batched_graph.x = gcn1_feature
+        logits = self.model_gnn2.forward(batched_graph)
+        return logits
+
+    pass
+
+
+class MyDataParallel(nn.DataParallel):
+
+    def __init__(self, module, device_ids=None, output_device=None):
+        super(MyDataParallel, self).__init__(module, device_ids, output_device)
+        self.src_device = torch.device("cuda:{}".format(self.device_ids[0]))
+        pass
+
+    def forward(self, inputs):
+        for t in chain(self.module.parameters(), self.module.buffers()):
+            if t.device != self.src_device:
+                raise RuntimeError(
+                    ('Module must have its parameters and buffers on device '
+                     '{} but found one of them on device {}.').format(
+                         self.src_device, t.device))
+
+        replicas = self.replicate(self.module, self.device_ids[:len(inputs)])
+        outputs = self.parallel_apply(replicas, inputs, None)
+        return self.gather(outputs, self.output_device)
 
     pass
 
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10',
-                 batch_size=64, image_size=224, sp_size=8, train_print_freq=100, test_print_freq=50, is_sgd=True,
-                 test_split="val", root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1"):
+    def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10', down_ratio=4, batch_size=64, image_size=224,
+                 sp_size=8, train_print_freq=100, test_print_freq=50, test_split="val",
+                 root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=14,
+                 has_bn=True, normalize=True, residual=False, improved=False, weight_decay=0.0, is_sgd=False):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
 
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False,
+        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True, down_ratio=down_ratio,
+                                       image_size=image_size, sp_size=sp_size, test_split=test_split)
+        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False, down_ratio=down_ratio,
                                       image_size=image_size, sp_size=sp_size, test_split=test_split)
 
+        self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
+                                       num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
-                                      num_workers=4, collate_fn=self.test_dataset.collate_fn)
+                                      num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
+
+        self.model = MyGCNNet(conv_layer_num=conv_layer_num,
+                              has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
+
+        ######################################################
+        if torch.cuda.is_available():
+            self.model = MyDataParallel(self.model).to(self.device)
+            cudnn.benchmark = True
+        ######################################################
+
+        if is_sgd:
+            self.lr_s = [[0, 0.01], [15, 0.001], [25, 0.0001]]
+            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
+                                             momentum=0.9, weight_decay=weight_decay)
+        else:
+            self.lr_s = [[0, 0.001], [15, 0.0001], [25, 0.00001]]
+            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
+
+        Tools.print("Total param: {} lr_s={} Optimizer={}".format(
+            self._view_model_param(self.model), self.lr_s, self.optimizer))
+
+        self.loss_class = nn.CrossEntropyLoss().to(self.device)
         pass
 
-    def test(self):
-        for i, (images, labels, batched_graph, batched_pixel_graph) in enumerate(self.test_loader):
+    def load_model(self, model_file_name):
+        ckpt = torch.load(model_file_name, map_location=self.device)
+
+        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
+        # for c in keys:
+        #     del ckpt[c]
+        #     Tools.print(c)
+        #     pass
+
+        self.model.load_state_dict(ckpt, strict=False)
+        Tools.print('Load Model: {}'.format(model_file_name))
+        pass
+
+    def train(self, epochs, start_epoch=0):
+        for epoch in range(start_epoch, epochs):
+            Tools.print()
+            Tools.print("Start Epoch {}".format(epoch))
+
+            self._lr(epoch)
+            Tools.print('Epoch:{:02d},lr={:.4f}'.format(epoch, self.optimizer.param_groups[0]['lr']))
+
+            epoch_loss, epoch_train_acc, epoch_train_acc_k = self._train_epoch()
+            self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
+            epoch_test_loss, epoch_test_acc, epoch_test_acc_k = self.test()
+
+            Tools.print('Epoch:{:02d}, Train:{:.4f}-{:.4f}/{:.4f} Test:{:.4f}-{:.4f}/{:.4f}'.format(
+                epoch, epoch_train_acc, epoch_train_acc_k,
+                epoch_loss, epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
             pass
         pass
+
+    def _train_epoch(self):
+        self.model.train()
+
+        start = time.time()
+
+        epoch_loss, epoch_train_acc, epoch_train_acc_k, nb_data = 0, 0, 0, 0
+        for i, (images_list, labels_list, batched_graph_list, batched_pixel_graph_list) in enumerate(self.train_loader):
+            # Run
+            self.optimizer.zero_grad()
+
+            Tools.print("train_loader {}".format(time.time() - start))
+            start2 = time.time()
+
+            # Data
+            inputs = []
+            labels = torch.cat(labels_list).long().to(self.device)
+            for gpu_id, (images, batched_graph, batched_pixel_graph) in enumerate(
+                    zip(images_list, batched_graph_list, batched_pixel_graph_list)):
+                images = images.float().to(torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+
+                batched_graph.batch = batched_graph.batch.to(
+                    torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                batched_graph.edge_index = batched_graph.edge_index.to(
+                    torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+
+                batched_pixel_graph.batch = batched_pixel_graph.batch.to(
+                    torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(
+                    torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(
+                    torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+
+                inputs.append([images, batched_graph, batched_pixel_graph])
+                pass
+
+            logits = self.model.forward(inputs)
+            # logits = self.model.forward(images, batched_graph, batched_pixel_graph)
+
+            loss = self.loss_class(logits, labels)
+            loss.backward()
+            self.optimizer.step()
+
+            # Stat
+            nb_data += labels.size(0)
+            epoch_loss += loss.detach().item()
+            top_1, top_k = self._accuracy_top_k(logits, labels)
+            epoch_train_acc += top_1
+            epoch_train_acc_k += top_k
+
+            # Print
+            if i % self.train_print_freq == 0:
+                Tools.print("{}-{} loss={:.4f}/{:.4f} acc={:.4f} acc5={:.4f}".format(
+                    i, len(self.train_loader), epoch_loss/(i+1),
+                    loss.detach().item(), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data))
+                pass
+
+            Tools.print("train_time {}".format(time.time() - start2))
+            start = time.time()
+
+            pass
+        return epoch_loss/(len(self.train_loader)+1), epoch_train_acc/nb_data, epoch_train_acc_k/nb_data
+
+    def test(self):
+        self.model.eval()
+
+        Tools.print()
+        epoch_test_loss, epoch_test_acc, epoch_test_acc_k, nb_data = 0, 0, 0, 0
+        with torch.no_grad():
+            for i, (images, labels, batched_graph, batched_pixel_graph) in enumerate(self.test_loader):
+                # Data
+                images = images.float().to(self.device)
+                labels = labels.long().to(self.device)
+
+                batched_graph.batch = batched_graph.batch.to(self.device)
+                batched_graph.edge_index = batched_graph.edge_index.to(self.device)
+
+                batched_pixel_graph.batch = batched_pixel_graph.batch.to(self.device)
+                batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
+                batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
+
+                # Run
+                logits = self.model.forward(images, batched_graph, batched_pixel_graph)
+                loss = self.loss_class(logits, labels)
+
+                # Stat
+                nb_data += labels.size(0)
+                epoch_test_loss += loss.detach().item()
+                top_1, top_k = self._accuracy_top_k(logits, labels)
+                epoch_test_acc += top_1
+                epoch_test_acc_k += top_k
+
+                # Print
+                if i % self.test_print_freq == 0:
+                    Tools.print("{}-{} loss={:.4f}/{:.4f} acc={:.4f} acc5={:.4f}".format(
+                        i, len(self.test_loader), epoch_test_loss/(i+1),
+                        loss.detach().item(), epoch_test_acc/nb_data, epoch_test_acc_k/nb_data))
+                    pass
+                pass
+            pass
+
+        return epoch_test_loss/(len(self.test_loader)+1), epoch_test_acc/nb_data, epoch_test_acc_k/nb_data
+
+    def _lr(self, epoch):
+        for lr in self.lr_s:
+            if lr[0] == epoch:
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = lr[1]
+                pass
+            pass
+        pass
+
+    @staticmethod
+    def _save_checkpoint(model, root_ckpt_dir, epoch):
+        torch.save(model.state_dict(), os.path.join(root_ckpt_dir, 'epoch_{}.pkl'.format(epoch)))
+        for file in glob.glob(root_ckpt_dir + '/*.pkl'):
+            if int(file.split('_')[-1].split('.')[0]) < epoch - 1:
+                os.remove(file)
+                pass
+            pass
+        pass
+
+    @staticmethod
+    def _accuracy(scores, targets):
+        return (scores.detach().argmax(dim=1) == targets).float().sum().item()
+
+    @staticmethod
+    def _accuracy_top_k(scores, targets, top_k=5):
+        top_k_index = scores.detach().topk(top_k)[1]
+        top_k = sum([int(a) in b for a, b in zip(targets, top_k_index)])
+        top_1 = sum([int(a) == int(b[0]) for a, b in zip(targets, top_k_index)])
+        return top_1, top_k
+
+    @staticmethod
+    def _view_model_param(model):
+        total_param = 0
+        for param in model.parameters():
+            total_param += np.prod(list(param.data.size()))
+        return total_param
 
     pass
 
 
 if __name__ == '__main__':
     """
-    GCNNet  2166696 32 sgd 0.01 2020-05-11 Epoch:03,lr=0.0100,Train:0.1530-0.3666/4.2644 Test:0.1470-0.3580/4.3808
     
-    Load Model: ./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet2/epoch_3.pkl
-    GCNNet3 4358696 36 sgd 0.01 2020-05-23 Epoch:09,lr=0.0001,Train:0.5551-0.7980/1.9078 Test:0.5512-0.7965/1.9085
-    
-    2020-06-02 21:45:23 Epoch:04, Train:0.2958-0.5602/3.3328 Test:0.2768-0.5402/3.5083
     """
-    _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
+    # _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt2/dgl/4_DGL_CONV-ImageNet3_Fast/{}".format("GCNNet-C2PC2PC2")
+    _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Time/{}".format("GCNNet-C2PC2P")
     _batch_size = 64
     _image_size = 224
-    _is_sgd = True
-    _sp_size = 4
-    _train_print_freq = 2000
+    _train_print_freq = 100
     _test_print_freq = 1000
-    _num_workers = 12
+    _num_workers = 40
     _use_gpu = True
+
     _gpu_id = "0"
     # _gpu_id = "1"
 
-    Tools.print("ckpt:{} batch size:{} image size:{} sp size:{} workers:{} gpu:{}".format(
-        _root_ckpt_dir, _batch_size, _image_size, _sp_size, _num_workers, _gpu_id))
+    # _epochs = 30
+    # _is_sgd = False
+    # _weight_decay = 0.0
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, test_split="val",
+    _epochs = 30
+    _is_sgd = True
+    _weight_decay = 5e-4
+
+    _improved = True
+    _has_bn = True
+    _has_residual = True
+    _is_normalize = True
+
+    _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14
+    # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20
+
+    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} down_ratio:{} conv_layer_num:{} workers:{} "
+                "gpu:{} has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
+        _epochs, _root_ckpt_dir, _batch_size, _image_size, _sp_size, _down_ratio, _conv_layer_num, _num_workers,
+        _gpu_id, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
+
+    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
+                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
+                       has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    # runner.load_model(model_file_name="./ckpt2/dgl/4_DGL_CONV-ImageNet2/GCNNet4/epoch_3.pkl")
-    # runner.train(10, start_epoch=0)
-    runner.test()
+    runner.train(_epochs)
+
     pass
