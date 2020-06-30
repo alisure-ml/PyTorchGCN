@@ -496,7 +496,7 @@ class RunnerSPE(object):
         epoch_test_loss, epoch_test_acc, epoch_test_acc_k, nb_data = 0, 0, 0, 0
         with torch.no_grad():
             for i, (images_list, labels_list,
-                    batched_graph_list, batched_pixel_graph_list) in enumerate(self.train_loader):
+                    batched_graph_list, batched_pixel_graph_list) in enumerate(self.test_loader):
                 # Data
                 inputs = []
                 labels = torch.cat(labels_list).long().to(self.device)
@@ -584,14 +584,14 @@ if __name__ == '__main__':
     """
     
     """
-    # _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
+    _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
+    # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}".format("GCNNet-C2PC2P")
     _batch_size = 64
     _image_size = 224
-    _train_print_freq = 100
-    _test_print_freq = 1000
+    _train_print_freq = 1000
+    _test_print_freq = 100
     _num_workers = 40
     _use_gpu = True
 
@@ -624,6 +624,9 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.train(_epochs)
+    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_1.pkl")
+    epoch_test_loss, epoch_test_acc, epoch_test_acc_k = runner.test()
+    Tools.print('Test:{:.4f}-{:.4f}/{:.4f}'.format(epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
+    runner.train(_epochs, start_epoch=2)
 
     pass
