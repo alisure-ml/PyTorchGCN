@@ -392,11 +392,13 @@ class RunnerSPE(object):
         ######################################################
 
         if is_sgd:
-            self.lr_s = [[0, 0.01], [15, 0.001], [25, 0.0001]]
+            # self.lr_s = [[0, 0.01], [15, 0.001], [25, 0.0001]]
+            # self.lr_s = [[0, 0.1], [10, 0.01], [15, 0.001], [18, 0.0001]]
+            self.lr_s = [[0, 0.1], [5, 0.01], [9, 0.001], [12, 0.0001], [14, 0.00001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
-            self.lr_s = [[0, 0.001], [15, 0.0001], [25, 0.00001]]
+            self.lr_s = [[0, 0.001], [10, 0.0001], [15, 0.00001]]
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
@@ -408,11 +410,11 @@ class RunnerSPE(object):
     def load_model(self, model_file_name):
         ckpt = torch.load(model_file_name, map_location=self.device)
 
-        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
-        # for c in keys:
-        #     del ckpt[c]
-        #     Tools.print(c)
-        #     pass
+        keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
+        for c in keys:
+            del ckpt[c]
+            Tools.print(c)
+            pass
 
         self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
@@ -582,12 +584,14 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
+    2020-07-04 15:34:16 Epoch:29, Train:0.5638-0.7989/1.9539 Test:0.5556-0.7971/1.9430
+    
     
     """
     _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
     # _data_root_path = "/media/ubuntu/ALISURE/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}".format("GCNNet-C2PC2P")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}".format("GCNNet-C2PC2PC2")
     _batch_size = 64
     _image_size = 224
     _train_print_freq = 1000
@@ -601,7 +605,7 @@ if __name__ == '__main__':
     # _is_sgd = False
     # _weight_decay = 0.0
 
-    _epochs = 30
+    _epochs = 15
     _is_sgd = True
     _weight_decay = 5e-4
 
@@ -610,8 +614,8 @@ if __name__ == '__main__':
     _has_residual = True
     _is_normalize = True
 
-    _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14
-    # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20
+    # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
+    _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
 
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} down_ratio:{} conv_layer_num:{} workers:{} "
                 "gpu:{} has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
@@ -624,9 +628,9 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_1.pkl")
-    epoch_test_loss, epoch_test_acc, epoch_test_acc_k = runner.test()
-    Tools.print('Test:{:.4f}-{:.4f}/{:.4f}'.format(epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
-    runner.train(_epochs, start_epoch=2)
+    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
+    # epoch_test_loss, epoch_test_acc, epoch_test_acc_k = runner.test()
+    # Tools.print('Test:{:.4f}-{:.4f}/{:.4f}'.format(epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
+    runner.train(_epochs, start_epoch=0)
 
     pass
