@@ -1,24 +1,19 @@
 import os
 import cv2
-import time
 import glob
 import torch
+import random
 import skimage
 import numpy as np
 import torch.nn as nn
-from itertools import chain
-import torch.nn.functional as F
+from PIL import Image
 from skimage import segmentation
 from alisuretool.Tools import Tools
-import torch_geometric.transforms as T
-import torch.backends.cudnn as cudnn
-from torch.utils.data import DataLoader
-import torchvision.datasets as datasets
+from torchvision.models import vgg13_bn
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
-from torchvision.models import vgg13_bn, vgg16_bn
-from torch_geometric.nn import GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling
+from torch_geometric.nn import GCNConv, global_mean_pool
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -46,10 +41,10 @@ class DealSuperPixel(object):
         self.label_data = label_data if len(label_data) == self.ds_image_size else cv2.resize(
             label_data, (self.ds_image_size, self.ds_image_size))
 
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter)
+                                         sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -179,7 +174,7 @@ class MyDataset(Dataset):
         # Graph
         #################################################################################
         graph = Data(edge_index=torch.from_numpy(np.transpose(sp_adj, axes=(1, 0))),
-                     num_nodes=len(pixel_adj), y=torch.from_numpy(sp_label).float())
+                     num_nodes=len(pixel_adj), y=torch.from_numpy(sp_label).float(), num_sp=len(pixel_adj))
         #################################################################################
         # Small Graph
         #################################################################################
@@ -199,8 +194,6 @@ class MyDataset(Dataset):
         graphs, pixel_graphs, images, labels, segments = map(list, zip(*samples))
 
         images = torch.cat(images)
-        segments = torch.cat(segments)
-        labels = torch.tensor(np.array(labels))
 
         # 超像素图
         batched_graph = Batch.from_data_list(graphs)
@@ -516,7 +509,7 @@ class RunnerSPE(object):
             epoch_recall += recall
 
             # cal 2
-            cum_add = np.cumsum([0] + batched_graph.batch_num_nodes)
+            cum_add = np.cumsum([0] + batched_graph.num_sp.tolist())
             for one in range(len(segments)):
                 tar_sod = self._cal_sod(labels[cum_add[one]: cum_add[one + 1]].tolist(), segments[one])
                 pre_sod = self._cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one + 1]].tolist(), segments[one])
@@ -586,7 +579,6 @@ class RunnerSPE(object):
             for i, (images, targets, batched_graph, batched_pixel_graph, segments) in enumerate(self.test_loader):
                 # Data
                 images = images.float().to(self.device)
-
                 labels = batched_graph.y.to(self.device)
                 batched_graph.batch = batched_graph.batch.to(self.device)
                 batched_graph.edge_index = batched_graph.edge_index.to(self.device)
@@ -596,6 +588,7 @@ class RunnerSPE(object):
                 batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
 
                 logits, logits_sigmoid = self.model.forward(images, batched_graph, batched_pixel_graph)
+
                 loss = self.loss_class(logits_sigmoid, labels)
                 labels_val = labels.cpu().detach().numpy()
                 logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
@@ -612,7 +605,7 @@ class RunnerSPE(object):
                 epoch_test_recall += recall
 
                 # cal 2
-                cum_add = np.cumsum([0] + batched_graph.batch_num_nodes)
+                cum_add = np.cumsum([0] + batched_graph.num_sp.tolist())
                 for one in range(len(segments)):
                     tar_sod = self._cal_sod(labels[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
                     pre_sod = self._cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
@@ -679,7 +672,7 @@ class RunnerSPE(object):
                 # 可视化
                 labels = batched_graph.y
                 logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
-                cum_add = np.cumsum([0] + batched_graph.batch_num_nodes)
+                cum_add = np.cumsum([0] + batched_graph.num_sp.tolist())
                 for one in range(len(segments)):
                     tar_sod = self._cal_sod(labels[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
                     pre_sod = self._cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
@@ -748,16 +741,16 @@ if __name__ == '__main__':
     """
     2020-07-04 15:34:16 Epoch:29, Train:0.5638-0.7989/1.9539 Test:0.5556-0.7971/1.9430
     """
-    _data_root_path = '/home/ubuntu/ALISURE/data/SOD/DUTS'
+    _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P")
-    _batch_size = 4
+    _batch_size = 4 * 5
     _image_size = 320
     _train_print_freq = 100
     _test_print_freq = 100
-    _num_workers = 16
+    _num_workers = 32
     _use_gpu = True
 
-    _gpu_id = "0"
+    _gpu_id = "3"
 
     _epochs = 100
     _is_sgd = True
