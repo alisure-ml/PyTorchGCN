@@ -280,7 +280,8 @@ class GCNNet1(nn.Module):
 
 class GCNNet2(nn.Module):
 
-    def __init__(self, in_dim=128, hidden_dims=[128, 128, 128, 128], skip_which=[1, 2, 3], skip_dim=128, n_out=1,
+    def __init__(self, in_dim=128, hidden_dims=[128, 128, 128, 128],
+                 skip_which=[1, 2, 3], skip_dim=128, n_out=1, has_0=False,
                  has_bn=False, normalize=False, residual=False, improved=False):
         super().__init__()
         self.hidden_dims = hidden_dims
@@ -309,8 +310,9 @@ class GCNNet2(nn.Module):
         self.skip_which = skip_which
         self.skip_dim = skip_dim
         self.n_out = n_out
-        sk_hidden_dims = [in_dim] + [self.hidden_dims[which-1] for which in self.skip_which]
-        self.skip_connect_index = [0] + self.skip_which
+        sk_hidden_dims = [self.hidden_dims[which-1] for which in self.skip_which]
+        sk_hidden_dims = [in_dim] + sk_hidden_dims if has_0 else sk_hidden_dims
+        self.skip_connect_index = [0] + self.skip_which if has_0 else self.skip_which
         self.skip_connect_list = nn.ModuleList()
         for hidden_dim in sk_hidden_dims:
             # 待改进
@@ -355,7 +357,7 @@ class GCNNet2(nn.Module):
 
 class MyGCNNet(nn.Module):
 
-    def __init__(self, conv_layer_num=14, has_bn=False, normalize=False, residual=False, improved=False):
+    def __init__(self, conv_layer_num=14, has_bn=False, normalize=False, residual=False, improved=False, has_0=False):
         super().__init__()
         self.model_conv = CONVNet(layer_num=conv_layer_num)  # 14, 20
 
@@ -365,7 +367,7 @@ class MyGCNNet(nn.Module):
                                   hidden_dims=[256, 256],
                                   has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
         self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 1024, 1024],
-                                  skip_which=[2, 4], skip_dim=128, n_out=1,
+                                  skip_which=[2, 4], skip_dim=128, n_out=1, has_0=has_0,
                                   has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
         pass
 
@@ -391,7 +393,7 @@ class RunnerSPE(object):
 
     def __init__(self, data_root_path, down_ratio=4, batch_size=64, image_size=320,
                  sp_size=4, train_print_freq=100, test_print_freq=50, root_ckpt_dir="./ckpt2/norm3",
-                 num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=14,
+                 num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=14, has_0=False,
                  has_bn=True, normalize=True, residual=False, improved=False, weight_decay=0.0, is_sgd=False):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -409,16 +411,17 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet(conv_layer_num=conv_layer_num,
+        self.model = MyGCNNet(conv_layer_num=conv_layer_num, has_0=has_0,
                               has_bn=has_bn, normalize=normalize, residual=residual, improved=improved).to(self.device)
 
         if is_sgd:
             # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
-            self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]]
+            # self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]]
+            self.lr_s = [[0, 0.01], [25, 0.001], [40, 0.0001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
-            self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
+            self.lr_s = [[0, 0.001], [25, 0.0001], [40, 0.00001]]
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
@@ -773,7 +776,6 @@ if __name__ == '__main__':
     2020-07-06 19:00:46 E:99, Test  mae-score=0.1030/0.6667 final-mse-score=0.1041/0.6381-0.1133/0.6381 loss=0.2793
     """
     _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Label")
     _batch_size = 4 * 5
     _image_size = 320
     _train_print_freq = 100
@@ -781,9 +783,9 @@ if __name__ == '__main__':
     _num_workers = 32
     _use_gpu = True
 
-    _gpu_id = "2"
+    _gpu_id = "3"
 
-    _epochs = 100
+    _epochs = 50
     _is_sgd = False
     _weight_decay = 0
 
@@ -791,6 +793,7 @@ if __name__ == '__main__':
     # _is_sgd = True
     # _weight_decay = 5e-4
 
+    _has_0 = True
     _improved = True
     _has_bn = True
     _has_residual = True
@@ -799,14 +802,18 @@ if __name__ == '__main__':
     _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
     # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
 
-    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} down_ratio:{} conv_layer_num:{} workers:{} "
-                "gpu:{} has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Label")
+    # _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Label_No0")
+
+    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} "
+                "down_ratio:{} conv_layer_num:{} workers:{} gpu:{} has_0:{} "
+                "has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _batch_size, _image_size, _sp_size, _down_ratio, _conv_layer_num, _num_workers,
-        _gpu_id, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
+        _gpu_id, _has_0, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
-                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
+                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio, has_0=_has_0,
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
