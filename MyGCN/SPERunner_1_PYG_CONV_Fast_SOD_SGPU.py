@@ -162,7 +162,7 @@ class MyDataset(Dataset):
         graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_small_data)
 
         # 返回
-        return graph, pixel_graph, img_data, label_small_data, segment
+        return graph, pixel_graph, img_data, label_small_data, segment, image_small_data
 
     def get_sp_info(self, image, label):
         # Super Pixel
@@ -191,9 +191,10 @@ class MyDataset(Dataset):
 
     @staticmethod
     def collate_fn(samples):
-        graphs, pixel_graphs, images, labels, segments = map(list, zip(*samples))
+        graphs, pixel_graphs, images, labels, segments, images_small = map(list, zip(*samples))
 
         images = torch.cat(images)
+        images_small = torch.tensor(images_small)
 
         # 超像素图
         batched_graph = Batch.from_data_list(graphs)
@@ -207,7 +208,7 @@ class MyDataset(Dataset):
             pass
         batched_pixel_graph = Batch.from_data_list(_pixel_graphs)
 
-        return images, labels, batched_graph, batched_pixel_graph, segments
+        return images, labels, batched_graph, batched_pixel_graph, segments, images_small
 
     pass
 
@@ -412,7 +413,8 @@ class RunnerSPE(object):
                               has_bn=has_bn, normalize=normalize, residual=residual, improved=improved).to(self.device)
 
         if is_sgd:
-            self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
+            # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
+            self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
@@ -424,6 +426,11 @@ class RunnerSPE(object):
 
         self.loss_class = nn.BCELoss().to(self.device)
         pass
+
+    def loss_bce(self, logits_sigmoid, labels):
+        positions = (labels > 0.9) + (labels < 0.1)
+        loss = self.loss_class(logits_sigmoid[positions], labels[positions])
+        return loss
 
     def load_model(self, model_file_name):
         ckpt = torch.load(model_file_name, map_location=self.device)
@@ -475,7 +482,8 @@ class RunnerSPE(object):
         epoch_prec3 = np.zeros(shape=(th_num,)) + 1e-6
         epoch_recall3 = np.zeros(shape=(th_num,)) + 1e-6
 
-        for i, (images, targets, batched_graph, batched_pixel_graph, segments) in enumerate(self.train_loader):
+        for i, (images, targets, batched_graph,
+                batched_pixel_graph, segments, images_small) in enumerate(self.train_loader):
             # Run
             self.optimizer.zero_grad()
 
@@ -491,7 +499,7 @@ class RunnerSPE(object):
 
             logits, logits_sigmoid = self.model.forward(images, batched_graph, batched_pixel_graph)
 
-            loss = self.loss_class(logits_sigmoid, labels)
+            loss = self.loss_bce(logits_sigmoid, labels)
             labels_val = labels.cpu().detach().numpy()
             logits_sigmoid_val = logits_sigmoid.cpu().detach().numpy()
             loss.backward()
@@ -576,7 +584,8 @@ class RunnerSPE(object):
 
         loader = self.train_loader if is_train_loader else self.test_loader
         with torch.no_grad():
-            for i, (images, targets, batched_graph, batched_pixel_graph, segments) in enumerate(self.test_loader):
+            for i, (images, targets, batched_graph,
+                    batched_pixel_graph, segments, images_small) in enumerate(self.test_loader):
                 # Data
                 images = images.float().to(self.device)
                 labels = batched_graph.y.to(self.device)
@@ -649,14 +658,19 @@ class RunnerSPE(object):
             pass
         return avg_loss, avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max()
 
-    def visual(self, model_file=None, is_train=False):
+    def visual(self, model_file=None, is_train=False, result_path=None):
         if model_file:
             self.load_model(model_file_name=model_file)
+
+        if result_path:
+            result_path = Tools.new_dir(os.path.join(result_path, "train" if is_train else "test"))
 
         loader = self.train_loader if is_train else self.test_loader
         self.model.eval()
         with torch.no_grad():
-            for i, (images, targets, batched_graph, batched_pixel_graph, segments) in enumerate(loader):
+            for i, (images, targets, batched_graph, batched_pixel_graph, segments, images_small) in enumerate(loader):
+                Tools.print("{}-{}".format(i, len(loader)))
+
                 # Data
                 images = images.float().to(self.device)
                 batched_graph.batch = batched_graph.batch.to(self.device)
@@ -677,9 +691,20 @@ class RunnerSPE(object):
                     tar_sod = self._cal_sod(labels[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
                     pre_sod = self._cal_sod(logits_sigmoid_val[cum_add[one]: cum_add[one+1]].tolist(), segments[one])
 
-                    Image.fromarray(np.asarray(tar_sod * 255, dtype=np.uint8)).show()
-                    Image.fromarray(np.asarray(pre_sod * 255, dtype=np.uint8)).show()
-                    # targets[one].show()
+                    im1 = Image.fromarray(np.asarray(tar_sod * 255, dtype=np.uint8))
+                    im2 = Image.fromarray(np.asarray(pre_sod * 255, dtype=np.uint8))
+                    im3 = Image.fromarray(np.asarray(targets[one] * 255, dtype=np.uint8))
+                    im4 = Image.fromarray(np.asarray(images_small[one], dtype=np.uint8))
+                    if result_path:
+                        im1.save(os.path.join(result_path, "{}_{}_{}.bmp".format(i, one, 1)))
+                        im2.save(os.path.join(result_path, "{}_{}_{}.bmp".format(i, one, 2)))
+                        im3.save(os.path.join(result_path, "{}_{}_{}.bmp".format(i, one, 3)))
+                        im4.save(os.path.join(result_path, "{}_{}_{}.png".format(i, one, 0)))
+                    else:
+                        im1.show()
+                        im2.show()
+                        im3.show()
+                        im4.show()
                     pass
                 pass
             pass
@@ -739,10 +764,16 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    2020-07-04 15:34:16 Epoch:29, Train:0.5638-0.7989/1.9539 Test:0.5556-0.7971/1.9430
+    SGD
+    2020-07-06 18:50:41 E:99, Train mae-score=0.0589/0.9160 final-mse-score=0.0592/0.8949-0.0706/0.8949 loss=0.1260
+    2020-07-06 18:50:41 E:99, Test  mae-score=0.1010/0.6853 final-mse-score=0.1022/0.6522-0.1114/0.6522 loss=0.2538
+
+    Adam
+    2020-07-06 19:00:46 E:99, Train mae-score=0.0548/0.9180 final-mse-score=0.0549/0.8966-0.0665/0.8966 loss=0.1224
+    2020-07-06 19:00:46 E:99, Test  mae-score=0.1030/0.6667 final-mse-score=0.1041/0.6381-0.1133/0.6381 loss=0.2793
     """
     _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Label")
     _batch_size = 4 * 5
     _image_size = 320
     _train_print_freq = 100
@@ -750,11 +781,15 @@ if __name__ == '__main__':
     _num_workers = 32
     _use_gpu = True
 
-    _gpu_id = "3"
+    _gpu_id = "2"
 
     _epochs = 100
-    _is_sgd = True
-    _weight_decay = 5e-4
+    _is_sgd = False
+    _weight_decay = 0
+
+    # _epochs = 100
+    # _is_sgd = True
+    # _weight_decay = 5e-4
 
     _improved = True
     _has_bn = True
@@ -775,7 +810,10 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
+    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
+    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P/epoch_99.pkl")
     runner.train(_epochs, start_epoch=0)
+    # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P/epoch_99.pkl", is_train=False,
+    #               result_path="./result/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P")
 
     pass
