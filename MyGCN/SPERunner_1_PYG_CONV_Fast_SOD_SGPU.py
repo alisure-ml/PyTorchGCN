@@ -393,7 +393,7 @@ class RunnerSPE(object):
 
     def __init__(self, data_root_path, down_ratio=4, batch_size=64, image_size=320,
                  sp_size=4, train_print_freq=100, test_print_freq=50, root_ckpt_dir="./ckpt2/norm3",
-                 num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=14, has_0=False,
+                 num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=14, has_mask=False, has_0=False,
                  has_bn=True, normalize=True, residual=False, improved=False, weight_decay=0.0, is_sgd=False):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -416,23 +416,26 @@ class RunnerSPE(object):
 
         if is_sgd:
             # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
-            # self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]]
-            self.lr_s = [[0, 0.01], [25, 0.001], [40, 0.0001]]
+            self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
-            self.lr_s = [[0, 0.001], [25, 0.0001], [40, 0.00001]]
+            # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
             self._view_model_param(self.model), self.lr_s, self.optimizer))
 
+        self.has_mask = has_mask
         self.loss_class = nn.BCELoss().to(self.device)
         pass
 
     def loss_bce(self, logits_sigmoid, labels):
-        positions = (labels > 0.9) + (labels < 0.1)
-        loss = self.loss_class(logits_sigmoid[positions], labels[positions])
+        if self.has_mask:
+            positions = (labels > 0.9) + (labels < 0.1)
+            loss = self.loss_class(logits_sigmoid[positions], labels[positions])
+        else:
+            loss = self.loss_class(logits_sigmoid, labels)
         return loss
 
     def load_model(self, model_file_name):
@@ -774,6 +777,14 @@ if __name__ == '__main__':
     Adam
     2020-07-06 19:00:46 E:99, Train mae-score=0.0548/0.9180 final-mse-score=0.0549/0.8966-0.0665/0.8966 loss=0.1224
     2020-07-06 19:00:46 E:99, Test  mae-score=0.1030/0.6667 final-mse-score=0.1041/0.6381-0.1133/0.6381 loss=0.2793
+    
+    Adam ckpt:./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P_Label_No0
+    2020-07-07 07:55:09 E:49, Train mae-score=0.0819/0.8772 final-mse-score=0.0824/0.8567-0.0907/0.8567 loss=0.1201
+    2020-07-07 07:55:09 E:49, Test  mae-score=0.1122/0.6621 final-mse-score=0.1136/0.6291-0.1209/0.6291 loss=0.2717
+    
+    Adam ckpt:./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P_Label
+    2020-07-07 08:30:40 E:49, Train mae-score=0.0817/0.8780 final-mse-score=0.0822/0.8567-0.0905/0.8567 loss=0.1200
+    2020-07-07 08:30:40 E:49, Test  mae-score=0.1091/0.6649 final-mse-score=0.1105/0.6274-0.1177/0.6274 loss=0.2681
     """
     _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _batch_size = 4 * 5
@@ -783,9 +794,9 @@ if __name__ == '__main__':
     _num_workers = 32
     _use_gpu = True
 
-    _gpu_id = "3"
+    _gpu_id = "2"
 
-    _epochs = 50
+    _epochs = 100  # Super Param Group 1
     _is_sgd = False
     _weight_decay = 0
 
@@ -793,7 +804,9 @@ if __name__ == '__main__':
     # _is_sgd = True
     # _weight_decay = 5e-4
 
-    _has_0 = True
+    _has_0 = False  # Super Param 2
+    _has_mask = False  # Super Param 3
+
     _improved = True
     _has_bn = True
     _has_residual = True
@@ -802,18 +815,20 @@ if __name__ == '__main__':
     _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
     # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
 
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Label")
-    # _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Label_No0")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P")
+    # _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Mask")
+    # _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Mask_No0")
 
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} "
-                "down_ratio:{} conv_layer_num:{} workers:{} gpu:{} has_0:{} "
+                "down_ratio:{} conv_layer_num:{} workers:{} gpu:{} has_mask:{} has_0:{} "
                 "has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _batch_size, _image_size, _sp_size, _down_ratio, _conv_layer_num, _num_workers,
-        _gpu_id, _has_0, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
+        _gpu_id, _has_mask, _has_0, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
-                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio, has_0=_has_0,
+                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
+                       has_0=_has_0, has_mask=_has_mask,
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
