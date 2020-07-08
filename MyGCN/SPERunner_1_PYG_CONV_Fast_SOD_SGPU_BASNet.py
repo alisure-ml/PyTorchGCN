@@ -109,13 +109,31 @@ class RandomHorizontalFlip(object):
     pass
 
 
+class RandomCrop(transforms.RandomCrop):
+
+    def __init__(self, size):
+        self.size = (int(size), int(size))
+        pass
+
+    def __call__(self, sample):
+        img = sample['image']
+        mask = sample['label']
+        i, j, h, w = self.get_params(img, self.size)
+        img = transforms.functional.crop(img, i, j, h, w)
+        mask = transforms.functional.crop(mask, i, j, h, w)
+        return {'image': img, 'label': mask}
+
+    pass
+
+
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path, down_ratio=4, is_train=True, image_size=320, sp_size=4):
+    def __init__(self, data_root_path, down_ratio=4, is_train=True,
+                 image_size_train=224, image_size_test=256, sp_size=4):
         super().__init__()
         self.sp_size = sp_size
         self.is_train = is_train
-        self.image_size = image_size
+        self.image_size = image_size_train if self.is_train else image_size_test
         self.image_size_for_sp = self.image_size // down_ratio
         self.data_root_path = data_root_path
 
@@ -126,7 +144,8 @@ class MyDataset(Dataset):
                                             "DUTS-TR-Mask" if self.is_train else "DUTS-TE-Mask")
 
         # 数据增强
-        self.transform_train = transforms.Compose([FixedResize(self.image_size), RandomHorizontalFlip()])
+        self.transform_train = transforms.Compose([FixedResize(image_size_test),
+                                                   RandomHorizontalFlip(), RandomCrop(self.image_size)])
         self.transform_test = transforms.Compose([FixedResize(self.image_size)])
 
         # 准备数据
@@ -391,8 +410,8 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path, down_ratio=4, batch_size=64, image_size=320,
-                 sp_size=4, train_print_freq=100, test_print_freq=50, root_ckpt_dir="./ckpt2/norm3",
+    def __init__(self, data_root_path, down_ratio=4, batch_size=64, image_size_train=224, image_size_test=256,
+                 sp_size=4, train_print_freq=100, test_print_freq=50, root_ckpt_dir="./ckpt2/norm3", lr=None,
                  num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=14, has_mask=False, has_0=False,
                  has_bn=True, normalize=True, residual=False, improved=False, weight_decay=0.0, is_sgd=False):
         self.train_print_freq = train_print_freq
@@ -401,10 +420,12 @@ class RunnerSPE(object):
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path, is_train=True, down_ratio=down_ratio,
-                                       image_size=image_size, sp_size=sp_size)
-        self.test_dataset = MyDataset(data_root_path=data_root_path, is_train=False, down_ratio=down_ratio,
-                                      image_size=image_size, sp_size=sp_size)
+        self.train_dataset = MyDataset(
+            data_root_path=data_root_path, is_train=True, down_ratio=down_ratio,
+            image_size_train=image_size_train, image_size_test=image_size_test, sp_size=sp_size)
+        self.test_dataset = MyDataset(
+            data_root_path=data_root_path, is_train=False, down_ratio=down_ratio,
+            image_size_train=image_size_train, image_size_test=image_size_test, sp_size=sp_size)
 
         self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
                                        num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
@@ -416,11 +437,11 @@ class RunnerSPE(object):
 
         if is_sgd:
             # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
-            self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]]
+            self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
-            # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
+            self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]] if lr is None else lr
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
@@ -787,22 +808,25 @@ if __name__ == '__main__':
     2020-07-07 08:30:40 E:49, Test  mae-score=0.1091/0.6649 final-mse-score=0.1105/0.6274-0.1177/0.6274 loss=0.2681
     """
     _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
-    _batch_size = 4 * 5
-    _image_size = 320
+    _batch_size = 4 * 8
+    _image_size_train = 224
+    _image_size_test = 256
     _train_print_freq = 100
     _test_print_freq = 100
     _num_workers = 32
     _use_gpu = True
 
-    _gpu_id = "2"
+    _gpu_id = "3"
 
     _epochs = 100  # Super Param Group 1
     _is_sgd = False
     _weight_decay = 0
+    _lr = [[0, 0.001], [70, 0.0001], [90, 0.00001]]
 
     # _epochs = 100
     # _is_sgd = True
     # _weight_decay = 5e-4
+    # _lr = [[0, 0.01], [50, 0.001], [90, 0.0001]]
 
     _has_0 = False  # Super Param 2
     _has_mask = False  # Super Param 3
@@ -815,24 +839,24 @@ if __name__ == '__main__':
     _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
     # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
 
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P")
-    # _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Mask")
-    # _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD/{}".format("GCNNet-C2PC2P_Mask_No0")
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}_{}_{}_{}".format("GCNNet-C2PC2P",
+                                                                              _is_sgd, _has_0, _has_mask)
 
-    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} "
+    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
                 "down_ratio:{} conv_layer_num:{} workers:{} gpu:{} has_mask:{} has_0:{} "
                 "has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
-        _epochs, _root_ckpt_dir, _batch_size, _image_size, _sp_size, _down_ratio, _conv_layer_num, _num_workers,
-        _gpu_id, _has_mask, _has_0, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
+        _epochs, _root_ckpt_dir, _batch_size, _image_size_train, _image_size_test, _sp_size, _down_ratio,
+        _conv_layer_num, _num_workers, _gpu_id, _has_mask, _has_0, _has_residual,
+        _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
-                       batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
-                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
-                       has_0=_has_0, has_mask=_has_mask,
+    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, batch_size=_batch_size,
+                       image_size_train=_image_size_train, image_size_test=_image_size_test,
+                       sp_size=_sp_size, is_sgd=_is_sgd, has_mask=_has_mask, lr=_lr,
+                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio, has_0=_has_0,
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
+    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
     # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P/epoch_99.pkl")
     runner.train(_epochs, start_epoch=0)
     # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P/epoch_99.pkl", is_train=False,
