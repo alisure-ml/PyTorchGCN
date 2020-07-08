@@ -393,8 +393,7 @@ class RunnerSPE(object):
 
         if is_sgd:
             # self.lr_s = [[0, 0.01], [15, 0.001], [25, 0.0001]]
-            # self.lr_s = [[0, 0.1], [10, 0.01], [15, 0.001], [18, 0.0001]]
-            self.lr_s = [[0, 0.1], [5, 0.01], [9, 0.001], [12, 0.0001], [14, 0.00001]]
+            self.lr_s = [[0, 0.01], [7, 0.001], [12, 0.0001]]
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
@@ -584,9 +583,8 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    2020-07-04 15:34:16 Epoch:29, Train:0.5638-0.7989/1.9539 Test:0.5556-0.7971/1.9430
-    
-    
+    GCNNet-C2PC2P   2020-07-04 15:34:16 Epoch:29, Train:0.5638-0.7989/1.9539 Test:0.5556-0.7971/1.9430
+    GCNNet-C2PC2PC2 2020-07-08 10:20:30 Epoch:14, Train:0.5995-0.8276/1.7634 Test:0.5917-0.8264/1.7479
     """
     _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
@@ -628,7 +626,7 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
+    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
     # epoch_test_loss, epoch_test_acc, epoch_test_acc_k = runner.test()
     # Tools.print('Test:{:.4f}-{:.4f}/{:.4f}'.format(epoch_test_acc, epoch_test_acc_k, epoch_test_loss))
     runner.train(_epochs, start_epoch=0)
