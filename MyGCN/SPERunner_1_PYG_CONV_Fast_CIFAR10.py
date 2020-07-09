@@ -16,7 +16,7 @@ import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.models import vgg13_bn, vgg16_bn
-from torch_geometric.nn import GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling
+from torch_geometric.nn import GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling, SAGEConv
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -282,18 +282,133 @@ class GCNNet2(nn.Module):
     pass
 
 
+class SAGENet1(nn.Module):
+
+    def __init__(self, in_dim=64, hidden_dims=[128, 128, 128, 128],
+                 has_bn=False, normalize=False, residual=False, concat=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+        self.residual = residual
+        self.normalize = normalize
+        self.has_bn = has_bn
+        self.concat = concat
+
+        self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = in_dim
+        for hidden_dim in self.hidden_dims:
+            self.gcn_list.append(SAGEConv(_in_dim, hidden_dim, normalize=self.normalize, concat=self.concat))
+            _in_dim = hidden_dim
+            pass
+
+        if self.has_bn:
+            self.bn_list = nn.ModuleList()
+            for hidden_dim in self.hidden_dims:
+                self.bn_list.append(nn.BatchNorm1d(hidden_dim))
+                pass
+            pass
+
+        self.relu = nn.ReLU()
+        pass
+
+    def forward(self, data):
+        hidden_nodes_feat = self.embedding_h(data.x)
+        for gcn, bn in zip(self.gcn_list, self.bn_list):
+            h_in = hidden_nodes_feat
+            hidden_nodes_feat = gcn(h_in, data.edge_index)
+
+            if self.has_bn:
+                hidden_nodes_feat = bn(hidden_nodes_feat)
+
+            hidden_nodes_feat = self.relu(hidden_nodes_feat)
+
+            if self.residual and h_in.size()[-1] == hidden_nodes_feat.size()[-1]:
+                hidden_nodes_feat = h_in + hidden_nodes_feat
+            pass
+
+        hg = global_mean_pool(hidden_nodes_feat, data.batch)
+        return hg
+
+    pass
+
+
+class SAGENet2(nn.Module):
+
+    def __init__(self, in_dim=128, hidden_dims=[128, 128, 128, 128], n_classes=10,
+                 has_bn=False, normalize=False, residual=False, concat=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+        self.normalize = normalize
+        self.residual = residual
+        self.has_bn = has_bn
+        self.concat = concat
+
+        self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = in_dim
+        for hidden_dim in self.hidden_dims:
+            self.gcn_list.append(SAGEConv(_in_dim, hidden_dim, normalize=self.normalize, concat=self.concat))
+            _in_dim = hidden_dim
+            pass
+
+        if self.has_bn:
+            self.bn_list = nn.ModuleList()
+            for hidden_dim in self.hidden_dims:
+                self.bn_list.append(nn.BatchNorm1d(hidden_dim))
+                pass
+            pass
+
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
+        self.relu = nn.ReLU()
+        pass
+
+    def forward(self, data):
+        hidden_nodes_feat = self.embedding_h(data.x)
+        for gcn, bn in zip(self.gcn_list, self.bn_list):
+            h_in = hidden_nodes_feat
+            hidden_nodes_feat = gcn(h_in, data.edge_index)
+
+            if self.has_bn:
+                hidden_nodes_feat = bn(hidden_nodes_feat)
+
+            hidden_nodes_feat = self.relu(hidden_nodes_feat)
+
+            if self.residual and h_in.size()[-1] == hidden_nodes_feat.size()[-1]:
+                hidden_nodes_feat = h_in + hidden_nodes_feat
+            pass
+
+        hg = global_mean_pool(hidden_nodes_feat, data.batch)
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class MyGCNNet(nn.Module):
 
-    def __init__(self, conv_layer_num=6, has_bn=False, normalize=False, residual=False, improved=False):
+    def __init__(self, conv_layer_num=6, which=0,
+                 has_bn=False, normalize=False, residual=False, improved=False, concat=False):
         super().__init__()
         self.model_conv = CONVNet(layer_num=conv_layer_num)  # 6, 13
 
-        self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[-2].num_features,
-                                  hidden_dims=[128, 128],
-                                  has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
-        self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1],
-                                  hidden_dims=[128, 128, 128, 128], n_classes=10,
-                                  has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
+        if which == 0:
+            self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[-2].num_features,
+                                      hidden_dims=[128, 128],
+                                      has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
+            self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1],
+                                      hidden_dims=[128, 128, 128, 128], n_classes=10,
+                                      has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
+        elif which == 1:
+            self.model_gnn1 = SAGENet1(in_dim=self.model_conv.features[-2].num_features,
+                                       hidden_dims=[128, 128],
+                                       has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
+            self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1],
+                                       hidden_dims=[128, 128, 128, 128], n_classes=10,
+                                       has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
+        else:
+            assert which == -1
         pass
 
     def forward(self, images, batched_graph, batched_pixel_graph):
@@ -316,8 +431,8 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10', down_ratio=1,
-                 batch_size=64, image_size=32, sp_size=4, train_print_freq=100, test_print_freq=50,
+    def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10', down_ratio=1, concat=False, which=0,
+                 batch_size=64, image_size=32, sp_size=4, train_print_freq=100, test_print_freq=50, lr=None,
                  root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=6,
                  has_bn=True, normalize=True, residual=False, improved=False, weight_decay=0.0, is_sgd=False):
         self.train_print_freq = train_print_freq
@@ -336,15 +451,15 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet(conv_layer_num=conv_layer_num,
-                              has_bn=has_bn, normalize=normalize, residual=residual, improved=improved).to(self.device)
+        self.model = MyGCNNet(conv_layer_num=conv_layer_num, which=which, has_bn=has_bn, normalize=normalize,
+                              residual=residual, improved=improved, concat=concat).to(self.device)
 
         if is_sgd:
-            self.lr_s = [[0, 0.1], [50, 0.01], [100, 0.001]]
+            self.lr_s = [[0, 0.1], [50, 0.01], [100, 0.001]] if lr is None else lr
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
         else:
-            self.lr_s = [[0, 0.001], [25, 0.001], [50, 0.0002], [75, 0.00004]]
+            self.lr_s = [[0, 0.001], [50, 0.0002], [75, 0.00004]] if lr is None else lr
             self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
@@ -505,13 +620,24 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    Adam 153344 has_residual:True is_normalize:True has_bn:True improved:True is_sgd:False weight_decay:0.0    Epoch: 79, Train:0.9354-0.9995/0.1828 Test:0.8559-0.9953/0.5030
-    SGD  153344 has_residual:True is_normalize:True has_bn:True improved:True is_sgd:True  weight_decay:0.0005 Epoch:101, Train:0.8676-0.9955/0.3903 Test:0.8377-0.9937/0.4716
-    SGD  395840 has_residual:True is_normalize:True has_bn:True improved:True is_sgd:True  weight_decay:0.0005 Epoch:116, Train:0.9468-0.9991/0.1577 Test:0.8927-0.9959/0.3575
+    GCNNet
+    Adam 153344 has_residual:True  is_normalize:True has_bn:True improved:True is_sgd:False weight_decay:0.0    Epoch: 79, Train:0.9354-0.9995/0.1828 Test:0.8559-0.9953/0.5030
+    SGD  153344 has_residual:True  is_normalize:True has_bn:True improved:True is_sgd:True  weight_decay:0.0005 Epoch:101, Train:0.8676-0.9955/0.3903 Test:0.8377-0.9937/0.4716
+    SGD  395840 has_residual:True  is_normalize:True has_bn:True improved:True is_sgd:True  weight_decay:0.0005 Epoch:116, Train:0.9468-0.9991/0.1577 Test:0.8927-0.9959/0.3575
+    
+    SAGENet
+    SGD  153344 has_residual:True  is_normalize:True has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:123, Train:0.9106-0.9985/0.2586 Test:0.8570-0.9953/0.4469
+    SGD  243456 has_residual:True  is_normalize:True has_bn:True concat:True   is_sgd:True  weight_decay:0.0005 Epoch:118, Train:0.9318-0.9994/0.1975 Test:0.8744-0.9957/0.4026
+    Adam 153344 has_residual:True  is_normalize:True has_bn:True concat:True   is_sgd:False weight_decay:0.0    Epoch: 80, Train:0.9480-0.9998/0.1458 Test:0.8543-0.9943/0.5667
+    Adam 243456 has_residual:True  is_normalize:True has_bn:True concat:True   is_sgd:False weight_decay:0.0    Epoch: 77, Train:0.9672-0.9999/0.0933 Test:0.8706-0.9962/0.5388
+    SGD  243456 has_residual:False is_normalize:True has_bn:True concat:True   is_sgd:True  weight_decay:0.0005 Epoch:113, Train:0.9229-0.9990/0.2216 Test:0.8704-0.9956/0.4058
+    
+    SGD  395840 has_residual:True  is_normalize:True has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:108, Train:0.9444-0.9993/0.1604 Test:0.8963-0.9964/0.3470
+    SGD  494144 has_residual:False is_normalize:True has_bn:True concat:True   is_sgd:True  weight_decay:0.0005 Epoch:107, Train:0.9442-0.9992/0.1621 Test:0.8924-0.9962/0.3286
+    SGD  494144 has_residual:True  is_normalize:True has_bn:True concat:True   is_sgd:True  weight_decay:0.0005 Epoch:113, Train:0.9563-0.9994/0.1294 Test:0.8995-0.9960/0.3355
     """
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast_CIFAR10/{}".format("GCNNet")
     _batch_size = 64
     _image_size = 32
     _train_print_freq = 100
@@ -519,33 +645,50 @@ if __name__ == '__main__':
     _num_workers = 20
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
-
     # _epochs = 100
     # _is_sgd = False
     # _weight_decay = 0.0
+    # _lr = [[0, 0.001], [50, 0.0002], [75, 0.00004]]
 
     _epochs = 150
     _is_sgd = True
     _weight_decay = 5e-4
+    _lr = [[0, 0.1], [50, 0.01], [100, 0.001]]
 
-    _improved = True
+    # GCN
+    # _which = 0
+    # _improved = True
+    # _has_bn = True
+    # _has_residual = True
+    # _is_normalize = True
+    # _concat = False  # No use
+
+    # SAGE
+    _which = 1
+    _concat = True
     _has_bn = True
     _has_residual = True
     _is_normalize = True
+    _improved = True  # No use
 
-    _sp_size, _down_ratio, _conv_layer_num = 4, 1, 6
-    # _sp_size, _down_ratio, _conv_layer_num = 2, 2, 13
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
-    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} down_ratio:{} conv_layer_num:{} workers:{} "
-                "gpu:{} has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
+    # _sp_size, _down_ratio, _conv_layer_num = 4, 1, 6
+    _sp_size, _down_ratio, _conv_layer_num = 2, 2, 13
+
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast_CIFAR10/{}_{}_{}_{}_{}".format(_which, _is_sgd, _sp_size,
+                                                                                 _down_ratio, _conv_layer_num)
+
+    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} down_ratio:{} "
+                "conv_layer_num:{} workers:{} gpu:{} has_residual:{} is_normalize:{} "
+                "has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _batch_size, _image_size, _sp_size, _down_ratio, _conv_layer_num, _num_workers,
-        _gpu_id, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
+        _gpu_id, _has_residual, _is_normalize, _has_bn, _improved, _concat, _is_sgd, _weight_decay))
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
+    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, concat=_concat, which=_which,
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
-                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
+                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio, lr=_lr,
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
