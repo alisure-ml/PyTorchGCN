@@ -18,7 +18,7 @@ import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.models import vgg13_bn, vgg16_bn
-from torch_geometric.nn import GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling
+from torch_geometric.nn import GCNConv, global_mean_pool, TopKPooling, EdgePooling, SAGPooling, SAGEConv
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -427,11 +427,19 @@ class MyGCNNet(nn.Module):
                                       hidden_dims=[512, 512, 1024, 1024], n_classes=1000,
                                       has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
         elif which == 1:
+            # self.model_gnn1 = SAGENet1(in_dim=self.model_conv.features[in_dim_which].num_features,
+            #                            hidden_dims=[256, 256],
+            #                            has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
+            # self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1],
+            #                            hidden_dims=[512, 512, 1024, 1024], n_classes=1000,
+            #                            has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
+
+            # 10779712
             self.model_gnn1 = SAGENet1(in_dim=self.model_conv.features[in_dim_which].num_features,
-                                       hidden_dims=[256, 256],
+                                       hidden_dims=[256, 512],
                                        has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
             self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1],
-                                       hidden_dims=[512, 512, 1024, 1024], n_classes=1000,
+                                       hidden_dims=[512, 1024, 1024, 2048], n_classes=1000,
                                        has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         else:
             assert which == -1
@@ -700,8 +708,12 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    GCNNet-C2PC2P   2020-07-04 15:34:16 Epoch:29, Train:0.5638-0.7989/1.9539 Test:0.5556-0.7971/1.9430
-    GCNNet-C2PC2PC2 2020-07-08 10:20:30 Epoch:14, Train:0.5995-0.8276/1.7634 Test:0.5917-0.8264/1.7479
+    GCNNet-C2PC2P    0_4_4_14 3425856  2020-07-04 15:34:16 Epoch:29, Train:0.5638-0.7989/1.9539 Test:0.5556-0.7971/1.9430
+    GCNNet-C2PC2PC2  0_4_4_20 4344896  2020-07-08 10:20:30 Epoch:14, Train:0.5995-0.8276/1.7634 Test:0.5917-0.8264/1.7479
+    SAGENet-C2PC2P   1_4_4_14 5490240  2020-07-12 21:13:38 Epoch:14, Train:0.5814-0.8146/1.8494 Test:0.5748-0.8122/1.8225
+    SAGENet-C2PC2PC2 1_4_4_20 6442048  2020-07-15 08:19:12 Epoch:14, Train:0.6250-0.8473/1.6212 Test:0.6134-0.8424/1.6205
+    SAGENet-C2PC2P   1_4_4_14 10779712 2020-07-22 18:49:53 Epoch:14, Train:0.6324-0.8522/1.6052 Test:0.6128-0.8400/1.6380
+
     """
     _data_root_path = '/mnt/4T/Data/ILSVRC17/ILSVRC2015_CLS-LOC/ILSVRC2015/Data/CLS-LOC'
     # _data_root_path = "/media/ubuntu/ALISURE-SSD/data/ImageNet/ILSVRC2015/Data/CLS-LOC"
@@ -742,8 +754,8 @@ if __name__ == '__main__':
     _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
     # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
 
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}_{}_{}_{}".format(_which, _sp_size,
-                                                                               _down_ratio, _conv_layer_num)
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/{}_{}_{}_{}_Large".format(_which, _sp_size,
+                                                                                     _down_ratio, _conv_layer_num)
 
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{} sp size:{} down_ratio:{} "
                 "conv_layer_num:{} workers:{} gpu:{} has_residual:{} is_normalize:{} "
