@@ -335,7 +335,9 @@ class GCNNet2(nn.Module):
         self.skip_connect_list = nn.ModuleList()
         for hidden_dim in sk_hidden_dims:
             # 待改进
-            self.skip_connect_list.append(nn.Linear(hidden_dim, self.skip_dim, bias=False))
+            # self.skip_connect_list.append(nn.Linear(hidden_dim, self.skip_dim, bias=False))
+            self.skip_connect_list.append(GCNConv(hidden_dim, self.skip_dim,
+                                                  normalize=self.normalize, improved=self.improved))
             pass
 
         self.readout_mlp = nn.Linear(len(self.skip_connect_list) * skip_dim, n_out, bias=False)
@@ -363,7 +365,7 @@ class GCNNet2(nn.Module):
 
         skip_connect = []
         for sc, index in zip(self.skip_connect_list, self.skip_connect_index):
-            sc_feat = sc(gcn_hidden_nodes_feat[index])
+            sc_feat = sc(gcn_hidden_nodes_feat[index], data.edge_index)
             skip_connect.append(sc_feat)
             pass
 
@@ -806,6 +808,27 @@ if __name__ == '__main__':
     Adam ckpt:./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P_Label
     2020-07-07 08:30:40 E:49, Train mae-score=0.0817/0.8780 final-mse-score=0.0822/0.8567-0.0905/0.8567 loss=0.1200
     2020-07-07 08:30:40 E:49, Test  mae-score=0.1091/0.6649 final-mse-score=0.1105/0.6274-0.1177/0.6274 loss=0.2681
+    
+    Adam
+    C2PC2P_False_False_False
+    2020-07-08 06:19:12    0- 157 loss=0.2998/0.2998 mse=0.1193/0.1193 final-mse=0.1221-0.1323
+    2020-07-08 06:21:02  100- 157 loss=0.2764/0.2553 mse=0.1131/0.1141 final-mse=0.1148-0.1268
+    2020-07-08 06:21:39 E:99, Train mae-score=0.0692/0.9131 final-mse-score=0.0688/0.8883-0.0865/0.8883 loss=0.1607
+    2020-07-08 06:21:39 E:99, Test  mae-score=0.1131/0.6627 final-mse-score=0.1139/0.6360-0.1261/0.6360 loss=0.2742
+
+    C2PC2P_True_False_False
+    2020-07-08 07:35:57    0- 157 loss=0.3086/0.3086 mse=0.1511/0.1511 final-mse=0.1541-0.1641
+    2020-07-08 07:37:12  100- 157 loss=0.2959/0.2787 mse=0.1458/0.1469 final-mse=0.1482-0.1594
+    2020-07-08 07:37:38 E:99, Train mae-score=0.1173/0.8681 final-mse-score=0.1177/0.8437-0.1333/0.8437 loss=0.2305
+    2020-07-08 07:37:38 E:99, Test  mae-score=0.1456/0.6230 final-mse-score=0.1470/0.5871-0.1584/0.5871 loss=0.2937
+    
+    Adam C2PC2P_False_False_False 2598976
+    2020-07-08 20:22:38 E:99, Train mae-score=0.0711/0.9119 final-mse-score=0.0708/0.8861-0.0877/0.8861 loss=0.1627
+    2020-07-08 20:22:38 E:99, Test  mae-score=0.1142/0.6589 final-mse-score=0.1151/0.6349-0.1268/0.6349 loss=0.2758
+    
+    Adam C2PC2PC2_False_False_False 3518016
+    2020-07-09 21:34:59 E:99, Train mae-score=0.0386/0.9407 final-mse-score=0.0381/0.9213-0.0568/0.9213 loss=0.1139
+    2020-07-09 21:34:59 E:99, Test  mae-score=0.0929/0.6946 final-mse-score=0.0935/0.6740-0.1057/0.6740 loss=0.2698
     """
     _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _batch_size = 4 * 8
@@ -823,10 +846,11 @@ if __name__ == '__main__':
     _weight_decay = 0
     _lr = [[0, 0.001], [70, 0.0001], [90, 0.00001]]
 
-    # _epochs = 100
+    # _epochs = 100  # Super Param Group 1
     # _is_sgd = True
     # _weight_decay = 5e-4
-    # _lr = [[0, 0.01], [50, 0.001], [90, 0.0001]]
+    # # _lr = [[0, 0.01], [50, 0.001], [90, 0.0001]]
+    # _lr = [[0, 0.001], [70, 0.0001], [90, 0.00001]]
 
     _has_0 = False  # Super Param 2
     _has_mask = False  # Super Param 3
@@ -836,10 +860,10 @@ if __name__ == '__main__':
     _has_residual = True
     _is_normalize = True
 
-    _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
-    # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
+    # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
+    _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
 
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}_{}_{}_{}".format("GCNNet-C2PC2P",
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}_{}_{}_{}".format("GCNNet-C2PC2PC2",
                                                                               _is_sgd, _has_0, _has_mask)
 
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
@@ -856,10 +880,10 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
+    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
     # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P/epoch_99.pkl")
-    runner.train(_epochs, start_epoch=0)
-    # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P/epoch_99.pkl", is_train=False,
-    #               result_path="./result/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P")
+    # runner.train(_epochs, start_epoch=0)
+    runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_False/epoch_99.pkl",
+                  is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_False")
 
     pass
