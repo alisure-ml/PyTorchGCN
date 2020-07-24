@@ -543,9 +543,9 @@ class ResGatedGCN(MessagePassing):
         Vh = self.V(x)
         Ah = self.A(x)
         Bh = self.B(x)
-        Ce = self.C(e)
+        self.e = self.C(e)
 
-        h = self.propagate(edge_index, size=size, x=x, Ah=Ah, Bh=Bh, Ce=Ce,
+        h = self.propagate(edge_index, size=size, x=x, Ah=Ah, Bh=Bh,
                            Uh=Uh, Vh=Vh, edge_weight=edge_weight, res_n_id=res_n_id)
         e = self.e
         if self.has_bn:  # batch normalization
@@ -555,14 +555,20 @@ class ResGatedGCN(MessagePassing):
         h, e = self.relu(h), self.relu(e)
         return h, e
 
-    def message(self, x, Ce, Ah_i, Bh_j, Uh_i, Vh_j, edge_index_i, size_i):
-        e_ij = Ah_i + Bh_j + Ce
-        sigma_ij = torch.sigmoid(e_ij)
+    def message(self, x, Ah_i, Bh_j, Uh_i, Vh_j, edge_index_i, size_i):
+        e_ij = Ah_i + Bh_j + self.e
         self.e = e_ij
+        sigma_ij = torch.sigmoid(e_ij)
 
-        sigma_ij = sigma_ij / (scatter_add(sigma_ij, edge_index_i, dim=0, dim_size=size_i)[edge_index_i] + 1e-16)
-        h = Uh_i + Vh_j * sigma_ij
-        return h
+        # 1
+        # a = Vh_j * sigma_ij
+        # b = scatter_add(sigma_ij, edge_index_i, dim=0, dim_size=size_i)[edge_index_i] + 1e-16
+
+        # 2
+        a = scatter_add(Vh_j * sigma_ij, edge_index_i, dim=0, dim_size=size_i)[edge_index_i]
+        b = scatter_add(sigma_ij, edge_index_i, dim=0, dim_size=size_i)[edge_index_i] + 1e-16
+
+        return Uh_i + a / b
 
     def update(self, aggr_out):
         if self.normalize:
@@ -979,6 +985,12 @@ SGD  494144 has_residual:True  is_normalize:True  has_bn:True concat:True   is_s
 GAT
 SGD  121344 has_residual:True  is_normalize:True  has_bn:True concat:True   is_sgd:True  weight_decay:0.0005 Epoch:146, Train:0.8919-0.9979/0.3092 Test:0.8510-0.9944/0.4449
 SGD  354304 has_residual:True  is_normalize:True  has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:113, Train:0.9232-0.9988/0.2235 Test:0.8615-0.9951/0.4277
+
+ResGatedGCN
+SGD  518784 has_residual:True  is_normalize:True  has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:121, Train:0.9056-0.9978/0.2796 Test:0.8553-0.9947/0.4318
+SGD  518784 has_residual:True  is_normalize:True  has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:113, Train:0.9323-0.9994/0.1950 Test:0.8796-0.9967/0.3696
+
+
 """
 
 
@@ -997,8 +1009,8 @@ if __name__ == '__main__':
     # _which = 2  # GAT
     _which = 3  # ResGatedGCN
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     # _is_sgd = False
     _is_sgd = True
@@ -1020,7 +1032,7 @@ if __name__ == '__main__':
         _concat, _has_bn, _has_residual = False, True, True
         _is_normalize, _improved = True, True  # No use
     elif _which == 3:
-        _has_bn, _has_residual, _is_normalize = True, True, True
+        _has_bn, _has_residual, _is_normalize = True, True, False
         _concat, _improved = False, True  # No use
     else:
         raise Exception(".......")
