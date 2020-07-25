@@ -41,10 +41,13 @@ class DealSuperPixel(object):
         self.label_data = label_data if len(label_data) == self.ds_image_size else cv2.resize(
             label_data, (self.ds_image_size, self.ds_image_size))
 
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
+        try:
+            self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+                                             sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
+        except TypeError:
+            self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+                                             sigma=slic_sigma, max_iter=slic_max_iter)
+            pass
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -829,27 +832,40 @@ if __name__ == '__main__':
     Adam C2PC2PC2_False_False_False 3518016
     2020-07-09 21:34:59 E:99, Train mae-score=0.0386/0.9407 final-mse-score=0.0381/0.9213-0.0568/0.9213 loss=0.1139
     2020-07-09 21:34:59 E:99, Test  mae-score=0.0929/0.6946 final-mse-score=0.0935/0.6740-0.1057/0.6740 loss=0.2698
+    
+    
+    Adam C2PC2PC2_False_False_False 3518016 50 0.0001
+    2020-07-25 04:29:51 E:49, Train mae-score=0.0624/0.9244 final-mse-score=0.0621/0.9014-0.0835/0.9014 loss=0.1437
+    2020-07-25 04:29:51 E:49, Test  mae-score=0.1195/0.6759 final-mse-score=0.1201/0.6532-0.1363/0.6532 loss=0.2952
+    
+    Adam C2PC2PC2_False_False_False 3518016 50 0.001
+    2020-07-25 04:24:54 E:49, Train mae-score=0.0575/0.9294 final-mse-score=0.0571/0.9078-0.0780/0.9078 loss=0.1347
+    2020-07-25 04:24:54 E:49, Test  mae-score=0.1069/0.6881 final-mse-score=0.1081/0.6592-0.1235/0.6592 loss=0.2636
+    
     """
-    _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
+
+    # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
+    _data_root_path = "/mnt/4T/Data/SOD/DUTS"
+
     _batch_size = 4 * 8
     _image_size_train = 224
     _image_size_test = 256
     _train_print_freq = 100
     _test_print_freq = 100
-    _num_workers = 32
+    _num_workers = 16
     _use_gpu = True
 
-    _gpu_id = "3"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
-    _epochs = 100  # Super Param Group 1
+    _epochs = 50  # Super Param Group 1
     _is_sgd = False
     _weight_decay = 0
-    _lr = [[0, 0.001], [70, 0.0001], [90, 0.00001]]
+    _lr = [[0, 0.001]]
 
     # _epochs = 100  # Super Param Group 1
     # _is_sgd = True
     # _weight_decay = 5e-4
-    # # _lr = [[0, 0.01], [50, 0.001], [90, 0.0001]]
     # _lr = [[0, 0.001], [70, 0.0001], [90, 0.00001]]
 
     _has_0 = False  # Super Param 2
@@ -860,12 +876,12 @@ if __name__ == '__main__':
     _has_residual = True
     _is_normalize = True
 
-    # _sp_size, _down_ratio, _conv_layer_num = 4, 4, 14  # GCNNet-C2PC2P
-    _sp_size, _down_ratio, _conv_layer_num = 4, 4, 20  # GCNNet-C2PC2PC2
+    # _sp_size, _down_ratio, _conv_layer_num , _model_name= 4, 4, 14, "GCNNet-C2PC2P"
+    _sp_size, _down_ratio, _conv_layer_num, _model_name = 4, 4, 20, "GCNNet-C2PC2PC2"
 
-    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}_{}_{}_{}".format("GCNNet-C2PC2PC2",
-                                                                              _is_sgd, _has_0, _has_mask)
+    _name = "{}_{}_{}_{}_lr2".format(_model_name, _is_sgd, _has_0, _has_mask)
 
+    _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
                 "down_ratio:{} conv_layer_num:{} workers:{} gpu:{} has_mask:{} has_0:{} "
                 "has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
@@ -880,10 +896,10 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/GCNNet-C2PC2P/epoch_29.pkl")
-    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P/epoch_99.pkl")
+    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/0_4_4_20/epoch_14.pkl")
     # runner.train(_epochs, start_epoch=0)
-    runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_False/epoch_99.pkl",
+
+    runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_False_lr001/epoch_49.pkl",
                   is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_False")
 
     pass
