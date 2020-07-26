@@ -977,7 +977,7 @@ if __name__ == '__main__':
     _is_sgd = False
     _weight_decay = 0
     # _lr = [[0, 0.001]]
-    _lr = [[0, 0.0001]]
+    _lr = [[0, 0.0001], [30, 0.00001]]
 
     # _epochs = 100  # Super Param Group 1
     # _is_sgd = True
@@ -994,7 +994,7 @@ if __name__ == '__main__':
     # _sp_size, _down_ratio, _conv_layer_num , _model_name= 4, 4, 14, "GCNNet-C2PC2P"
     _sp_size, _down_ratio, _conv_layer_num, _model_name = 4, 4, 20, "GCNNet-C2PC2PC2"
 
-    _name = "E2E-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
+    _name = "E2E-{}_{}_{}_lr0001_2".format(_model_name, _is_sgd, _has_mask)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
@@ -1011,9 +1011,9 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/0_4_4_20/epoch_14.pkl")
-    # runner.train(_epochs, start_epoch=0)
+    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/0_4_4_20/epoch_14.pkl")
+    runner.train(_epochs, start_epoch=0)
 
-    runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001/epoch_49.pkl",
-                  is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001")
+    # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001/epoch_49.pkl",
+    #               is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001")
     pass
