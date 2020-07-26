@@ -168,6 +168,7 @@ class MyDataset(Dataset):
         # 读数据
         label = Image.open(self.label_name_list[idx])
         image = Image.open(self.image_name_list[idx]).convert("RGB")
+        image_name = self.image_name_list[idx]
 
         # 数据增强
         sample = {'image': image, 'label': label}
@@ -184,7 +185,7 @@ class MyDataset(Dataset):
         graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_small_data)
 
         # 返回
-        return graph, pixel_graph, img_data, label_small_data, segment, image_small_data
+        return graph, pixel_graph, img_data, label_small_data, segment, image_small_data, image_name
 
     def get_sp_info(self, image, label):
         # Super Pixel
@@ -213,7 +214,7 @@ class MyDataset(Dataset):
 
     @staticmethod
     def collate_fn(samples):
-        graphs, pixel_graphs, images, labels, segments, images_small = map(list, zip(*samples))
+        graphs, pixel_graphs, images, labels, segments, images_small, image_name = map(list, zip(*samples))
 
         images = torch.cat(images)
         images_small = torch.tensor(images_small)
@@ -230,7 +231,7 @@ class MyDataset(Dataset):
             pass
         batched_pixel_graph = Batch.from_data_list(_pixel_graphs)
 
-        return images, labels, batched_graph, batched_pixel_graph, segments, images_small
+        return images, labels, batched_graph, batched_pixel_graph, segments, images_small, image_name
 
     pass
 
@@ -596,8 +597,8 @@ class RunnerSPE(object):
         epoch_mae2, epoch_prec2, epoch_recall2 = 0.0, np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
         epoch_mae3, epoch_prec3, epoch_recall3 = 0.0, np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
         epoch_mae4, epoch_prec4, epoch_recall4 = 0.0, np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
-        for i, (images, targets, batched_graph,
-                batched_pixel_graph, segments, images_small) in enumerate(self.train_loader):
+        for i, (images, targets, batched_graph, batched_pixel_graph,
+                segments, images_small, images_name) in enumerate(self.train_loader):
             # Run
             self.optimizer.zero_grad()
 
@@ -723,7 +724,7 @@ class RunnerSPE(object):
         loader = self.train_loader if is_train_loader else self.test_loader
         with torch.no_grad():
             for i, (images, targets, batched_graph,
-                    batched_pixel_graph, segments, images_small) in enumerate(self.test_loader):
+                    batched_pixel_graph, segments, images_small, images_name) in enumerate(self.test_loader):
                 # Data
                 images = images.float().to(self.device)
                 labels = batched_graph.y.to(self.device)
@@ -833,7 +834,8 @@ class RunnerSPE(object):
         loader = self.train_loader if is_train else self.test_loader
         self.model.eval()
         with torch.no_grad():
-            for i, (images, targets, batched_graph, batched_pixel_graph, segments, images_small) in enumerate(loader):
+            for i, (images, targets, batched_graph,
+                    batched_pixel_graph, segments, images_small, images_name) in enumerate(loader):
                 Tools.print("{}-{}".format(i, len(loader)))
 
                 # Data
@@ -868,11 +870,12 @@ class RunnerSPE(object):
                     im3 = Image.fromarray(np.asarray(tar_sod * 255, dtype=np.uint8))
                     im4 = Image.fromarray(np.asarray(pre_sod * 255, dtype=np.uint8))
                     if result_path:
-                        im0.save(os.path.join(result_path, "{}_{}_{}.png".format(i, one, 0)))
-                        im1.save(os.path.join(result_path, "{}_{}_{}.bmp".format(i, one, 1)))
-                        im2.save(os.path.join(result_path, "{}_{}_{}.bmp".format(i, one, 2)))
-                        im3.save(os.path.join(result_path, "{}_{}_{}.bmp".format(i, one, 3)))
-                        im4.save(os.path.join(result_path, "{}_{}_{}.bmp".format(i, one, 4)))
+                        image_name = os.path.splitext(os.path.basename(images_name[one]))[0]
+                        im0.save(os.path.join(result_path, "{}_{}.png".format(image_name, 0)))
+                        im1.save(os.path.join(result_path, "{}_{}.bmp".format(image_name, 1)))
+                        im2.save(os.path.join(result_path, "{}_{}.bmp".format(image_name, 2)))
+                        im3.save(os.path.join(result_path, "{}_{}.bmp".format(image_name, 3)))
+                        im4.save(os.path.join(result_path, "{}_{}.bmp".format(image_name, 4)))
                     else:
                         im0.show()
                         im1.show()
@@ -958,21 +961,17 @@ if __name__ == '__main__':
     # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _data_root_path = "/mnt/4T/Data/SOD/DUTS"
 
-    # _batch_size = 4 * 8
-    # _image_size_train = 224
-    # _image_size_test = 256
-
-    _batch_size = 1 * 8
-    _image_size_train = 320
-    _image_size_test = 320
+    _batch_size = 4 * 8
+    _image_size_train = 224
+    _image_size_test = 256
 
     _train_print_freq = 100
     _test_print_freq = 100
     _num_workers = 16
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     _epochs = 50  # Super Param Group 1
     _is_sgd = False
@@ -995,7 +994,7 @@ if __name__ == '__main__':
     # _sp_size, _down_ratio, _conv_layer_num , _model_name= 4, 4, 14, "GCNNet-C2PC2P"
     _sp_size, _down_ratio, _conv_layer_num, _model_name = 4, 4, 20, "GCNNet-C2PC2PC2"
 
-    _name = "E2E-{}_{}_{}_lr0001_3".format(_model_name, _is_sgd, _has_mask)
+    _name = "E2E-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
@@ -1012,9 +1011,9 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/0_4_4_20/epoch_14.pkl")
-    runner.train(_epochs, start_epoch=0)
+    # runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/0_4_4_20/epoch_14.pkl")
+    # runner.train(_epochs, start_epoch=0)
 
-    # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_lr0001_2/epoch_49.pkl",
-    #               is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001")
+    runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001/epoch_49.pkl",
+                  is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001")
     pass
