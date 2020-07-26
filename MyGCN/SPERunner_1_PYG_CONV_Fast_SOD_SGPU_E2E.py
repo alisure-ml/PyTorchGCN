@@ -942,63 +942,37 @@ if __name__ == '__main__':
     2020-07-06 18:50:41 E:99, Train mae-score=0.0589/0.9160 final-mse-score=0.0592/0.8949-0.0706/0.8949 loss=0.1260
     2020-07-06 18:50:41 E:99, Test  mae-score=0.1010/0.6853 final-mse-score=0.1022/0.6522-0.1114/0.6522 loss=0.2538
 
-    Adam
-    2020-07-06 19:00:46 E:99, Train mae-score=0.0548/0.9180 final-mse-score=0.0549/0.8966-0.0665/0.8966 loss=0.1224
-    2020-07-06 19:00:46 E:99, Test  mae-score=0.1030/0.6667 final-mse-score=0.1041/0.6381-0.1133/0.6381 loss=0.2793
-    
-    Adam ckpt:./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P_Label_No0
-    2020-07-07 07:55:09 E:49, Train mae-score=0.0819/0.8772 final-mse-score=0.0824/0.8567-0.0907/0.8567 loss=0.1201
-    2020-07-07 07:55:09 E:49, Test  mae-score=0.1122/0.6621 final-mse-score=0.1136/0.6291-0.1209/0.6291 loss=0.2717
-    
-    Adam ckpt:./ckpt2/dgl/1_PYG_CONV_Fast-SOD/GCNNet-C2PC2P_Label
-    2020-07-07 08:30:40 E:49, Train mae-score=0.0817/0.8780 final-mse-score=0.0822/0.8567-0.0905/0.8567 loss=0.1200
-    2020-07-07 08:30:40 E:49, Test  mae-score=0.1091/0.6649 final-mse-score=0.1105/0.6274-0.1177/0.6274 loss=0.2681
-    
-    Adam
-    C2PC2P_False_False_False
-    2020-07-08 06:19:12    0- 157 loss=0.2998/0.2998 mse=0.1193/0.1193 final-mse=0.1221-0.1323
-    2020-07-08 06:21:02  100- 157 loss=0.2764/0.2553 mse=0.1131/0.1141 final-mse=0.1148-0.1268
-    2020-07-08 06:21:39 E:99, Train mae-score=0.0692/0.9131 final-mse-score=0.0688/0.8883-0.0865/0.8883 loss=0.1607
-    2020-07-08 06:21:39 E:99, Test  mae-score=0.1131/0.6627 final-mse-score=0.1139/0.6360-0.1261/0.6360 loss=0.2742
-
-    C2PC2P_True_False_False
-    2020-07-08 07:35:57    0- 157 loss=0.3086/0.3086 mse=0.1511/0.1511 final-mse=0.1541-0.1641
-    2020-07-08 07:37:12  100- 157 loss=0.2959/0.2787 mse=0.1458/0.1469 final-mse=0.1482-0.1594
+    Adam C2PC2P_True_False_False
     2020-07-08 07:37:38 E:99, Train mae-score=0.1173/0.8681 final-mse-score=0.1177/0.8437-0.1333/0.8437 loss=0.2305
     2020-07-08 07:37:38 E:99, Test  mae-score=0.1456/0.6230 final-mse-score=0.1470/0.5871-0.1584/0.5871 loss=0.2937
-    
-    Adam C2PC2P_False_False_False 2598976
-    2020-07-08 20:22:38 E:99, Train mae-score=0.0711/0.9119 final-mse-score=0.0708/0.8861-0.0877/0.8861 loss=0.1627
-    2020-07-08 20:22:38 E:99, Test  mae-score=0.1142/0.6589 final-mse-score=0.1151/0.6349-0.1268/0.6349 loss=0.2758
     
     Adam C2PC2PC2_False_False_False 3518016
     2020-07-09 21:34:59 E:99, Train mae-score=0.0386/0.9407 final-mse-score=0.0381/0.9213-0.0568/0.9213 loss=0.1139
     2020-07-09 21:34:59 E:99, Test  mae-score=0.0929/0.6946 final-mse-score=0.0935/0.6740-0.1057/0.6740 loss=0.2698
     
-    
-    Adam C2PC2PC2_False_False_False 3518016 50 0.0001
-    2020-07-25 04:29:51 E:49, Train mae-score=0.0624/0.9244 final-mse-score=0.0621/0.9014-0.0835/0.9014 loss=0.1437
-    2020-07-25 04:29:51 E:49, Test  mae-score=0.1195/0.6759 final-mse-score=0.1201/0.6532-0.1363/0.6532 loss=0.2952
-    
-    Adam C2PC2PC2_False_False_False 3518016 50 0.001
-    2020-07-25 04:24:54 E:49, Train mae-score=0.0575/0.9294 final-mse-score=0.0571/0.9078-0.0780/0.9078 loss=0.1347
-    2020-07-25 04:24:54 E:49, Test  mae-score=0.1069/0.6881 final-mse-score=0.1081/0.6592-0.1235/0.6592 loss=0.2636
-    
+    Adam 5143616 E2E-GCNNet-C2PC2PC2_False_False_lr0001
+    E:42, Train gcn-mae-score=0.0597-0.9279 gcn-final-mse-score=0.0593-0.9053(0.0806/0.9053) sod-mae-score=0.0382-0.9677 loss=0.2057(0.1374+0.0683)
+    E:42, Test  gcn-mae-score=0.0854-0.7293 gcn-final-mse-score=0.0864-0.6807(0.1016/0.6807) sod-mae-score=0.0747-0.8002 loss=0.4401(0.2245+0.2156)
     """
 
     # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _data_root_path = "/mnt/4T/Data/SOD/DUTS"
 
-    _batch_size = 4 * 8
-    _image_size_train = 224
-    _image_size_test = 256
+    # _batch_size = 4 * 8
+    # _image_size_train = 224
+    # _image_size_test = 256
+
+    _batch_size = 1 * 8
+    _image_size_train = 320
+    _image_size_test = 320
+
     _train_print_freq = 100
     _test_print_freq = 100
     _num_workers = 16
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     _epochs = 50  # Super Param Group 1
     _is_sgd = False
@@ -1021,7 +995,7 @@ if __name__ == '__main__':
     # _sp_size, _down_ratio, _conv_layer_num , _model_name= 4, 4, 14, "GCNNet-C2PC2P"
     _sp_size, _down_ratio, _conv_layer_num, _model_name = 4, 4, 20, "GCNNet-C2PC2PC2"
 
-    _name = "{}_{}_{}_lr0001_2".format(_model_name, _is_sgd, _has_mask)
+    _name = "E2E-{}_{}_{}_lr0001_3".format(_model_name, _is_sgd, _has_mask)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
@@ -1041,6 +1015,6 @@ if __name__ == '__main__':
     runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/0_4_4_20/epoch_14.pkl")
     runner.train(_epochs, start_epoch=0)
 
-    # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_lr001/epoch_49.pkl",
-    #               is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_lr001")
+    # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/GCNNet-C2PC2PC2_False_False_lr0001_2/epoch_49.pkl",
+    #               is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001")
     pass
