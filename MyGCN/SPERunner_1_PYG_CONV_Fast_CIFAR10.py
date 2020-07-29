@@ -96,10 +96,10 @@ class MyDataset(Dataset):
         self.image_size_for_sp = self.image_size // down_ratio
         self.data_root_path = data_root_path
 
-        self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
-                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
-        # self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=2),
+        # self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=4),
         #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
+        self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=2),
+                                             transforms.RandomHorizontalFlip()]) if self.is_train else None
         # self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=None),
         #                                      transforms.RandomHorizontalFlip()]) if self.is_train else None
         # self.transform = transforms.Compose([transforms.RandomCrop(self.image_size, padding=2),
@@ -991,7 +991,7 @@ ResGatedGCN
 SGD  518784 has_residual:True  is_normalize:True  has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:121, Train:0.9056-0.9978/0.2796 Test:0.8553-0.9947/0.4318
 SGD  518784 has_residual:True  is_normalize:True  has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:113, Train:0.9323-0.9994/0.1950 Test:0.8796-0.9967/0.3696
 
-
+Padding = 2, GCN 维度全一样时比较好
 """
 
 
