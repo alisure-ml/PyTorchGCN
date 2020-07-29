@@ -199,10 +199,10 @@ class GCNNet1(nn.Module):
         self.has_bn = has_bn
         self.improved = improved
 
-        self.embedding_h = nn.Linear(in_dim, in_dim)
+        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
 
         self.gcn_list = nn.ModuleList()
-        _in_dim = in_dim
+        _in_dim = self.hidden_dims[0]
         for hidden_dim in self.hidden_dims:
             self.gcn_list.append(GCNConv(_in_dim, hidden_dim, normalize=self.normalize, improved=self.improved))
             _in_dim = hidden_dim
@@ -678,6 +678,7 @@ class MyGCNNet(nn.Module):
             #                           has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
 
             # 153344
+            # 165696 2020-07-29 02:51:09 Epoch:147, Train:0.9513-0.9996/0.1499 Test:0.8704-0.9952/0.4132 padding=2
             self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[-2].num_features,
                                       hidden_dims=[128, 128],
                                       has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
@@ -1004,13 +1005,13 @@ if __name__ == '__main__':
     _num_workers = 20
     _use_gpu = True
 
-    # _which = 0  # GCN
+    _which = 0  # GCN
     # _which = 1  # SAGE
     # _which = 2  # GAT
-    _which = 3  # ResGatedGCN
+    # _which = 3  # ResGatedGCN
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     # _is_sgd = False
     _is_sgd = True
@@ -1038,7 +1039,7 @@ if __name__ == '__main__':
         raise Exception(".......")
 
     if _is_sgd:
-        _epochs, _weight_decay, _lr = 150, 5e-4, [[0, 0.1], [50, 0.01], [100, 0.001]]
+        _epochs, _weight_decay, _lr = 150, 5e-4, [[0, 0.1], [50, 0.01], [100, 0.001], [130, 0.0001]]
         # _lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
     else:
         _epochs, _weight_decay, _lr = 100, 0.0, [[0, 0.001], [50, 0.0002], [75, 0.00004]]
