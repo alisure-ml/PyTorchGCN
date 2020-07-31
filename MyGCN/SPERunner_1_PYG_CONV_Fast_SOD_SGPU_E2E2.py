@@ -1000,15 +1000,21 @@ if __name__ == '__main__':
     
     2020-07-30 08:05:27 E:33, Train sod-mae-score=0.0279-0.9757 gcn-mae-score=0.0588-0.9266 gcn-final-mse-score=0.0582-0.9067(0.0800/0.9067) loss=0.1899(0.1374+0.0525)
     2020-07-30 08:05:27 E:33, Test  sod-mae-score=0.0679-0.8116 gcn-mae-score=0.0890-0.7165 gcn-final-mse-score=0.0897-0.6880(0.1055/0.6880) loss=0.4470(0.2379+0.2091)
+    
+    2020-07-31 22:48:53 E:18, Train sod-mae-score=0.0401-0.9559 gcn-mae-score=0.0679-0.9040 gcn-final-mse-score=0.0682-0.8856(0.0828/0.8856) loss=0.2138(0.1407+0.0731)
+    2020-07-31 22:48:53 E:18, Test  sod-mae-score=0.0766-0.8062 gcn-mae-score=0.0933-0.7115 gcn-final-mse-score=0.0945-0.6822(0.1076/0.6822) loss=0.3833(0.2124+0.1708)
     """
 
     # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _data_root_path = "/mnt/4T/Data/SOD/DUTS"
 
     # _batch_size = 4 * 8
-    _batch_size = 1 * 8
     _image_size_train = 224
     _image_size_test = 256
+
+    # _batch_size = 1 * 6
+    # _image_size_train = 320
+    # _image_size_test = 320
 
     _train_print_freq = 100
     _test_print_freq = 100
@@ -1020,7 +1026,6 @@ if __name__ == '__main__':
 
     _epochs = 50  # Super Param Group 1
     _is_sgd = False
-    # _weight_decay = 0.0005
     _weight_decay = 0.0
     # _lr = [[0, 0.001]]
     _lr = [[0, 0.0001], [30, 0.00001]]
