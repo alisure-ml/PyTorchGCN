@@ -993,26 +993,13 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    SGD
-    2020-07-06 18:50:41 E:99, Train mae-score=0.0589/0.9160 final-mse-score=0.0592/0.8949-0.0706/0.8949 loss=0.1260
-    2020-07-06 18:50:41 E:99, Test  mae-score=0.1010/0.6853 final-mse-score=0.1022/0.6522-0.1114/0.6522 loss=0.2538
-
-    Adam C2PC2P_True_False_False
-    2020-07-08 07:37:38 E:99, Train mae-score=0.1173/0.8681 final-mse-score=0.1177/0.8437-0.1333/0.8437 loss=0.2305
-    2020-07-08 07:37:38 E:99, Test  mae-score=0.1456/0.6230 final-mse-score=0.1470/0.5871-0.1584/0.5871 loss=0.2937
-    
-    Adam C2PC2PC2_False_False_False 3518016
-    2020-07-09 21:34:59 E:99, Train mae-score=0.0386/0.9407 final-mse-score=0.0381/0.9213-0.0568/0.9213 loss=0.1139
-    2020-07-09 21:34:59 E:99, Test  mae-score=0.0929/0.6946 final-mse-score=0.0935/0.6740-0.1057/0.6740 loss=0.2698
-    
-    Adam 5143616 E2E-GCNNet-C2PC2PC2_False_False_lr0001
-    E:42, Train gcn-mae-score=0.0597-0.9279 gcn-final-mse-score=0.0593-0.9053(0.0806/0.9053) sod-mae-score=0.0382-0.9677 loss=0.2057(0.1374+0.0683)
-    E:42, Test  gcn-mae-score=0.0854-0.7293 gcn-final-mse-score=0.0864-0.6807(0.1016/0.6807) sod-mae-score=0.0747-0.8002 loss=0.4401(0.2245+0.2156)
-    
     2020-07-29 06:24:01 E:25, Train sod-mae-score=0.0446-0.9613 gcn-mae-score=0.0767-0.9089 gcn-final-mse-score=0.0763-0.8889(0.0982/0.8889) loss=0.2476(0.1670+0.0806)
     2020-07-29 06:24:01 E:25, Test  sod-mae-score=0.0724-0.8147 gcn-mae-score=0.0902-0.7123 gcn-final-mse-score=0.0910-0.6760(0.1069/0.6760) loss=0.3891(0.2161+0.1730)
     2020-07-29 14:26:18 E:49, Train sod-mae-score=0.0232-0.9797 gcn-mae-score=0.0529-0.9319 gcn-final-mse-score=0.0522-0.9112(0.0745/0.9112) loss=0.1722(0.1286+0.0436)
     2020-07-29 14:26:18 E:49, Test  sod-mae-score=0.0686-0.8081 gcn-mae-score=0.0908-0.7081 gcn-final-mse-score=0.0915-0.6797(0.1077/0.6797) loss=0.4528(0.2372+0.2155)
+    
+    2020-07-30 08:05:27 E:33, Train sod-mae-score=0.0279-0.9757 gcn-mae-score=0.0588-0.9266 gcn-final-mse-score=0.0582-0.9067(0.0800/0.9067) loss=0.1899(0.1374+0.0525)
+    2020-07-30 08:05:27 E:33, Test  sod-mae-score=0.0679-0.8116 gcn-mae-score=0.0890-0.7165 gcn-final-mse-score=0.0897-0.6880(0.1055/0.6880) loss=0.4470(0.2379+0.2091)
     """
 
     # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
@@ -1033,7 +1020,8 @@ if __name__ == '__main__':
 
     _epochs = 50  # Super Param Group 1
     _is_sgd = False
-    _weight_decay = 0
+    # _weight_decay = 0.0005
+    _weight_decay = 0.0
     # _lr = [[0, 0.001]]
     _lr = [[0, 0.0001], [30, 0.00001]]
 
@@ -1051,7 +1039,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio, _conv_layer_num, _model_name = 4, 4, 20, "GCNNet-C2PC2PC2"
 
-    _name = "E2E2-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
+    _name = "E2E2-{}_{}_{}_lr0001_3".format(_model_name, _is_sgd, _has_mask)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
     Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
