@@ -10,10 +10,10 @@ from PIL import Image
 import torch.nn.functional as F
 from skimage import segmentation
 from alisuretool.Tools import Tools
-from torchvision.models import vgg13_bn
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
+from torchvision.models import vgg13_bn, vgg16_bn
 from torch_geometric.nn import GCNConv, global_mean_pool
 
 
@@ -33,15 +33,11 @@ def gpu_setup(use_gpu, gpu_id):
 
 class DealSuperPixel(object):
 
-    def __init__(self, image_data, label_data, ds_image_size=224, super_pixel_size=14, slic_sigma=1, slic_max_iter=5):
-        self.ds_image_size = ds_image_size
-        self.super_pixel_num = (self.ds_image_size // super_pixel_size) ** 2
-
-        self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
-            image_data, (self.ds_image_size, self.ds_image_size))
-        self.label_data = label_data if len(label_data) == self.ds_image_size else cv2.resize(
-            label_data, (self.ds_image_size, self.ds_image_size))
-
+    def __init__(self, image_data, label_data, super_pixel_size=14, slic_sigma=1, slic_max_iter=5):
+        image_size = image_data.shape[0: 2]
+        self.super_pixel_num = (image_size[0] * image_size[1]) // (super_pixel_size * super_pixel_size)
+        self.image_data = image_data
+        self.label_data = label_data
         try:
             self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
                                              sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
@@ -132,14 +128,12 @@ class RandomCrop(transforms.RandomCrop):
 
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path, down_ratio=4, down_ratio2=2, is_train=True,
-                 image_size_train=224, image_size_test=256, sp_size=4):
+    def __init__(self, data_root_path, down_ratio=4, down_ratio2=2, is_train=True, sp_size=4):
         super().__init__()
         self.sp_size = sp_size
         self.is_train = is_train
-        self.image_size = image_size_train if self.is_train else image_size_test
-        self.image_size_for_sp = self.image_size // down_ratio
-        self.label_size_for_sod = self.image_size // down_ratio2
+        self.down_ratio_for_sp = down_ratio
+        self.down_ratio_for_sod = down_ratio2
         self.data_root_path = data_root_path
 
         # 路径
@@ -149,9 +143,7 @@ class MyDataset(Dataset):
                                             "DUTS-TR-Mask" if self.is_train else "DUTS-TE-Mask")
 
         # 数据增强
-        self.transform_train = transforms.Compose([FixedResize(image_size_test),
-                                                   RandomHorizontalFlip(), RandomCrop(self.image_size)])
-        self.transform_test = transforms.Compose([FixedResize(self.image_size)])
+        self.transform_train = transforms.Compose([RandomHorizontalFlip()])
 
         # 准备数据
         self.image_name_list, self.label_name_list = self.get_image_label_name()
@@ -171,30 +163,34 @@ class MyDataset(Dataset):
         label = Image.open(self.label_name_list[idx])
         image = Image.open(self.image_name_list[idx]).convert("RGB")
         image_name = self.image_name_list[idx]
+        if image.size == label.size:
+            w, h = label.size
+            # 数据增强
+            sample = {'image': image, 'label': label}
+            sample = self.transform_train(sample) if self.is_train else sample
+            image, label = sample['image'], sample['label']
+            label_for_sod = np.asarray(label.resize((w//self.down_ratio_for_sod, h//self.down_ratio_for_sod))) / 255
 
-        # 数据增强
-        sample = {'image': image, 'label': label}
-        sample = self.transform_train(sample) if self.is_train else self.transform_test(sample)
-        image, label = sample['image'], sample['label']
-        label_for_sod = np.asarray(label.resize((self.label_size_for_sod, self.label_size_for_sod))) / 255
+            # 归一化
+            _normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            img_data = transforms.Compose([transforms.ToTensor(), _normalize])(image).unsqueeze(dim=0)
 
-        # 归一化
-        _normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        img_data = transforms.Compose([transforms.ToTensor(), _normalize])(image).unsqueeze(dim=0)
-
-        # 超像素
-        image_small_data = np.asarray(image.resize((self.image_size_for_sp, self.image_size_for_sp)))
-        label_for_sp = np.asarray(label.resize((self.image_size_for_sp, self.image_size_for_sp))) / 255
-        graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp)
-
+            # 超像素
+            image_small_data = np.asarray(image.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp)))
+            label_for_sp = np.asarray(label.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp))) / 255
+            graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp)
+        else:
+            Tools.print('IMAGE ERROR, PASSING {}'.format(image_name))
+            graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name = \
+                self.__getitem__(np.random.randint(0, len(self.image_name_list)))
+            pass
         # 返回
         return graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name
 
     def get_sp_info(self, image, label):
         # Super Pixel
         #################################################################################
-        deal_super_pixel = DealSuperPixel(image_data=image, label_data=label,
-                                          ds_image_size=self.image_size_for_sp, super_pixel_size=self.sp_size)
+        deal_super_pixel = DealSuperPixel(image_data=image, label_data=label, super_pixel_size=self.sp_size)
         segment, sp_adj, pixel_adj, sp_label = deal_super_pixel.run()
         #################################################################################
         # Graph
@@ -242,7 +238,7 @@ class MyDataset(Dataset):
 
 class ConvBlock(nn.Module):
 
-    def __init__(self, cin, cout, stride=1, ks=3, has_relu=True, has_bn=True, bias=True):
+    def __init__(self, cin, cout, stride=1, ks=3, has_relu=True, has_bn=False, bias=True):
         super().__init__()
         self.has_relu = has_relu
         self.has_bn = has_bn
@@ -267,22 +263,31 @@ class ConvBlock(nn.Module):
 
 class CONVNet(nn.Module):
 
-    def __init__(self, layer_num=20):  # 14, 20
+    def __init__(self):  # 9+4, 16+7, 23+10, 30
         super().__init__()
-        self.features = vgg13_bn(pretrained=True).features[0: layer_num]
-        self.out_num2 = self.features[-2].num_features
-        self.out_num1 = self.out_num2 // 2
+        self.features = vgg16_bn(pretrained=True).features[0: 33]
+        self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
+
+        self.out_num1 = 128
+        self.out_num2 = 256
+        self.out_num3 = 512
         pass
 
     def forward(self, x):
         block_1 = self.features[0: 6](x)
-        block_1_max = self.features[6](block_1)
+        block_1_max = self.max_pool(block_1)  # 1
+
         block_2 = self.features[7: 13](block_1_max)
-        block_2_max = self.features[13](block_2)
-        block_3 = self.features[14: 20](block_2_max)
+        block_2_max = self.max_pool(block_2)  # 2
+
+        block_3 = self.features[14: 23](block_2_max)
+
+        block_4 = self.features[24: 33](block_3)
+
         assert self.out_num1 == block_2.size(1)
         assert self.out_num2 == block_3.size(1)
-        return block_2, block_3
+        assert self.out_num3 == block_4.size(1)
+        return block_2, block_3, block_4
 
     pass
 
@@ -364,9 +369,7 @@ class GCNNet2(nn.Module):
         self.skip_connect_list = nn.ModuleList()
         self.skip_connect_bn_list = nn.ModuleList()
         for hidden_dim in [self.hidden_dims[which-1] for which in skip_which]:
-            # self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
-            self.skip_connect_list.append(GCNConv(hidden_dim, skip_dim,
-                                                  normalize=self.normalize, improved=self.improved))
+            self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
             self.skip_connect_bn_list.append(nn.BatchNorm1d(skip_dim))
             pass
 
@@ -395,7 +398,7 @@ class GCNNet2(nn.Module):
         skip_connect = []
         for sc, index, bn in zip(self.skip_connect_list, self.skip_connect_index, self.skip_connect_bn_list):
             # Conv
-            sc_feat = sc(gcn_hidden_nodes_feat[index], data.edge_index)
+            sc_feat = sc(gcn_hidden_nodes_feat[index])
             if self.has_bn:
                 sc_feat = bn(sc_feat)
             sc_feat = self.relu(sc_feat)
@@ -412,39 +415,46 @@ class GCNNet2(nn.Module):
 
 class SODNet(nn.Module):
 
-    def __init__(self, conv1_feature_num, conv2_feature_num, sod_gcn1_feature_num,
-                 sod_gcn2_feature_num, mout=128, sout=1):
+    def __init__(self, conv1_feature_num, conv2_feature_num, conv3_feature_num,
+                 sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
         super().__init__()
-        self.conv_conv1 = ConvBlock(conv1_feature_num, cout=mout, ks=3)
-        self.conv_conv2 = ConvBlock(conv2_feature_num, cout=mout, ks=3)
-        self.conv_sod_gcn1 = ConvBlock(sod_gcn1_feature_num, cout=mout, ks=3)
-        self.conv_sod_gcn2 = ConvBlock(sod_gcn2_feature_num, cout=mout, ks=3)
+        self.conv_sod_gcn2 = ConvBlock(sod_gcn2_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_sod_gcn1 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_conv3 = ConvBlock(conv3_feature_num, cout=conv3_feature_num, ks=3)
+        self.conv_conv2 = ConvBlock(conv2_feature_num, cout=conv2_feature_num, ks=3)
+        self.conv_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
 
-        self.cat_conv1 = ConvBlock(mout * 2, cout=mout, ks=3)
-        self.cat_conv2 = ConvBlock(mout * 2, cout=mout, ks=3)
-        self.cat_sod_gcn = ConvBlock(mout * 2, cout=mout, ks=3)
+        self.cat_sod_gcn = ConvBlock(sod_gcn1_feature_num, cout=conv3_feature_num, ks=3)
+        self.cat_conv3 = ConvBlock(conv3_feature_num, cout=conv2_feature_num, ks=3)
+        self.cat_conv2 = ConvBlock(conv2_feature_num, cout=conv1_feature_num, ks=3)
+        self.cat_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
 
-        self.conv_final_1 = ConvBlock(mout, cout=mout, ks=3)
-        self.conv_final_2 = ConvBlock(mout, cout=sout, ks=3, has_relu=False, has_bn=False, bias=False)
+        self.conv_final_1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+        self.conv_final_2 = ConvBlock(conv1_feature_num, cout=out, ks=3, has_relu=False, has_bn=False, bias=False)
         pass
 
-    def forward(self, conv1_feature, conv2_feature, sod_gcn1_feature, sod_gcn2_feature):
-        conv_sod_gcn2 = self.conv_sod_gcn2(sod_gcn2_feature)  # 256, 56
-        conv_sod_gcn1 = self.conv_sod_gcn1(sod_gcn1_feature)  # 256, 56
-        cat_sod_gcn = torch.cat([conv_sod_gcn1, conv_sod_gcn2], dim=1)  # 512, 56
-        cat_sod_gcn = self.cat_sod_gcn(cat_sod_gcn)  # 256, 56
+    def forward(self, conv1_feature, conv2_feature, conv3_feature, sod_gcn1_feature, sod_gcn2_feature):
+        conv_sod_gcn2 = self.conv_sod_gcn2(sod_gcn2_feature)  # 512, 56
+        conv_sod_gcn1 = self.conv_sod_gcn1(sod_gcn1_feature)  # 512, 56
+        cat_sod_gcn = conv_sod_gcn1 + conv_sod_gcn2  # 512, 56
+        cat_sod_gcn = self.cat_sod_gcn(cat_sod_gcn)  # 512, 56
 
-        conv_conv2 = self.conv_conv2(conv2_feature)
-        cat_conv2 = torch.cat([cat_sod_gcn, conv_conv2], dim=1)  # 512, 56
-        cat_conv2 = self.cat_conv2(cat_conv2)  # 256, 56
-        cat_conv2 = F.interpolate(cat_conv2, conv1_feature.size()[2:], mode='bilinear', align_corners=True)  # 256, 112
+        conv_conv3 = self.conv_conv3(conv3_feature)  # 512, 56
+        cat_conv3 = cat_sod_gcn + conv_conv3  # 512, 56
+        cat_conv3 = self.cat_conv3(cat_conv3)  # 256, 56
+        cat_conv3 = F.interpolate(cat_conv3, conv2_feature.size()[2:], mode='bilinear', align_corners=True)  # 256, 112
 
-        conv_conv1 = self.conv_conv1(conv1_feature)
-        cat_conv1 = torch.cat([cat_conv2, conv_conv1], dim=1)  # 512, 112
-        cat_conv1 = self.cat_conv1(cat_conv1)  # 256, 112
+        conv_conv2 = self.conv_conv2(conv2_feature)  # 256, 56
+        cat_conv2 = cat_conv3 + conv_conv2  # 256, 56
+        cat_conv2 = self.cat_conv2(cat_conv2)  # 128, 56
+        cat_conv2 = F.interpolate(cat_conv2, conv1_feature.size()[2:], mode='bilinear', align_corners=True)  # 128, 112
+
+        conv_conv1 = self.conv_conv1(conv1_feature)  # 128, 112
+        cat_conv1 = cat_conv2 + conv_conv1  # 128, 112
+        cat_conv1 = self.cat_conv1(cat_conv1)  # 128, 112
 
         out_feat = cat_conv1
-        out_feat = self.conv_final_1(out_feat)  # 256, 112
+        out_feat = self.conv_final_1(out_feat)  # 128, 112
         out_feat = self.conv_final_2(out_feat)  # 1, 112
         return out_feat, torch.sigmoid(out_feat)
 
@@ -453,11 +463,10 @@ class SODNet(nn.Module):
 
 class MyGCNNet(nn.Module):
 
-    def __init__(self, conv_layer_num=20, has_bn=False, normalize=False, residual=False, improved=False):
+    def __init__(self, has_bn=False, normalize=False, residual=False, improved=False):
         super().__init__()
-        assert conv_layer_num == 20
-        self.model_conv = CONVNet(layer_num=conv_layer_num)  # 20
-        self.model_gnn1 = GCNNet1(in_dim=self.model_conv.out_num2, hidden_dims=[256, 256],
+        self.model_conv = CONVNet()
+        self.model_gnn1 = GCNNet1(in_dim=self.model_conv.out_num3, hidden_dims=[512, 512],
                                   has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
         self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 1024, 1024],
                                   skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
@@ -465,18 +474,19 @@ class MyGCNNet(nn.Module):
 
         self.model_sod = SODNet(conv1_feature_num=self.model_conv.out_num1,
                                 conv2_feature_num=self.model_conv.out_num2,
+                                conv3_feature_num=self.model_conv.out_num3,
                                 sod_gcn1_feature_num=self.model_gnn1.out_num,
-                                sod_gcn2_feature_num=self.model_gnn2.out_num, mout=256, sout=1)
+                                sod_gcn2_feature_num=self.model_gnn2.out_num, out=1)
         pass
 
     def forward(self, images, batched_graph, batched_pixel_graph):
         # model 1
         conv_feature = self.model_conv(images)  # 128, 64; 256, 64
-        conv1_feature, conv2_feature = conv_feature
+        conv1_feature, conv2_feature, conv3_feature = conv_feature
 
         # model 2
         data_where = batched_pixel_graph.data_where
-        pixel_nodes_feat = conv2_feature[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
+        pixel_nodes_feat = conv3_feature[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
         # 构造特征 for SOD
@@ -490,7 +500,7 @@ class MyGCNNet(nn.Module):
 
         # SOD
         sod_logits, sod_logits_sigmoid = self.model_sod.forward(
-            conv1_feature, conv2_feature, sod_gcn1_feature, sod_gcn2_feature)
+            conv1_feature, conv2_feature, conv3_feature, sod_gcn1_feature, sod_gcn2_feature)
         return gcn2_logits, gcn2_logits_sigmoid, sod_logits, sod_logits_sigmoid
 
     @staticmethod
@@ -509,9 +519,8 @@ class MyGCNNet(nn.Module):
 
 class RunnerSPE(object):
 
-    def __init__(self, data_root_path, down_ratio=4, batch_size=64, image_size_train=224, image_size_test=256,
-                 sp_size=4, train_print_freq=100, test_print_freq=50, root_ckpt_dir="./ckpt2/norm3", lr=None,
-                 num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=14, has_mask=False,
+    def __init__(self, data_root_path, down_ratio=4, sp_size=4, train_print_freq=100, test_print_freq=50,
+                 root_ckpt_dir="./ckpt2/norm3", lr=None, num_workers=8, use_gpu=True, gpu_id="1", has_mask=False,
                  has_bn=True, normalize=True, residual=False, improved=False, weight_decay=0.0, is_sgd=False):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
@@ -520,19 +529,16 @@ class RunnerSPE(object):
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
         self.train_dataset = MyDataset(
-            data_root_path=data_root_path, is_train=True, down_ratio=down_ratio,
-            image_size_train=image_size_train, image_size_test=image_size_test, sp_size=sp_size)
+            data_root_path=data_root_path, is_train=True, down_ratio=down_ratio, sp_size=sp_size)
         self.test_dataset = MyDataset(
-            data_root_path=data_root_path, is_train=False, down_ratio=down_ratio,
-            image_size_train=image_size_train, image_size_test=image_size_test, sp_size=sp_size)
+            data_root_path=data_root_path, is_train=False, down_ratio=down_ratio, sp_size=sp_size)
 
-        self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
+        self.train_loader = DataLoader(self.train_dataset, batch_size=1, shuffle=True,
                                        num_workers=num_workers, collate_fn=self.train_dataset.collate_fn)
-        self.test_loader = DataLoader(self.test_dataset, batch_size=batch_size, shuffle=False,
+        self.test_loader = DataLoader(self.test_dataset, batch_size=1, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet(conv_layer_num=conv_layer_num, has_bn=has_bn,
-                              normalize=normalize, residual=residual, improved=improved).to(self.device)
+        self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, improved=improved).to(self.device)
 
         if is_sgd:
             # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
@@ -545,6 +551,7 @@ class RunnerSPE(object):
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
             self._view_model_param(self.model), self.lr_s, self.optimizer))
+        self._print_network(self.model)
 
         self.has_mask = has_mask
         self.loss_class = nn.BCELoss().to(self.device)
@@ -585,18 +592,18 @@ class RunnerSPE(object):
             (test_loss, test_loss1, test_loss2, test_mae, test_score,
              test_mae2, test_score2, test_mae3, test_score3, test_mae4, test_score4) = self.test()
 
-            Tools.print('E:{:2d}, Train gcn-mae-score={:.4f}-{:.4f} gcn-final-mse-score={:.4f}-{:.4f}({:.4f}/{:.4f}) '
-                        'sod-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-                epoch, train_mae, train_score, train_mae2, train_score2, train_mae3, train_score3,
-                train_mae4, train_score4, train_loss, train_loss1, train_loss2))
-            Tools.print('E:{:2d}, Test  gcn-mae-score={:.4f}-{:.4f} gcn-final-mse-score={:.4f}-{:.4f}({:.4f}/{:.4f}) '
-                        'sod-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-                epoch, test_mae, test_score, test_mae2, test_score2, test_mae3, test_score3,
-                test_mae4, test_score4, test_loss, test_loss1, test_loss2))
+            Tools.print('E:{:2d}, Train sod-mae-score={:.4f}-{:.4f} gcn-mae-score={:.4f}-{:.4f} '
+                        'gcn-final-mse-score={:.4f}-{:.4f}({:.4f}/{:.4f}) loss={:.4f}({:.4f}+{:.4f})'.format(
+                epoch, train_mae4, train_score4, train_mae, train_score,
+                train_mae2, train_score2, train_mae3, train_score3, train_loss, train_loss1, train_loss2))
+            Tools.print('E:{:2d}, Test  sod-mae-score={:.4f}-{:.4f} gcn-mae-score={:.4f}-{:.4f} '
+                        'gcn-final-mse-score={:.4f}-{:.4f}({:.4f}/{:.4f}) loss={:.4f}({:.4f}+{:.4f})'.format(
+                epoch, test_mae4, test_score4, test_mae, test_score,
+                test_mae2, test_score2, test_mae3, test_score3, test_loss, test_loss1, test_loss2))
             pass
         pass
 
-    def _train_epoch(self, is_print_result=False):
+    def _train_epoch(self):
         self.model.train()
 
         # 统计
@@ -681,11 +688,11 @@ class RunnerSPE(object):
             # Print
             if i % self.train_print_freq == 0:
                 Tools.print("{:4d}-{:4d} loss={:.4f}({:.4f}+{:.4f})-{:.4f}({:.4f}+{:.4f}) "
-                            "gcn-mse={:.4f}({:.4f}) gcn-final-mse={:.4f}({:.4f}) sod-mse={:.4f}({:.4f})".format(
+                            "sod-mse={:.4f}({:.4f}) gcn-mse={:.4f}({:.4f}) gcn-final-mse={:.4f}({:.4f})".format(
                     i, len(self.train_loader),
                     loss.detach().item(), loss1.detach().item(), loss2.detach().item(),
                     epoch_loss / (i + 1), epoch_loss1 / (i + 1), epoch_loss2 / (i + 1),
-                    mae, epoch_mae / (i + 1), epoch_mae2 / nb_data, epoch_mae3 / nb_data, mae4, epoch_mae4 / (i + 1)))
+                    mae4, epoch_mae4 / (i + 1), mae, epoch_mae / (i + 1), epoch_mae2 / nb_data, epoch_mae3 / nb_data))
                 pass
             pass
 
@@ -705,21 +712,14 @@ class RunnerSPE(object):
         avg_prec4, avg_recall4 = epoch_prec4/len(self.train_loader), epoch_recall4/len(self.train_loader)
         score4 = (1 + 0.3) * avg_prec4 * avg_recall4 / (0.3 * avg_prec4 + avg_recall4)
 
-        if is_print_result:
-            Tools.print('Train gcn-mae-score={:.4f}-{:.4f} gcn-final-mse-score={:.4f}-{:.4f}({:.4f}-{:.4f}) '
-                        'sod-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-                avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max(),
-                avg_mae4, score4.max(), avg_loss, avg_loss1, avg_loss2))
-            pass
-
         return (avg_loss, avg_loss1, avg_loss2,
                 avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max(), avg_mae4, score4.max())
 
-    def test(self, model_file=None, is_print_result=False, is_train_loader=False):
+    def test(self, model_file=None, is_train_loader=False):
         if model_file:
             self.load_model(model_file_name=model_file)
 
-        self.model.eval()
+        self.model.train()
 
         Tools.print()
         th_num = 25
@@ -735,7 +735,7 @@ class RunnerSPE(object):
         loader = self.train_loader if is_train_loader else self.test_loader
         with torch.no_grad():
             for i, (images, labels_sp, labels_sod,
-                    batched_graph, batched_pixel_graph, segments, _, _) in enumerate(self.test_loader):
+                    batched_graph, batched_pixel_graph, segments, _, _) in enumerate(loader):
                 # Data
                 images = images.float().to(self.device)
                 labels = batched_graph.y.to(self.device)
@@ -803,11 +803,11 @@ class RunnerSPE(object):
                 # Print
                 if i % self.test_print_freq == 0:
                     Tools.print("{:4d}-{:4d} loss={:.4f}({:.4f}+{:.4f})-{:.4f}({:.4f}+{:.4f}) "
-                                "gcn-mse={:.4f}({:.4f}) gcn-final-mse={:.4f}({:.4f}) sod-mse={:.4f}({:.4f})".format(
+                                "sod-mse={:.4f}({:.4f}) gcn-mse={:.4f}({:.4f}) gcn-final-mse={:.4f}({:.4f})".format(
                         i, len(loader), loss.detach().item(), loss1.detach().item(), loss2.detach().item(),
                         epoch_test_loss/(i+1), epoch_test_loss1/(i+1), epoch_test_loss2/(i+1),
-                        mae, epoch_test_mae/(i+1), epoch_test_mae2/nb_data,
-                        epoch_test_mae3/nb_data, mae4, epoch_test_mae4/(i+1)))
+                        mae4, epoch_test_mae4/(i+1), mae, epoch_test_mae/(i+1),
+                        epoch_test_mae2/nb_data, epoch_test_mae3/nb_data))
                     pass
                 pass
             pass
@@ -828,12 +828,6 @@ class RunnerSPE(object):
         avg_prec4, avg_recall4 = epoch_test_prec4/len(loader), epoch_test_recall4/len(loader)
         score4 = (1 + 0.3) * avg_prec4 * avg_recall4 / (0.3 * avg_prec4 + avg_recall4)
 
-        if is_print_result:
-            Tools.print('Test gcn-mae-score={:.4f}-{:.4f} gcn-final-mse-score={:.4f}-{:.4f}({:.4f}-{:.4f}) '
-                        'sod-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-                avg_mae, score.max(), avg_mae2, score2.max(), avg_mae3, score3.max(),
-                avg_mae4, score4.max(), avg_loss, avg_loss1, avg_loss2))
-            pass
         return (avg_loss, avg_loss1, avg_loss2, avg_mae, score.max(),
                 avg_mae2, score2.max(), avg_mae3, score3.max(), avg_mae4, score4.max())
 
@@ -901,6 +895,15 @@ class RunnerSPE(object):
         pass
 
     @staticmethod
+    def _print_network(model):
+        num_params = 0
+        for p in model.parameters():
+            num_params += p.numel()
+        Tools.print(model)
+        Tools.print("The number of parameters: {}".format(num_params))
+        pass
+
+    @staticmethod
     def _cal_sod(pre, segment):
         result = np.asarray(segment.copy(), dtype=np.float32)
         for i in range(len(pre)):
@@ -954,49 +957,23 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
     """
-    SGD
-    2020-07-06 18:50:41 E:99, Train mae-score=0.0589/0.9160 final-mse-score=0.0592/0.8949-0.0706/0.8949 loss=0.1260
-    2020-07-06 18:50:41 E:99, Test  mae-score=0.1010/0.6853 final-mse-score=0.1022/0.6522-0.1114/0.6522 loss=0.2538
-
-    Adam C2PC2P_True_False_False
-    2020-07-08 07:37:38 E:99, Train mae-score=0.1173/0.8681 final-mse-score=0.1177/0.8437-0.1333/0.8437 loss=0.2305
-    2020-07-08 07:37:38 E:99, Test  mae-score=0.1456/0.6230 final-mse-score=0.1470/0.5871-0.1584/0.5871 loss=0.2937
-    
-    Adam C2PC2PC2_False_False_False 3518016
-    2020-07-09 21:34:59 E:99, Train mae-score=0.0386/0.9407 final-mse-score=0.0381/0.9213-0.0568/0.9213 loss=0.1139
-    2020-07-09 21:34:59 E:99, Test  mae-score=0.0929/0.6946 final-mse-score=0.0935/0.6740-0.1057/0.6740 loss=0.2698
-    
-    Adam 5143616 E2E-GCNNet-C2PC2PC2_False_False_lr0001
-    E:42, Train gcn-mae-score=0.0597-0.9279 gcn-final-mse-score=0.0593-0.9053(0.0806/0.9053) sod-mae-score=0.0382-0.9677 loss=0.2057(0.1374+0.0683)
-    E:42, Test  gcn-mae-score=0.0854-0.7293 gcn-final-mse-score=0.0864-0.6807(0.1016/0.6807) sod-mae-score=0.0747-0.8002 loss=0.4401(0.2245+0.2156)
     """
 
     # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _data_root_path = "/mnt/4T/Data/SOD/DUTS"
 
-    # _batch_size = 4 * 8
-    _batch_size = 1 * 8
-    _image_size_train = 224
-    _image_size_test = 256
-
-    _train_print_freq = 100
-    _test_print_freq = 100
+    _train_print_freq = 1000
+    _test_print_freq = 1000
     _num_workers = 16
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
-    _epochs = 50  # Super Param Group 1
+    _epochs = 30  # Super Param Group 1
     _is_sgd = False
-    _weight_decay = 0
-    # _lr = [[0, 0.001]]
-    _lr = [[0, 0.0001], [30, 0.00001]]
-
-    # _epochs = 100  # Super Param Group 1
-    # _is_sgd = True
-    # _weight_decay = 5e-4
-    # _lr = [[0, 0.001], [70, 0.0001], [90, 0.00001]]
+    _weight_decay = 0.0
+    _lr = [[0, 0.0001], [20, 0.00001]]
 
     _has_mask = False  # Super Param 3
 
@@ -1005,28 +982,21 @@ if __name__ == '__main__':
     _has_residual = True
     _is_normalize = True
 
-    _sp_size, _down_ratio, _conv_layer_num, _model_name = 4, 4, 20, "GCNNet-C2PC2PC2"
+    _sp_size, _down_ratio, _model_name = 4, 4, "GCNNet-C2PC2PC3C3"
 
-    _name = "E2E-PoolNet-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
+    _name = "E2E2-BS1-MoreConv-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
-    Tools.print("epochs:{} ckpt:{} batch size:{} image size:{}/{} sp size:{} "
-                "down_ratio:{} conv_layer_num:{} workers:{} gpu:{} has_mask:{} "
+    Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_mask:{} "
                 "has_residual:{} is_normalize:{} has_bn:{} improved:{} is_sgd:{} weight_decay:{}".format(
-        _epochs, _root_ckpt_dir, _batch_size, _image_size_train, _image_size_test, _sp_size, _down_ratio,
-        _conv_layer_num, _num_workers, _gpu_id, _has_mask, _has_residual,
-        _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
+        _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers,
+        _gpu_id, _has_mask, _has_residual, _is_normalize, _has_bn, _improved, _is_sgd, _weight_decay))
 
-    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir, batch_size=_batch_size,
-                       image_size_train=_image_size_train, image_size_test=_image_size_test,
+    runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
                        sp_size=_sp_size, is_sgd=_is_sgd, has_mask=_has_mask, lr=_lr,
                        residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
-                       has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
+                       has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/0_4_4_20/epoch_14.pkl")
     runner.train(_epochs, start_epoch=0)
-
-    # runner.visual(model_file="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001/epoch_49.pkl",
-    #               is_train=False, result_path="./result/1_PYG_CONV_Fast-SOD_BAS/E2E-GCNNet-C2PC2PC2_False_False_lr0001")
     pass
