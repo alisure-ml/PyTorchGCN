@@ -943,10 +943,13 @@ class RunnerSPE(object):
     pass
 
 
-if __name__ == '__main__':
-    """
-    """
+"""
+2020-08-03 04:40:23 E:20, Train sod-mae-score=0.0224-0.9677 gcn-mae-score=0.0354-0.9295 gcn-final-mse-score=0.0352-0.9321(0.0489/0.9321) loss=0.1270(0.0850+0.0420)
+2020-08-03 04:40:23 E:20, Test  sod-mae-score=0.0657-0.8131 gcn-mae-score=0.0759-0.7425 gcn-final-mse-score=0.0761-0.7485(0.0876/0.7485) loss=0.3963(0.2028+0.1935)
+"""
 
+
+if __name__ == '__main__':
     # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _data_root_path = "/mnt/4T/Data/SOD/DUTS"
 
