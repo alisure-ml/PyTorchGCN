@@ -542,6 +542,72 @@ class SODNet(nn.Module):
     def __init__(self, conv1_feature_num, conv2_feature_num, conv3_feature_num,
                  conv4_feature_num, sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
         super().__init__()
+        self.conv_sod_gcn2_1 = ConvBlock(sod_gcn2_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_sod_gcn2_2 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_sod_gcn1_1 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_sod_gcn1_2 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_conv4_1 = ConvBlock(conv4_feature_num, cout=conv4_feature_num, ks=3)
+        self.conv_conv4_2 = ConvBlock(conv4_feature_num, cout=conv4_feature_num, ks=3)
+        self.conv_conv3_1 = ConvBlock(conv3_feature_num, cout=conv3_feature_num, ks=3)
+        self.conv_conv3_2 = ConvBlock(conv3_feature_num, cout=conv3_feature_num, ks=3)
+        self.conv_conv2_1 = ConvBlock(conv2_feature_num, cout=conv2_feature_num, ks=3)
+        self.conv_conv2_2 = ConvBlock(conv2_feature_num, cout=conv2_feature_num, ks=3)
+        self.conv_conv1_1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+        self.conv_conv1_2 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+
+        self.cat_sod_gcn_1 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.cat_sod_gcn_2 = ConvBlock(sod_gcn1_feature_num, cout=conv4_feature_num, ks=3)
+        self.cat_conv4_1 = ConvBlock(conv4_feature_num, cout=conv4_feature_num, ks=3)
+        self.cat_conv4_2 = ConvBlock(conv4_feature_num, cout=conv3_feature_num, ks=3)
+        self.cat_conv3_1 = ConvBlock(conv3_feature_num, cout=conv3_feature_num, ks=3)
+        self.cat_conv3_2 = ConvBlock(conv3_feature_num, cout=conv2_feature_num, ks=3)
+        self.cat_conv2_1 = ConvBlock(conv2_feature_num, cout=conv2_feature_num, ks=3)
+        self.cat_conv2_2 = ConvBlock(conv2_feature_num, cout=conv1_feature_num, ks=3)
+        self.cat_conv1_1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+        self.cat_conv1_2 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+
+        self.conv_final_1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+        self.conv_final_2 = ConvBlock(conv1_feature_num, cout=out, ks=3, has_relu=False, has_bn=False, bias=False)
+        pass
+
+    def forward(self, conv1_feature, conv2_feature, conv3_feature, conv4_feature, sod_gcn1_feature, sod_gcn2_feature):
+        conv_sod_gcn2 = self.conv_sod_gcn2_2(self.conv_sod_gcn2_1(sod_gcn2_feature))  # 512, 56
+        conv_sod_gcn1 = self.conv_sod_gcn1_2(self.conv_sod_gcn1_1(sod_gcn1_feature))  # 512, 56
+        cat_sod_gcn = conv_sod_gcn1 + conv_sod_gcn2  # 512, 56
+        cat_sod_gcn = self.cat_sod_gcn_2(self.cat_sod_gcn_1(cat_sod_gcn))  # 512, 56
+
+        conv_conv4 = self.conv_conv4_2(self.conv_conv4_1(conv4_feature))  # 512, 56
+        cat_conv4 = cat_sod_gcn + conv_conv4  # 512, 56
+        cat_conv4 = self.cat_conv4_2(self.cat_conv4_1(cat_conv4))  # 512, 56
+        cat_conv4 = F.interpolate(cat_conv4, conv3_feature.size()[2:], mode='bilinear', align_corners=True)  # 512, 56
+
+        conv_conv3 = self.conv_conv3_2(self.conv_conv3_1(conv3_feature))  # 512, 56
+        cat_conv3 = cat_conv4 + conv_conv3  # 512, 56
+        cat_conv3 = self.cat_conv3_2(self.cat_conv3_1(cat_conv3))  # 256, 56
+        cat_conv3 = F.interpolate(cat_conv3, conv2_feature.size()[2:], mode='bilinear', align_corners=True)  # 256, 56
+
+        conv_conv2 = self.conv_conv2_2(self.conv_conv2_1(conv2_feature))  # 256, 56
+        cat_conv2 = cat_conv3 + conv_conv2  # 256, 56
+        cat_conv2 = self.cat_conv2_2(self.cat_conv2_1(cat_conv2))  # 128, 56
+        cat_conv2 = F.interpolate(cat_conv2, conv1_feature.size()[2:], mode='bilinear', align_corners=True)  # 128, 112
+
+        conv_conv1 = self.conv_conv1_2(self.conv_conv1_1(conv1_feature))  # 128, 112
+        cat_conv1 = cat_conv2 + conv_conv1  # 128, 112
+        cat_conv1 = self.cat_conv1_2(self.cat_conv1_1(cat_conv1))  # 128, 112
+
+        out_feat = cat_conv1
+        out_feat = self.conv_final_1(out_feat)  # 128, 112
+        out_feat = self.conv_final_2(out_feat)  # 1, 112
+        return out_feat, torch.sigmoid(out_feat)
+
+    pass
+
+
+class SODNet2(nn.Module):
+
+    def __init__(self, conv1_feature_num, conv2_feature_num, conv3_feature_num,
+                 conv4_feature_num, sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
+        super().__init__()
         self.conv_sod_gcn2 = ConvBlock(sod_gcn2_feature_num, cout=sod_gcn1_feature_num, ks=3)
         self.conv_sod_gcn1 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
         self.conv_conv4 = ConvBlock(conv4_feature_num, cout=conv4_feature_num, ks=3)
@@ -1106,6 +1172,7 @@ class RunnerSPE(object):
 2020-08-03 17:08:17 E:29, Train sod-mae-score=0.0106-0.9838 gcn-mae-score=0.0148-0.9538 gcn-final-mse-score=0.0142-0.9562(0.0306/0.9562) loss=0.0760(0.0548+0.0212)
 2020-08-03 17:08:17 E:29, Test  sod-mae-score=0.0553-0.8354 gcn-mae-score=0.0599-0.7781 gcn-final-mse-score=0.0597-0.7840(0.0725/0.7840) loss=0.4053(0.1996+0.2057)
 
+# E2E2-BS1-MoreConv-1-C2PC2PC3C3_False_False_lr0001
 2020-08-04 04:56:47 E:23, Train sod-mae-score=0.0129-0.9808 gcn-mae-score=0.0166-0.9516 gcn-final-mse-score=0.0159-0.9541(0.0325/0.9541) loss=0.0835(0.0581+0.0255)
 2020-08-04 04:56:47 E:23, Test  sod-mae-score=0.0540-0.8445 gcn-mae-score=0.0576-0.7889 gcn-final-mse-score=0.0573-0.7950(0.0705/0.7950) loss=0.3785(0.1876+0.1909)
 2020-08-04 09:05:31 E:29, Train sod-mae-score=0.0107-0.9837 gcn-mae-score=0.0141-0.9550 gcn-final-mse-score=0.0133-0.9575(0.0303/0.9575) loss=0.0756(0.0541+0.0215)
@@ -1123,8 +1190,8 @@ if __name__ == '__main__':
     _num_workers = 16
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     _epochs = 50  # Super Param Group 1
     _is_sgd = False
@@ -1143,7 +1210,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio, _model_name = 4, 4, "{}-C2PC2PC3C3C3".format(_which)
 
-    _name = "E2E2-BS1-MoreConv-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
+    _name = "E2E2-BS1-MoreMoreConv-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
     Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_mask:{} "
