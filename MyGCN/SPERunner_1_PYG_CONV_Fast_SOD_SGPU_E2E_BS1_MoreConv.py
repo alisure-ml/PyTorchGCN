@@ -263,14 +263,15 @@ class ConvBlock(nn.Module):
 
 class CONVNet(nn.Module):
 
-    def __init__(self):  # 9+4, 16+7, 23+10, 30
+    def __init__(self):  # 9+4, 16+7, 23+10, 30+13
         super().__init__()
-        self.features = vgg16_bn(pretrained=True).features[0: 33]
+        self.features = vgg16_bn(pretrained=True).features[0: 43]
         self.max_pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
         self.out_num1 = 128
         self.out_num2 = 256
         self.out_num3 = 512
+        self.out_num4 = 512
         pass
 
     def forward(self, x):
@@ -281,13 +282,14 @@ class CONVNet(nn.Module):
         block_2_max = self.max_pool(block_2)  # 2
 
         block_3 = self.features[14: 23](block_2_max)
-
         block_4 = self.features[24: 33](block_3)
+        block_5 = self.features[34: 43](block_4)
 
         assert self.out_num1 == block_2.size(1)
         assert self.out_num2 == block_3.size(1)
         assert self.out_num3 == block_4.size(1)
-        return block_2, block_3, block_4
+        assert self.out_num4 == block_5.size(1)
+        return block_2, block_3, block_4, block_5
 
     pass
 
@@ -538,15 +540,17 @@ class SAGENet2(nn.Module):
 class SODNet(nn.Module):
 
     def __init__(self, conv1_feature_num, conv2_feature_num, conv3_feature_num,
-                 sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
+                 conv4_feature_num, sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
         super().__init__()
         self.conv_sod_gcn2 = ConvBlock(sod_gcn2_feature_num, cout=sod_gcn1_feature_num, ks=3)
         self.conv_sod_gcn1 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_conv4 = ConvBlock(conv4_feature_num, cout=conv4_feature_num, ks=3)
         self.conv_conv3 = ConvBlock(conv3_feature_num, cout=conv3_feature_num, ks=3)
         self.conv_conv2 = ConvBlock(conv2_feature_num, cout=conv2_feature_num, ks=3)
         self.conv_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
 
-        self.cat_sod_gcn = ConvBlock(sod_gcn1_feature_num, cout=conv3_feature_num, ks=3)
+        self.cat_sod_gcn = ConvBlock(sod_gcn1_feature_num, cout=conv4_feature_num, ks=3)
+        self.cat_conv4 = ConvBlock(conv4_feature_num, cout=conv3_feature_num, ks=3)
         self.cat_conv3 = ConvBlock(conv3_feature_num, cout=conv2_feature_num, ks=3)
         self.cat_conv2 = ConvBlock(conv2_feature_num, cout=conv1_feature_num, ks=3)
         self.cat_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
@@ -555,16 +559,21 @@ class SODNet(nn.Module):
         self.conv_final_2 = ConvBlock(conv1_feature_num, cout=out, ks=3, has_relu=False, has_bn=False, bias=False)
         pass
 
-    def forward(self, conv1_feature, conv2_feature, conv3_feature, sod_gcn1_feature, sod_gcn2_feature):
+    def forward(self, conv1_feature, conv2_feature, conv3_feature, conv4_feature, sod_gcn1_feature, sod_gcn2_feature):
         conv_sod_gcn2 = self.conv_sod_gcn2(sod_gcn2_feature)  # 512, 56
         conv_sod_gcn1 = self.conv_sod_gcn1(sod_gcn1_feature)  # 512, 56
         cat_sod_gcn = conv_sod_gcn1 + conv_sod_gcn2  # 512, 56
         cat_sod_gcn = self.cat_sod_gcn(cat_sod_gcn)  # 512, 56
 
+        conv_conv4 = self.conv_conv4(conv4_feature)  # 512, 56
+        cat_conv4 = cat_sod_gcn + conv_conv4  # 512, 56
+        cat_conv4 = self.cat_conv4(cat_conv4)  # 512, 56
+        cat_conv4 = F.interpolate(cat_conv4, conv3_feature.size()[2:], mode='bilinear', align_corners=True)  # 512, 56
+
         conv_conv3 = self.conv_conv3(conv3_feature)  # 512, 56
-        cat_conv3 = cat_sod_gcn + conv_conv3  # 512, 56
+        cat_conv3 = cat_conv4 + conv_conv3  # 512, 56
         cat_conv3 = self.cat_conv3(cat_conv3)  # 256, 56
-        cat_conv3 = F.interpolate(cat_conv3, conv2_feature.size()[2:], mode='bilinear', align_corners=True)  # 256, 112
+        cat_conv3 = F.interpolate(cat_conv3, conv2_feature.size()[2:], mode='bilinear', align_corners=True)  # 256, 56
 
         conv_conv2 = self.conv_conv2(conv2_feature)  # 256, 56
         cat_conv2 = cat_conv3 + conv_conv2  # 256, 56
@@ -590,13 +599,13 @@ class MyGCNNet(nn.Module):
         self.model_conv = CONVNet()
 
         if which == 0:
-            self.model_gnn1 = GCNNet1(in_dim=self.model_conv.out_num3, hidden_dims=[512, 512],
+            self.model_gnn1 = GCNNet1(in_dim=self.model_conv.out_num4, hidden_dims=[512, 512],
                                       has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
             self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 1024, 1024],
                                       skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
                                       normalize=normalize, residual=residual, improved=improved)
         elif which == 1:
-            self.model_gnn1 = SAGENet1(in_dim=self.model_conv.out_num3, hidden_dims=[512, 512],
+            self.model_gnn1 = SAGENet1(in_dim=self.model_conv.out_num4, hidden_dims=[512, 512],
                                        has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
             self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 1024, 1024],
                                        skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
@@ -607,6 +616,7 @@ class MyGCNNet(nn.Module):
         self.model_sod = SODNet(conv1_feature_num=self.model_conv.out_num1,
                                 conv2_feature_num=self.model_conv.out_num2,
                                 conv3_feature_num=self.model_conv.out_num3,
+                                conv4_feature_num=self.model_conv.out_num4,
                                 sod_gcn1_feature_num=self.model_gnn1.out_num,
                                 sod_gcn2_feature_num=self.model_gnn2.out_num, out=1)
         pass
@@ -614,11 +624,11 @@ class MyGCNNet(nn.Module):
     def forward(self, images, batched_graph, batched_pixel_graph):
         # model 1
         conv_feature = self.model_conv(images)  # 128, 64; 256, 64
-        conv1_feature, conv2_feature, conv3_feature = conv_feature
+        conv1_feature, conv2_feature, conv3_feature, conv4_feature = conv_feature
 
         # model 2
         data_where = batched_pixel_graph.data_where
-        pixel_nodes_feat = conv3_feature[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
+        pixel_nodes_feat = conv4_feature[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
         # 构造特征 for SOD
@@ -632,7 +642,7 @@ class MyGCNNet(nn.Module):
 
         # SOD
         sod_logits, sod_logits_sigmoid = self.model_sod.forward(
-            conv1_feature, conv2_feature, conv3_feature, sod_gcn1_feature, sod_gcn2_feature)
+            conv1_feature, conv2_feature, conv3_feature, conv4_feature, sod_gcn1_feature, sod_gcn2_feature)
         return gcn2_logits, gcn2_logits_sigmoid, sod_logits, sod_logits_sigmoid
 
     @staticmethod
@@ -1113,17 +1123,17 @@ if __name__ == '__main__':
     _num_workers = 16
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
-    _epochs = 30  # Super Param Group 1
+    _epochs = 50  # Super Param Group 1
     _is_sgd = False
-    _weight_decay = 5e-4
-    _lr = [[0, 0.0001], [20, 0.00001]]
+    _weight_decay = 0.0
+    _lr = [[0, 0.0001], [20, 0.00001], [35, 0.000001]]
 
     _has_mask = False  # Super Param 3
-    _which = 0  # GCN
-    # _which = 1  # SAGE
+    # _which = 0  # GCN
+    _which = 1  # SAGE
 
     _improved = True
     _has_bn = True
@@ -1131,7 +1141,7 @@ if __name__ == '__main__':
     _is_normalize = True
     _concat = True
 
-    _sp_size, _down_ratio, _model_name = 4, 4, "{}-C2PC2PC3C3".format(_which)
+    _sp_size, _down_ratio, _model_name = 4, 4, "{}-C2PC2PC3C3C3".format(_which)
 
     _name = "E2E2-BS1-MoreConv-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
 
