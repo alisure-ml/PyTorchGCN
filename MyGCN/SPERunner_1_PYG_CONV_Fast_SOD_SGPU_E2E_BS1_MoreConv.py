@@ -1089,9 +1089,21 @@ class RunnerSPE(object):
     pass
 
 
+"""
+# E2E2-BS1-MoreConv-0-C2PC2PC3C3_False_False_lr0001
+2020-08-03 14:13:48 E:25, Train sod-mae-score=0.0118-0.9820 gcn-mae-score=0.0164-0.9522 gcn-final-mse-score=0.0158-0.9546(0.0320/0.9546) loss=0.0807(0.0572+0.0234)
+2020-08-03 14:13:48 E:25, Test  sod-mae-score=0.0561-0.8373 gcn-mae-score=0.0609-0.7782 gcn-final-mse-score=0.0607-0.7841(0.0735/0.7841) loss=0.3921(0.1972+0.1949)
+2020-08-03 17:08:17 E:29, Train sod-mae-score=0.0106-0.9838 gcn-mae-score=0.0148-0.9538 gcn-final-mse-score=0.0142-0.9562(0.0306/0.9562) loss=0.0760(0.0548+0.0212)
+2020-08-03 17:08:17 E:29, Test  sod-mae-score=0.0553-0.8354 gcn-mae-score=0.0599-0.7781 gcn-final-mse-score=0.0597-0.7840(0.0725/0.7840) loss=0.4053(0.1996+0.2057)
+
+2020-08-04 04:56:47 E:23, Train sod-mae-score=0.0129-0.9808 gcn-mae-score=0.0166-0.9516 gcn-final-mse-score=0.0159-0.9541(0.0325/0.9541) loss=0.0835(0.0581+0.0255)
+2020-08-04 04:56:47 E:23, Test  sod-mae-score=0.0540-0.8445 gcn-mae-score=0.0576-0.7889 gcn-final-mse-score=0.0573-0.7950(0.0705/0.7950) loss=0.3785(0.1876+0.1909)
+2020-08-04 09:05:31 E:29, Train sod-mae-score=0.0107-0.9837 gcn-mae-score=0.0141-0.9550 gcn-final-mse-score=0.0133-0.9575(0.0303/0.9575) loss=0.0756(0.0541+0.0215)
+2020-08-04 09:05:31 E:29, Test  sod-mae-score=0.0545-0.8391 gcn-mae-score=0.0579-0.7852 gcn-final-mse-score=0.0575-0.7913(0.0709/0.7913) loss=0.4008(0.1942+0.2066)
+"""
+
+
 if __name__ == '__main__':
-    """
-    """
 
     # _data_root_path = "/media/ubuntu/4T/ALISURE/Data/DUTS"
     _data_root_path = "/mnt/4T/Data/SOD/DUTS"
@@ -1101,17 +1113,17 @@ if __name__ == '__main__':
     _num_workers = 16
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
-    _weight_decay = 0.0
+    _weight_decay = 5e-4
     _lr = [[0, 0.0001], [20, 0.00001]]
 
     _has_mask = False  # Super Param 3
-    # _which = 0  # GCN
-    _which = 1  # SAGE
+    _which = 0  # GCN
+    # _which = 1  # SAGE
 
     _improved = True
     _has_bn = True
