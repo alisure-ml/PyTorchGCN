@@ -539,6 +539,61 @@ class SAGENet2(nn.Module):
 
 class SODNet(nn.Module):
 
+    def __init__(self, conv1_feature_num, conv2_feature_num, conv3_feature_num, conv4_feature_num,
+                 sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
+        super().__init__()
+        self.conv_sod_gcn2 = ConvBlock(sod_gcn2_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_sod_gcn1 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
+        self.conv_conv4 = ConvBlock(conv4_feature_num, cout=conv4_feature_num, ks=3)
+        self.conv_conv3 = ConvBlock(conv3_feature_num, cout=conv3_feature_num, ks=3)
+        self.conv_conv2 = ConvBlock(conv2_feature_num, cout=conv2_feature_num, ks=3)
+        self.conv_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+
+        self.cat_sod_gcn = ConvBlock(sod_gcn1_feature_num, cout=conv4_feature_num, ks=3)
+        self.cat_conv4 = ConvBlock(conv4_feature_num, cout=conv3_feature_num, ks=3)
+        self.cat_conv3 = ConvBlock(conv3_feature_num, cout=conv2_feature_num, ks=3)
+        self.cat_conv2 = ConvBlock(conv2_feature_num, cout=conv1_feature_num, ks=3)
+        self.cat_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+
+        self.conv_final_1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
+        self.conv_final_2 = ConvBlock(conv1_feature_num, cout=out, ks=3, has_relu=False, has_bn=False, bias=False)
+        pass
+
+    def forward(self, conv1_feature, conv2_feature, conv3_feature, conv4_feature, sod_gcn1_feature, sod_gcn2_feature):
+        conv_sod_gcn2 = self.conv_sod_gcn2(sod_gcn2_feature)  # 512, 56
+        conv_sod_gcn1 = self.conv_sod_gcn1(sod_gcn1_feature)  # 512, 56
+        cat_sod_gcn = conv_sod_gcn1 + conv_sod_gcn2  # 512, 56
+        cat_sod_gcn = self.cat_sod_gcn(cat_sod_gcn)  # 512, 56
+
+        conv_conv4 = self.conv_conv4(conv4_feature)  # 512, 56
+        cat_conv4 = cat_sod_gcn + conv_conv4  # 512, 56
+        cat_conv4 = self.cat_conv4(cat_conv4)  # 512, 56
+        cat_conv4 = F.interpolate(cat_conv4, conv3_feature.size()[2:], mode='bilinear', align_corners=True)  # 512, 56
+
+        conv_conv3 = self.conv_conv3(conv3_feature)  # 512, 56
+        cat_conv3 = cat_conv4 + conv_conv3  # 512, 56
+        cat_conv3 = self.cat_conv3(cat_conv3)  # 256, 56
+        cat_conv3 = F.interpolate(cat_conv3, conv2_feature.size()[2:], mode='bilinear', align_corners=True)  # 256, 56
+
+        conv_conv2 = self.conv_conv2(conv2_feature)  # 256, 56
+        cat_conv2 = cat_conv3 + conv_conv2  # 256, 56
+        cat_conv2 = self.cat_conv2(cat_conv2)  # 128, 56
+        cat_conv2 = F.interpolate(cat_conv2, conv1_feature.size()[2:], mode='bilinear', align_corners=True)  # 128, 112
+
+        conv_conv1 = self.conv_conv1(conv1_feature)  # 128, 112
+        cat_conv1 = cat_conv2 + conv_conv1  # 128, 112
+        cat_conv1 = self.cat_conv1(cat_conv1)  # 128, 112
+
+        out_feat = cat_conv1
+        out_feat = self.conv_final_1(out_feat)  # 128, 112
+        out_feat = self.conv_final_2(out_feat)  # 1, 112
+        return out_feat, torch.sigmoid(out_feat)
+
+    pass
+
+
+class SODNetMoreConv(nn.Module):
+
     def __init__(self, conv1_feature_num, conv2_feature_num, conv3_feature_num,
                  conv4_feature_num, sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
         super().__init__()
@@ -594,61 +649,6 @@ class SODNet(nn.Module):
         conv_conv1 = self.conv_conv1_2(self.conv_conv1_1(conv1_feature))  # 128, 112
         cat_conv1 = cat_conv2 + conv_conv1  # 128, 112
         cat_conv1 = self.cat_conv1_2(self.cat_conv1_1(cat_conv1))  # 128, 112
-
-        out_feat = cat_conv1
-        out_feat = self.conv_final_1(out_feat)  # 128, 112
-        out_feat = self.conv_final_2(out_feat)  # 1, 112
-        return out_feat, torch.sigmoid(out_feat)
-
-    pass
-
-
-class SODNet2(nn.Module):
-
-    def __init__(self, conv1_feature_num, conv2_feature_num, conv3_feature_num,
-                 conv4_feature_num, sod_gcn1_feature_num, sod_gcn2_feature_num, out=1):
-        super().__init__()
-        self.conv_sod_gcn2 = ConvBlock(sod_gcn2_feature_num, cout=sod_gcn1_feature_num, ks=3)
-        self.conv_sod_gcn1 = ConvBlock(sod_gcn1_feature_num, cout=sod_gcn1_feature_num, ks=3)
-        self.conv_conv4 = ConvBlock(conv4_feature_num, cout=conv4_feature_num, ks=3)
-        self.conv_conv3 = ConvBlock(conv3_feature_num, cout=conv3_feature_num, ks=3)
-        self.conv_conv2 = ConvBlock(conv2_feature_num, cout=conv2_feature_num, ks=3)
-        self.conv_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
-
-        self.cat_sod_gcn = ConvBlock(sod_gcn1_feature_num, cout=conv4_feature_num, ks=3)
-        self.cat_conv4 = ConvBlock(conv4_feature_num, cout=conv3_feature_num, ks=3)
-        self.cat_conv3 = ConvBlock(conv3_feature_num, cout=conv2_feature_num, ks=3)
-        self.cat_conv2 = ConvBlock(conv2_feature_num, cout=conv1_feature_num, ks=3)
-        self.cat_conv1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
-
-        self.conv_final_1 = ConvBlock(conv1_feature_num, cout=conv1_feature_num, ks=3)
-        self.conv_final_2 = ConvBlock(conv1_feature_num, cout=out, ks=3, has_relu=False, has_bn=False, bias=False)
-        pass
-
-    def forward(self, conv1_feature, conv2_feature, conv3_feature, conv4_feature, sod_gcn1_feature, sod_gcn2_feature):
-        conv_sod_gcn2 = self.conv_sod_gcn2(sod_gcn2_feature)  # 512, 56
-        conv_sod_gcn1 = self.conv_sod_gcn1(sod_gcn1_feature)  # 512, 56
-        cat_sod_gcn = conv_sod_gcn1 + conv_sod_gcn2  # 512, 56
-        cat_sod_gcn = self.cat_sod_gcn(cat_sod_gcn)  # 512, 56
-
-        conv_conv4 = self.conv_conv4(conv4_feature)  # 512, 56
-        cat_conv4 = cat_sod_gcn + conv_conv4  # 512, 56
-        cat_conv4 = self.cat_conv4(cat_conv4)  # 512, 56
-        cat_conv4 = F.interpolate(cat_conv4, conv3_feature.size()[2:], mode='bilinear', align_corners=True)  # 512, 56
-
-        conv_conv3 = self.conv_conv3(conv3_feature)  # 512, 56
-        cat_conv3 = cat_conv4 + conv_conv3  # 512, 56
-        cat_conv3 = self.cat_conv3(cat_conv3)  # 256, 56
-        cat_conv3 = F.interpolate(cat_conv3, conv2_feature.size()[2:], mode='bilinear', align_corners=True)  # 256, 56
-
-        conv_conv2 = self.conv_conv2(conv2_feature)  # 256, 56
-        cat_conv2 = cat_conv3 + conv_conv2  # 256, 56
-        cat_conv2 = self.cat_conv2(cat_conv2)  # 128, 56
-        cat_conv2 = F.interpolate(cat_conv2, conv1_feature.size()[2:], mode='bilinear', align_corners=True)  # 128, 112
-
-        conv_conv1 = self.conv_conv1(conv1_feature)  # 128, 112
-        cat_conv1 = cat_conv2 + conv_conv1  # 128, 112
-        cat_conv1 = self.cat_conv1(cat_conv1)  # 128, 112
 
         out_feat = cat_conv1
         out_feat = self.conv_final_1(out_feat)  # 128, 112
@@ -1177,6 +1177,16 @@ class RunnerSPE(object):
 2020-08-04 04:56:47 E:23, Test  sod-mae-score=0.0540-0.8445 gcn-mae-score=0.0576-0.7889 gcn-final-mse-score=0.0573-0.7950(0.0705/0.7950) loss=0.3785(0.1876+0.1909)
 2020-08-04 09:05:31 E:29, Train sod-mae-score=0.0107-0.9837 gcn-mae-score=0.0141-0.9550 gcn-final-mse-score=0.0133-0.9575(0.0303/0.9575) loss=0.0756(0.0541+0.0215)
 2020-08-04 09:05:31 E:29, Test  sod-mae-score=0.0545-0.8391 gcn-mae-score=0.0579-0.7852 gcn-final-mse-score=0.0575-0.7913(0.0709/0.7913) loss=0.4008(0.1942+0.2066)
+
+# E2E2-BS1-MoreConv-1-C2PC2PC3C3C3_False_False_lr0001
+2020-08-05 05:59:23 E:22, Train sod-mae-score=0.0139-0.9789 gcn-mae-score=0.0174-0.9502 gcn-final-mse-score=0.0166-0.9527(0.0333/0.9527) loss=0.0870(0.0596+0.0274)
+2020-08-05 05:59:23 E:22, Test  sod-mae-score=0.0532-0.8471 gcn-mae-score=0.0561-0.7911 gcn-final-mse-score=0.0558-0.7965(0.0694/0.7965) loss=0.3404(0.1724+0.1680)
+2020-08-06 03:47:13 E:47, Train sod-mae-score=0.0093-0.9858 gcn-mae-score=0.0117-0.9568 gcn-final-mse-score=0.0109-0.9592(0.0285/0.9592) loss=0.0697(0.0508+0.0189)
+2020-08-06 03:47:13 E:47, Test  sod-mae-score=0.0515-0.8406 gcn-mae-score=0.0538-0.7881 gcn-final-mse-score=0.0535-0.7940(0.0668/0.7940) loss=0.4166(0.1956+0.2210)
+
+# E2E2-BS1-MoreMoreConv-1-C2PC2PC3C3C3_False_False_lr0001
+2020-08-05 23:15:52 E:30, Train sod-mae-score=0.0112-0.9830 gcn-mae-score=0.0146-0.9540 gcn-final-mse-score=0.0138-0.9564(0.0309/0.9564) loss=0.0777(0.0552+0.0225)
+2020-08-05 23:15:52 E:30, Test  sod-mae-score=0.0520-0.8490 gcn-mae-score=0.0555-0.7891 gcn-final-mse-score=0.0553-0.7948(0.0687/0.7948) loss=0.3749(0.1860+0.1889)
 """
 
 
