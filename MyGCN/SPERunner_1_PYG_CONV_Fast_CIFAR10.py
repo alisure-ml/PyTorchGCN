@@ -188,6 +188,109 @@ class CONVNet(nn.Module):
     pass
 
 
+class CNNNet1(nn.Module):
+
+    def __init__(self, in_dim=64, hidden_dims=[128,], has_bn=False, normalize=False, residual=False, improved=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+        self.residual = residual
+        self.normalize = normalize
+        self.has_bn = has_bn
+        self.improved = improved
+
+        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = self.hidden_dims[0]
+        for hidden_dim in self.hidden_dims:
+            self.gcn_list.append(nn.Linear(_in_dim, hidden_dim))
+            _in_dim = hidden_dim
+            pass
+
+        if self.has_bn:
+            self.bn_list = nn.ModuleList()
+            for hidden_dim in self.hidden_dims:
+                self.bn_list.append(nn.BatchNorm1d(hidden_dim))
+                pass
+            pass
+
+        self.relu = nn.ReLU()
+        pass
+
+    def forward(self, data):
+        hidden_nodes_feat = self.embedding_h(data.x)
+        for gcn, bn in zip(self.gcn_list, self.bn_list):
+            h_in = hidden_nodes_feat
+            hidden_nodes_feat = gcn(h_in)
+
+            if self.has_bn:
+                hidden_nodes_feat = bn(hidden_nodes_feat)
+
+            hidden_nodes_feat = self.relu(hidden_nodes_feat)
+
+            if self.residual and h_in.size()[-1] == hidden_nodes_feat.size()[-1]:
+                hidden_nodes_feat = h_in + hidden_nodes_feat
+            pass
+
+        hg = global_pool_1(hidden_nodes_feat, data.batch)
+        return hg
+
+    pass
+
+
+class CNNNet2(nn.Module):
+
+    def __init__(self, in_dim=128, hidden_dims=[128, 128], n_classes=10,
+                 has_bn=False, normalize=False, residual=False, improved=False):
+        super().__init__()
+        self.hidden_dims = hidden_dims
+        self.normalize = normalize
+        self.residual = residual
+        self.has_bn = has_bn
+        self.improved = improved
+
+        self.embedding_h = nn.Linear(in_dim, in_dim)
+
+        self.gcn_list = nn.ModuleList()
+        _in_dim = in_dim
+        for hidden_dim in self.hidden_dims:
+            self.gcn_list.append(nn.Linear(_in_dim, hidden_dim))
+            _in_dim = hidden_dim
+            pass
+
+        if self.has_bn:
+            self.bn_list = nn.ModuleList()
+            for hidden_dim in self.hidden_dims:
+                self.bn_list.append(nn.BatchNorm1d(hidden_dim))
+                pass
+            pass
+
+        self.readout_mlp = nn.Linear(hidden_dims[-1], n_classes, bias=False)
+        self.relu = nn.ReLU()
+        pass
+
+    def forward(self, data):
+        hidden_nodes_feat = self.embedding_h(data.x)
+        for gcn, bn in zip(self.gcn_list, self.bn_list):
+            h_in = hidden_nodes_feat
+            hidden_nodes_feat = gcn(h_in)
+
+            if self.has_bn:
+                hidden_nodes_feat = bn(hidden_nodes_feat)
+
+            hidden_nodes_feat = self.relu(hidden_nodes_feat)
+
+            if self.residual and h_in.size()[-1] == hidden_nodes_feat.size()[-1]:
+                hidden_nodes_feat = h_in + hidden_nodes_feat
+            pass
+
+        hg = global_pool_2(hidden_nodes_feat, data.batch)
+        logits = self.readout_mlp(hg)
+        return logits
+
+    pass
+
+
 class GCNNet1(nn.Module):
 
     def __init__(self, in_dim=64, hidden_dims=[128, 128, 128, 128],
@@ -738,6 +841,11 @@ class MyGCNNet(nn.Module):
                                            has_bn=has_bn, normalize=normalize, residual=residual)
             self.model_gnn2 = ResGatedGCN2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128],
                                            has_bn=has_bn, normalize=normalize, residual=residual, n_classes=10)
+        elif which == 4:
+            self.model_gnn1 = CNNNet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=[128, 128],
+                                      has_bn=has_bn, normalize=normalize, residual=residual)
+            self.model_gnn2 = CNNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128],
+                                      has_bn=has_bn, normalize=normalize, residual=residual, n_classes=10)
         else:
             assert which == -1
         pass
@@ -992,6 +1100,10 @@ SGD  518784 has_residual:True  is_normalize:True  has_bn:True concat:False  is_s
 SGD  518784 has_residual:True  is_normalize:True  has_bn:True concat:False  is_sgd:True  weight_decay:0.0005 Epoch:113, Train:0.9323-0.9994/0.1950 Test:0.8796-0.9967/0.3696
 
 Padding = 2, GCN 维度全一样时比较好
+
+CNN
+SGD  4_True_4_1_6_mean_mean_pool 165696 Epoch:143, Train:0.9124-0.9985/0.2658 Test:0.8415-0.9933/0.4722
+SGD 4_True_2_2_13_mean_mean_pool 395840 Epoch:138, Train:0.9439-0.9991/0.1725 Test:0.8838-0.9950/0.3714
 """
 
 
@@ -1005,10 +1117,11 @@ if __name__ == '__main__':
     _num_workers = 20
     _use_gpu = True
 
-    _which = 0  # GCN
+    # _which = 0  # GCN
     # _which = 1  # SAGE
     # _which = 2  # GAT
     # _which = 3  # ResGatedGCN
+    _which = 4  # CNN
 
     _gpu_id = "0"
     # _gpu_id = "1"
@@ -1016,8 +1129,8 @@ if __name__ == '__main__':
     # _is_sgd = False
     _is_sgd = True
 
-    _sp_size, _down_ratio, _conv_layer_num = 4, 1, 6
-    # _sp_size, _down_ratio, _conv_layer_num = 2, 2, 13
+    # _sp_size, _down_ratio, _conv_layer_num = 4, 1, 6
+    _sp_size, _down_ratio, _conv_layer_num = 2, 2, 13
 
     global_pool_1, global_pool_2, pool_name = global_mean_pool, global_mean_pool, "mean_mean_pool"
     # global_pool_1, global_pool_2, pool_name = global_max_pool, global_max_pool, "max_max_pool"
@@ -1035,6 +1148,9 @@ if __name__ == '__main__':
     elif _which == 3:
         _has_bn, _has_residual, _is_normalize = True, True, False
         _concat, _improved = False, True  # No use
+    elif _which == 4:
+        _has_bn, _has_residual = True, True
+        _is_normalize, _concat, _improved = False, False, True  # No use
     else:
         raise Exception(".......")
 

@@ -1200,13 +1200,13 @@ if __name__ == '__main__':
     _num_workers = 16
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
-    _epochs = 50  # Super Param Group 1
+    _epochs = 40  # Super Param Group 1
     _is_sgd = False
     _weight_decay = 0.0
-    _lr = [[0, 0.0001], [20, 0.00001], [35, 0.000001]]
+    _lr = [[0, 0.0001], [20, 0.00001], [30, 0.000001]]
 
     _has_mask = False  # Super Param 3
     # _which = 0  # GCN
@@ -1218,9 +1218,11 @@ if __name__ == '__main__':
     _is_normalize = True
     _concat = True
 
-    _sp_size, _down_ratio, _model_name = 4, 4, "{}-C2PC2PC3C3C3".format(_which)
+    # _sp_size, _down_ratio, _model_name = 4, 4, "{}-C2PC2PC3C3C3".format(_which)
+    # _name = "E2E2-BS1-MoreMoreConv-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
 
-    _name = "E2E2-BS1-MoreMoreConv-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
+    _sp_size, _down_ratio, _model_name = 4, 4, "{}-C2PC2PC3C3C3".format(_which)
+    _name = "E2E2-Pretrain_BS1-MoreConv-{}_{}_{}_lr0001".format(_model_name, _is_sgd, _has_mask)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS/{}".format(_name)
     Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_mask:{} "
@@ -1234,5 +1236,6 @@ if __name__ == '__main__':
                        has_bn=_has_bn, improved=_improved, concat=_concat, weight_decay=_weight_decay,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
+    runner.load_model("./ckpt2/dgl/1_PYG_CONV_Fast-ImageNet/1_4_4_MoreConv/epoch_14.pkl")
     runner.train(_epochs, start_epoch=0)
     pass
