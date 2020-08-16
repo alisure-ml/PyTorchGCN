@@ -1187,6 +1187,10 @@ class RunnerSPE(object):
 # E2E2-BS1-MoreMoreConv-1-C2PC2PC3C3C3_False_False_lr0001
 2020-08-05 23:15:52 E:30, Train sod-mae-score=0.0112-0.9830 gcn-mae-score=0.0146-0.9540 gcn-final-mse-score=0.0138-0.9564(0.0309/0.9564) loss=0.0777(0.0552+0.0225)
 2020-08-05 23:15:52 E:30, Test  sod-mae-score=0.0520-0.8490 gcn-mae-score=0.0555-0.7891 gcn-final-mse-score=0.0553-0.7948(0.0687/0.7948) loss=0.3749(0.1860+0.1889)
+
+# E2E2-Pretrain_BS1-MoreConv-1-C2PC2PC3C3C3_False_False_lr0001
+2020-08-13 18:51:12 E:34, Train sod-mae-score=0.0105-0.9841 gcn-mae-score=0.0134-0.9554 gcn-final-mse-score=0.0126-0.9578(0.0298/0.9578) loss=0.0743(0.0532+0.0211)
+2020-08-13 18:51:12 E:34, Test  sod-mae-score=0.0522-0.8410 gcn-mae-score=0.0550-0.7889 gcn-final-mse-score=0.0546-0.7946(0.0681/0.7946) loss=0.3925(0.1879+0.2046)
 """
 
 
