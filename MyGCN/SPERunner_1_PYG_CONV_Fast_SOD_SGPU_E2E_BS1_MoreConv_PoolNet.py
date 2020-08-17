@@ -458,9 +458,10 @@ class VGG16(nn.Module):
 
 class DeepPoolLayer(nn.Module):
 
-    def __init__(self, k, k_out, is_not_last):
+    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None):
         super(DeepPoolLayer, self).__init__()
         self.is_not_last = is_not_last
+        self.has_gcn = has_gcn
 
         self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
         self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
@@ -469,13 +470,15 @@ class DeepPoolLayer(nn.Module):
         self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
+        self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
+        if self.has_gcn:
+            self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
         if self.is_not_last:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
-        self.relu = nn.ReLU()
         pass
 
-    def forward(self, x, x2=None, x3=None):
+    def forward(self, x, x2=None, x3=None, x_gcn=None):
         x_size = x.size()
 
         y1 = self.conv1(self.pool2(x))
@@ -488,11 +491,22 @@ class DeepPoolLayer(nn.Module):
 
         if self.is_not_last:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
+            pass
 
         res = self.conv_sum(res)
 
+        if self.has_gcn:
+            x_gcn = F.interpolate(x_gcn, x2.size()[2:], mode='bilinear', align_corners=True)
+            x_gcn = self.conv_gcn(x_gcn)
+            pass
+
         if self.is_not_last:
-            res = self.conv_sum_c(torch.add(torch.add(res, x2), x3))
+            res = torch.add(torch.add(res, x2), x3)
+            if self.has_gcn:
+                res = torch.add(res, x_gcn)
+            res = self.conv_sum_c(res)
+            pass
+
         return res
 
     pass
@@ -527,10 +541,10 @@ class MyGCNNet(nn.Module):
 
         # DEEP POOL
         deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True)
-        self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True)
-        self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False)
+        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, 512)
+        self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False)
+        self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False)
 
         # ScoreLayer
         score = 128
@@ -555,24 +569,13 @@ class MyGCNNet(nn.Module):
         pixel_nodes_feat = feature2[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
-        # 构造特征 for SOD
         sod_gcn1_feature = self.sod_feature(data_where, gcn1_feature, batched_pixel_graph=batched_pixel_graph)
 
         # GCN 2
         batched_graph.x = gcn1_feature
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
-        # 构造特征 for SOD
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
-
-        # SIZE
-        sod_gcn1_feature = F.interpolate(sod_gcn1_feature, feature3_size, mode='bilinear', align_corners=True)
-        sod_gcn2_feature = F.interpolate(sod_gcn2_feature, feature4_size, mode='bilinear', align_corners=True)
-        sod_gcn1_feature_size = sod_gcn1_feature.size()[2:]  # 512
-        sod_gcn2_feature_size = sod_gcn2_feature.size()[2:]  # 512
-        feature3 = sod_gcn1_feature
-        feature4 = sod_gcn2_feature
-        feature3_size = sod_gcn1_feature_size
-        feature4_size = sod_gcn2_feature_size
+        sod_gcn2_feature = F.interpolate(sod_gcn2_feature, feature3_size, mode='bilinear', align_corners=True)
 
         # PPM
         ppm_list = [feature4,
@@ -587,8 +590,8 @@ class MyGCNNet(nn.Module):
         info3 = self.info3(F.interpolate(ppm_cat, feature3_size, mode='bilinear', align_corners=True))
 
         # DEEP POOL
-        merge = self.deep_pool4(feature4, feature3, info3)  # A + F
-        merge = self.deep_pool3(merge, feature2, info2)  # A + F
+        merge = self.deep_pool4(feature4, feature3, info3, sod_gcn2_feature)  # A + F
+        merge = self.deep_pool3(merge, feature2, info2, sod_gcn1_feature)  # A + F
         merge = self.deep_pool2(merge, feature1, info1)  # A + F
         merge = self.deep_pool1(merge)  # A
 
@@ -728,8 +731,8 @@ class RunnerSPE(object):
 
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
             loss_fuse2 = F.binary_cross_entropy_with_logits(gcn_logits, labels, reduction='sum')
-            # loss = (loss_fuse1 + loss_fuse2) / iter_size
-            loss = loss_fuse1 / iter_size
+            loss = (loss_fuse1 + loss_fuse2) / iter_size
+            # loss = loss_fuse1 / iter_size
 
             loss.backward()
 
