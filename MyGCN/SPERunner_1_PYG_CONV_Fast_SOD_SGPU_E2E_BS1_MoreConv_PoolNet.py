@@ -506,9 +506,9 @@ class MyGCNNet(nn.Module):
         self.vgg16 = VGG16()
 
         # GCN
-        self.model_gnn1 = SAGENet1(in_dim=self.vgg16.out_num2, hidden_dims=[256, 256],
+        self.model_gnn1 = SAGENet1(in_dim=self.vgg16.out_num2, hidden_dims=[512, 512],
                                    has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
-        self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[256, 256, 512, 512],
+        self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
                                    skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
                                    normalize=normalize, residual=residual, concat=concat)
 
@@ -543,11 +543,12 @@ class MyGCNNet(nn.Module):
         # BASE
         feature1, feature2, feature3, feature4 = self.vgg16(x)
 
+        # SIZE
         x_size = x.size()[2:]
-        feature1_size = feature1.size()[2:]
-        feature2_size = feature2.size()[2:]
-        feature3_size = feature3.size()[2:]
-        feature4_size = feature4.size()[2:]
+        feature1_size = feature1.size()[2:]  # 128
+        feature2_size = feature2.size()[2:]  # 256
+        feature3_size = feature3.size()[2:]  # 512
+        feature4_size = feature4.size()[2:]  # 512
 
         # GCN 1
         data_where = batched_pixel_graph.data_where
@@ -562,6 +563,16 @@ class MyGCNNet(nn.Module):
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
         # 构造特征 for SOD
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
+
+        # SIZE
+        sod_gcn1_feature = F.interpolate(sod_gcn1_feature, feature3_size, mode='bilinear', align_corners=True)
+        sod_gcn2_feature = F.interpolate(sod_gcn2_feature, feature4_size, mode='bilinear', align_corners=True)
+        sod_gcn1_feature_size = sod_gcn1_feature.size()[2:]  # 512
+        sod_gcn2_feature_size = sod_gcn2_feature.size()[2:]  # 512
+        feature3 = sod_gcn1_feature
+        feature4 = sod_gcn2_feature
+        feature3_size = sod_gcn1_feature_size
+        feature4_size = sod_gcn2_feature_size
 
         # PPM
         ppm_list = [feature4,
@@ -717,7 +728,8 @@ class RunnerSPE(object):
 
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
             loss_fuse2 = F.binary_cross_entropy_with_logits(gcn_logits, labels, reduction='sum')
-            loss = (loss_fuse1 + loss_fuse2) / iter_size
+            # loss = (loss_fuse1 + loss_fuse2) / iter_size
+            loss = loss_fuse1 / iter_size
 
             loss.backward()
 
@@ -912,8 +924,8 @@ class RunnerSPE(object):
 
 
 """
-2020-08-16 11:47:37 E:30, Train sod-mae-score=0.0081-0.9874 gcn-mae-score=0.0324-0.9349 loss=197.9764(1944.9164+34.8479)
-2020-08-16 11:47:37 E:30, Test  sod-mae-score=0.0395-0.8724 gcn-mae-score=0.0718-0.7478 loss=0.3733(0.1932+0.1801)
+2020-08-17 05:54:19 E:26, Train sod-mae-score=0.0143-0.9788 gcn-mae-score=0.4746-0.3555 loss=327.3824(3273.8244+301.3948)
+2020-08-17 05:54:19 E:26, Test  sod-mae-score=0.0531-0.8400 gcn-mae-score=0.4765-0.2358 loss=0.8832(0.6926+0.1906)
 """
 
 
@@ -941,7 +953,7 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio, _model_name = 4, 4, "C2PC2PC3C3C3"
-    _name = "E2E2-Pretrain_temp_BS1-MoreConv-{}_{}_lr0001".format(_model_name, _is_sgd)
+    _name = "E2E2-Pretrain_PoolNet_BS1-MoreConv-{}_{}_lr0001".format(_model_name, _is_sgd)
 
     _root_ckpt_dir = "./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS_Temp/{}".format(_name)
     Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
@@ -955,6 +967,5 @@ if __name__ == '__main__':
                        has_bn=_has_bn, concat=_concat, weight_decay=_weight_decay,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
-    runner.load_model(model_file_name="./ckpt2/dgl/1_PYG_CONV_Fast-SOD_BAS_Temp/E2E2-Pretrain_temp_BS1-MoreConv-C2PC2PC3C3C3_False_lr0001/epoch_0.pkl")
     runner.train(_epochs, start_epoch=0)
     pass
