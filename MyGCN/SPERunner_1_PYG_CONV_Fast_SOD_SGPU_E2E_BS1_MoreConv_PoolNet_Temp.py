@@ -952,7 +952,8 @@ class RunnerSPE(object):
 # GCN + PoolNet - Info
 2020-08-19 06:13:06 E:29, Train sod-mae-score=0.0088-0.9865 gcn-mae-score=0.1049-0.8535 loss=218.1074(2096.1979+84.8759)
 2020-08-19 06:13:06 E:29, Test  sod-mae-score=0.0389-0.8763 gcn-mae-score=0.1308-0.6663 loss=0.4063(0.2405+0.1659)
-
+2020-08-19 14:12:13 E:27, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.4853-0.3322 loss=221.5410(2215.4099+309.6150)
+2020-08-19 14:12:13 E:27, Test  sod-mae-score=0.0394-0.8768 gcn-mae-score=0.4893-0.1866 loss=0.8766(0.7144+0.1622)
 """
 
 
