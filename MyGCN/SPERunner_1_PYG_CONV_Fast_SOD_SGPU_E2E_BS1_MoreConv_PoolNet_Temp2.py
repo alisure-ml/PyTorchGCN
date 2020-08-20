@@ -695,7 +695,7 @@ class RunnerSPE(object):
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
             loss_fuse2 = F.binary_cross_entropy_with_logits(gcn_logits, labels, reduction='sum')
             # loss = (loss_fuse1 + loss_fuse2) / iter_size
-            loss = loss_fuse1 / iter_size + loss_fuse2
+            loss = loss_fuse1 / iter_size + 10 * loss_fuse2
             # loss = loss_fuse1 / iter_size
 
             loss.backward()
@@ -917,12 +917,18 @@ class RunnerSPE(object):
 2020-08-19 06:13:06 E:29, Test  sod-mae-score=0.0389-0.8763 gcn-mae-score=0.1308-0.6663 loss=0.4063(0.2405+0.1659)
 
 # GCN + PoolNet - Info - Pool + SOD
+2020-08-20 03:00:50 E:24, Train sod-mae-score=0.0115-0.9824 gcn-mae-score=0.0876-0.8807 loss=270.4770(2632.0829+72.6867)
+2020-08-20 03:00:50 E:24, Test  sod-mae-score=0.0522-0.8297 gcn-mae-score=0.1214-0.7002 loss=0.4358(0.2416+0.1942)
 
 # GCN (change) + PoolNet - Info - Pool + SOD
+2020-08-20 10:57:10 E:23, Train sod-mae-score=0.0116-0.9823 gcn-mae-score=0.0833-0.8828 loss=272.6307(2655.9925+70.3146)
+2020-08-20 10:57:10 E:23, Test  sod-mae-score=0.0530-0.8267 gcn-mae-score=0.1144-0.7018 loss=0.4283(0.2337+0.1947)
 
 # GCN (change) + PoolNet - Info + Pool + SOD
 
 # GCN (change) + PoolNet - Info + Pool + 10 * SOD
+
+# GCN (change) + PoolNet - Info + Pool + 100 * SOD
 """
 
 
@@ -935,8 +941,8 @@ if __name__ == '__main__':
     _num_workers = 16
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
