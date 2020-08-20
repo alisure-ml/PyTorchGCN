@@ -908,32 +908,11 @@ class RunnerSPE(object):
 
 
 """
-# PoolNet
-2020-08-16 07:00:41 E:29, Train sod-mae-score=0.0090-0.9862 loss=213.5842
-2020-08-16 07:00:41 E:29, Test  sod-mae-score=0.0401-0.8738 loss=0.1594
-
-# PoolNet
-2020-08-16 11:47:37 E:30, Train sod-mae-score=0.0081-0.9874 gcn-mae-score=0.0324-0.9349 loss=197.9764(1944.9164+34.8479)
-2020-08-16 11:47:37 E:30, Test  sod-mae-score=0.0395-0.8724 gcn-mae-score=0.0718-0.7478 loss=0.3733(0.1932+0.1801)
-
-# GCN -> PoolNet
-2020-08-17 05:54:19 E:26, Train sod-mae-score=0.0143-0.9788 gcn-mae-score=0.4746-0.3555 loss=327.3824(3273.8244+301.3948)
-2020-08-17 05:54:19 E:26, Test  sod-mae-score=0.0531-0.8400 gcn-mae-score=0.4765-0.2358 loss=0.8832(0.6926+0.1906)
-
-# GCN + PoolNet
-2020-08-18 10:20:36 E:29, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.4741-0.3423 loss=210.3782(2103.7822+298.6683)
-2020-08-18 10:20:36 E:29, Test  sod-mae-score=0.0390-0.8709 gcn-mae-score=0.4713-0.1946 loss=0.8491(0.6760+0.1730)
-
-
-# PoolNet - Info
-2020-08-19 06:31:14 E:29, Train sod-mae-score=0.0091-0.9860 loss=215.3468
-2020-08-19 06:31:14 E:29, Test  sod-mae-score=0.0392-0.8720 loss=0.1676
-
-# GCN + PoolNet - Info
-2020-08-19 06:13:06 E:29, Train sod-mae-score=0.0088-0.9865 gcn-mae-score=0.1049-0.8535 loss=218.1074(2096.1979+84.8759)
-2020-08-19 06:13:06 E:29, Test  sod-mae-score=0.0389-0.8763 gcn-mae-score=0.1308-0.6663 loss=0.4063(0.2405+0.1659)
-2020-08-19 14:12:13 E:27, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.4853-0.3322 loss=221.5410(2215.4099+309.6150)
-2020-08-19 14:12:13 E:27, Test  sod-mae-score=0.0394-0.8768 gcn-mae-score=0.4893-0.1866 loss=0.8766(0.7144+0.1622)
+# GCN + PoolNet - Info + 20 * SOD
+2020-08-20 11:14:45 E:23, Train sod-mae-score=0.0101-0.9845 gcn-mae-score=0.0441-0.9175 loss=330.8670(2393.0891+45.7791)
+2020-08-20 11:14:45 E:23, Test  sod-mae-score=0.0388-0.8787 gcn-mae-score=0.0767-0.7431 loss=0.3250(0.1848+0.1403)
+2020-08-20 12:49:02 E:26, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.0407-0.9210 loss=310.5865(2237.6163+43.4124)
+2020-08-20 12:49:02 E:26, Test  sod-mae-score=0.0382-0.8786 gcn-mae-score=0.0744-0.7494 loss=0.3345(0.1849+0.1496)
 """
 
 
