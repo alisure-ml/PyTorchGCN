@@ -904,6 +904,8 @@ class RunnerSPE(object):
 
 
 """
+2020-08-22 00:45:40 E:26, Train sod-mae-score=0.0104-0.9843 gcn-mae-score=0.0583-0.9050 loss=353.6006(2448.1473+54.3929)
+2020-08-22 00:45:40 E:26, Test  sod-mae-score=0.0403-0.8696 gcn-mae-score=0.0876-0.7363 loss=0.3502(0.1888+0.1614)
 """
 
 
