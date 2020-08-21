@@ -925,8 +925,14 @@ class RunnerSPE(object):
 2020-08-20 10:57:10 E:23, Test  sod-mae-score=0.0530-0.8267 gcn-mae-score=0.1144-0.7018 loss=0.4283(0.2337+0.1947)
 
 # GCN (change) + PoolNet - Info + Pool + SOD
+2020-08-20 18:51:21 E:25, Train sod-mae-score=0.0098-0.9850 gcn-mae-score=0.1177-0.8387 loss=240.5121(2312.1480+92.9734)
+2020-08-20 18:51:21 E:25, Test  sod-mae-score=0.0391-0.8757 gcn-mae-score=0.1389-0.6624 loss=0.4067(0.2519+0.1548)
 
 # GCN (change) + PoolNet - Info + Pool + 10 * SOD
+2020-08-20 17:40:43 E:23, Train sod-mae-score=0.0102-0.9847 gcn-mae-score=0.0545-0.9087 loss=288.9387(2384.9528+50.4434)
+2020-08-20 17:40:43 E:23, Test  sod-mae-score=0.0407-0.8734 gcn-mae-score=0.0827-0.7388 loss=0.3253(0.1839+0.1414)
+2020-08-20 22:43:34 E:28, Train sod-mae-score=0.0091-0.9860 gcn-mae-score=0.0487-0.9149 loss=261.4301(2150.3576+46.3944)
+2020-08-20 22:43:34 E:28, Test  sod-mae-score=0.0391-0.8722 gcn-mae-score=0.0801-0.7408 loss=0.3496(0.1864+0.1632)
 
 # GCN (change) + PoolNet - Info + Pool + 100 * SOD
 """
