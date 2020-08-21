@@ -24,7 +24,7 @@ pip install torch-scatter==latest+cu100 -f https://pytorch-geometric.com/whl/tor
 pip install torch-sparse==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
 pip install torch-cluster==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
 pip install torch-spline-conv==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-geometric==1.4.3
+pip install torch-geometric=1.4.3
 """
 
 
@@ -476,6 +476,8 @@ class DeepPoolLayer(nn.Module):
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
+        self.conv_x = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
+        self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
             self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
         if self.is_not_last:
@@ -484,30 +486,33 @@ class DeepPoolLayer(nn.Module):
 
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
-        y1 = self.conv1(self.pool2(x))
-        y2 = self.conv2(self.pool4(x))
-        y3 = self.conv3(self.pool8(x))
-        res = torch.add(x, F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True))
-        res = torch.add(res, F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True))
-        res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
-        res = self.relu(res)
-        # res = x
 
+        y1 = self.conv1(self.pool2(x))
+        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
+        y2 = self.conv2(self.pool4(x))
+        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
+        y3 = self.conv3(self.pool8(x))
+        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
+        res = self.relu(y1 + y2 + y3)
         if self.is_not_last:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
             pass
-
         res = self.conv_sum(res)
 
+        x_res = F.interpolate(x, res.size()[2:], mode='bilinear', align_corners=True)
+        x_res = self.conv_x(x_res)
         if self.has_gcn:
-            x_gcn = F.interpolate(x_gcn, x2.size()[2:], mode='bilinear', align_corners=True)
+            x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
+            res = x_gcn * res + x_res
+        else:
+            res = res + x_res
             pass
+        res = self.relu(res)
+        res = self.conv_att(res)
 
         if self.is_not_last:
-            res = torch.add(res, x2)
-            if self.has_gcn:
-                res = torch.add(res, x_gcn)
+            res = res + x2
             res = self.conv_sum_c(res)
             pass
 
@@ -562,6 +567,8 @@ class MyGCNNet(nn.Module):
         batched_graph.x = gcn1_feature
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
+        sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
+                                            batched_pixel_graph=batched_pixel_graph)
 
         merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
         merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
@@ -705,7 +712,7 @@ class RunnerSPE(object):
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
             loss_fuse2 = F.binary_cross_entropy_with_logits(gcn_logits, labels, reduction='sum')
             # loss = (loss_fuse1 + loss_fuse2) / iter_size
-            loss = loss_fuse1 / iter_size + 20 * loss_fuse2
+            loss = loss_fuse1 / iter_size + 2 * loss_fuse2
             # loss = loss_fuse1 / iter_size
 
             loss.backward()
@@ -901,13 +908,15 @@ class RunnerSPE(object):
 
 
 """
-# GCN + PoolNet - Info + 10 * SOD
-2020-08-21 04:45:34 E:24, Train sod-mae-score=0.0094-0.9854 gcn-mae-score=0.0241-0.9398 loss=547.3604(2238.0991+32.3550)
-2020-08-21 04:45:34 E:24, Test  sod-mae-score=0.0391-0.8775 gcn-mae-score=0.0648-0.7574 loss=0.3452(0.1922+0.1530)
+# GCN (change) + PoolNet - Info + Pool + 2 * SOD + Att
+2020-08-20 14:40:30 E:28, Train sod-mae-score=0.0093-0.9857 gcn-mae-score=0.0426-0.9178 loss=310.7757(2204.1406+45.1808)
+2020-08-20 14:40:30 E:28, Test  sod-mae-score=0.0392-0.8785 gcn-mae-score=0.0744-0.7443 loss=0.3400(0.1824+0.1576)
+2020-08-20 14:35:11 E:27, Train sod-mae-score=0.0095-0.9854 gcn-mae-score=0.0430-0.9190 loss=316.7145(2265.4856+45.0830)
+2020-08-20 14:35:11 E:27, Test  sod-mae-score=0.0391-0.8760 gcn-mae-score=0.0761-0.7482 loss=0.3370(0.1842+0.1528)
 
-# GCN + PoolNet - Info + 20 * SOD
-2020-08-21 04:44:07 E:24, Train sod-mae-score=0.0094-0.9855 gcn-mae-score=0.0217-0.9430 loss=839.1996(2236.2227+30.7789)
-2020-08-21 04:44:07 E:24, Test  sod-mae-score=0.0405-0.8746 gcn-mae-score=0.0625-0.7606 loss=0.3361(0.1899+0.1462)
+# GCN (change) + PoolNet - Info + Pool + 2 * SOD + ...
+2020-08-22 01:27:09 E:23, Train sod-mae-score=0.0100-0.9848 gcn-mae-score=0.0453-0.9152 loss=329.8756(2363.9709+46.7392)
+2020-08-22 01:27:09 E:23, Test  sod-mae-score=0.0395-0.8726 gcn-mae-score=0.0764-0.7431 loss=0.3376(0.1848+0.1528)
 """
 
 
@@ -921,6 +930,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
+    # _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     _gpu_id = "3"
 
@@ -936,9 +947,9 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio = 4, 4
-    _name = "PoolNet_Temp-{}".format(_gpu_id)
+    _name = "PoolNet-{}".format(_gpu_id)
 
-    _root_ckpt_dir = "./ckpt/1_PYG_CONV_Fast-SOD_BAS_Temp/{}".format(_name)
+    _root_ckpt_dir = "./ckpt/Temp3/{}".format(_name)
     Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
                 "has_residual:{} is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _name, _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
@@ -952,4 +963,3 @@ if __name__ == '__main__':
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     runner.train(_epochs, start_epoch=0)
     pass
-
