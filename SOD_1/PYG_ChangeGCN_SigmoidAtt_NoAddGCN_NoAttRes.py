@@ -462,11 +462,10 @@ class VGG16(nn.Module):
 
 class DeepPoolLayer(nn.Module):
 
-    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None, has_att=False):
+    def __init__(self, k, k_out, is_not_last, has_gcn=False):
         super(DeepPoolLayer, self).__init__()
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
-        self.has_att = has_att
 
         self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
         self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
@@ -477,15 +476,13 @@ class DeepPoolLayer(nn.Module):
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
-        if self.has_att:
-            self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
-            self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
+            self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         if self.is_not_last:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         pass
 
-    def forward(self, x, x2=None, x_gcn=None, x_att=None):
+    def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
         y1 = self.conv1(self.pool2(x))
         y2 = self.conv2(self.pool4(x))
@@ -494,23 +491,22 @@ class DeepPoolLayer(nn.Module):
         res = torch.add(res, F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True))
         res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
         res = self.relu(res)
+
         if self.is_not_last:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
             pass
+
         res = self.conv_sum(res)
 
-        if self.has_att:
-            x_att = F.interpolate(x_att, res.size()[2:], mode='bilinear', align_corners=True)
-            res = x_att * res + res
+        if self.has_gcn:
+            x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
+            # res = x_gcn * res + res
+            res = x_gcn * res
             res = self.conv_att(res)
             pass
 
         if self.is_not_last:
             res = torch.add(res, x2)
-            if self.has_gcn:
-                x_gcn = F.interpolate(x_gcn, x2.size()[2:], mode='bilinear', align_corners=True)
-                x_gcn = self.conv_gcn(x_gcn)
-                res = torch.add(res, x_gcn)
             res = self.conv_sum_c(res)
             pass
 
@@ -535,8 +531,8 @@ class MyGCNNet(nn.Module):
 
         # DEEP POOL
         deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512, True)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, 512, True)
+        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True)
         self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False)
         self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False)
 
@@ -568,8 +564,8 @@ class MyGCNNet(nn.Module):
         sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
                                             batched_pixel_graph=batched_pixel_graph)
 
-        merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature, x_att=sod_gcn2_sigmoid)  # A + F
-        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature, x_att=sod_gcn2_sigmoid)  # A + F
+        merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_sigmoid)  # A + F
+        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn2_sigmoid)  # A + F
         merge = self.deep_pool2(merge, feature1)  # A + F
         merge = self.deep_pool1(merge)  # A
 
@@ -652,11 +648,6 @@ class RunnerSPE(object):
         pass
 
     def train(self, epochs, start_epoch=0):
-        # test_loss, test_loss1, test_loss2, test_mae, test_score, test_mae2, test_score2 = self.test()
-        # Tools.print('E:{:2d}, Test  sod-mae-score={:.4f}-{:.4f} '
-        #             'gcn-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-        #     0, test_mae, test_score, test_mae2, test_score2, test_loss, test_loss1, test_loss2))
-
         for epoch in range(start_epoch, epochs):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
@@ -906,11 +897,6 @@ class RunnerSPE(object):
 
 
 """
-# GCN (change) + PoolNet - Info + Pool + 2 * SOD + Att
-2020-08-20 14:40:30 E:28, Train sod-mae-score=0.0093-0.9857 gcn-mae-score=0.0426-0.9178 loss=310.7757(2204.1406+45.1808)
-2020-08-20 14:40:30 E:28, Test  sod-mae-score=0.0392-0.8785 gcn-mae-score=0.0744-0.7443 loss=0.3400(0.1824+0.1576)
-2020-08-20 14:35:11 E:27, Train sod-mae-score=0.0095-0.9854 gcn-mae-score=0.0430-0.9190 loss=316.7145(2265.4856+45.0830)
-2020-08-20 14:35:11 E:27, Test  sod-mae-score=0.0391-0.8760 gcn-mae-score=0.0761-0.7482 loss=0.3370(0.1842+0.1528)
 """
 
 
@@ -925,8 +911,9 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    # _gpu_id = "1"
-    _gpu_id = "2"
+    _gpu_id = "1"
+    # _gpu_id = "2"
+    # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False

@@ -478,6 +478,7 @@ class DeepPoolLayer(nn.Module):
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
             self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
+            self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         if self.is_not_last:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         pass
@@ -491,7 +492,6 @@ class DeepPoolLayer(nn.Module):
         res = torch.add(res, F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True))
         res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
         res = self.relu(res)
-        # res = x
 
         if self.is_not_last:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
@@ -500,14 +500,14 @@ class DeepPoolLayer(nn.Module):
         res = self.conv_sum(res)
 
         if self.has_gcn:
-            x_gcn = F.interpolate(x_gcn, x2.size()[2:], mode='bilinear', align_corners=True)
+            x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
+            res = x_gcn * res + res
+            res = self.conv_att(res)
             pass
 
         if self.is_not_last:
             res = torch.add(res, x2)
-            if self.has_gcn:
-                res = torch.add(res, x_gcn)
             res = self.conv_sum_c(res)
             pass
 
@@ -562,6 +562,8 @@ class MyGCNNet(nn.Module):
         batched_graph.x = gcn1_feature
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
+        sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
+                                            batched_pixel_graph=batched_pixel_graph)
 
         merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
         merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
@@ -647,11 +649,6 @@ class RunnerSPE(object):
         pass
 
     def train(self, epochs, start_epoch=0):
-        # test_loss, test_loss1, test_loss2, test_mae, test_score, test_mae2, test_score2 = self.test()
-        # Tools.print('E:{:2d}, Test  sod-mae-score={:.4f}-{:.4f} '
-        #             'gcn-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-        #     0, test_mae, test_score, test_mae2, test_score2, test_loss, test_loss1, test_loss2))
-
         for epoch in range(start_epoch, epochs):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
@@ -901,9 +898,10 @@ class RunnerSPE(object):
 
 
 """
-# GCN (change) + PoolNet - Info + Pool + 2 * SOD
-2020-08-20 13:53:52 E:27, Train sod-mae-score=0.0091-0.9859 gcn-mae-score=0.0389-0.9228 loss=301.2781(2166.5746+42.3103)
-2020-08-20 13:53:52 E:27, Test  sod-mae-score=0.0388-0.8778 gcn-mae-score=0.0724-0.7474 loss=0.3361(0.1864+0.1497)
+2020-08-20 14:40:30 E:28, Train sod-mae-score=0.0093-0.9857 gcn-mae-score=0.0426-0.9178 loss=310.7757(2204.1406+45.1808)
+2020-08-20 14:40:30 E:28, Test  sod-mae-score=0.0392-0.8785 gcn-mae-score=0.0744-0.7443 loss=0.3400(0.1824+0.1576)
+2020-08-20 14:35:11 E:27, Train sod-mae-score=0.0095-0.9854 gcn-mae-score=0.0430-0.9190 loss=316.7145(2265.4856+45.0830)
+2020-08-20 14:35:11 E:27, Test  sod-mae-score=0.0391-0.8760 gcn-mae-score=0.0761-0.7482 loss=0.3370(0.1842+0.1528)
 """
 
 
@@ -918,7 +916,9 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    _gpu_id = "1"
+    # _gpu_id = "1"
+    # _gpu_id = "2"
+    _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
@@ -932,9 +932,9 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio = 4, 4
-    _name = "PoolNet_Temp-{}".format(_is_sgd)
+    _name = "PoolNet-{}".format(_is_sgd)
 
-    _root_ckpt_dir = "./ckpt/1_PYG_CONV_Fast-SOD_BAS_Temp/{}".format(_name)
+    _root_ckpt_dir = "./ckpt/Temp3/{}".format(_name)
     Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
                 "has_residual:{} is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _name, _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
