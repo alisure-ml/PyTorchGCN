@@ -712,7 +712,7 @@ class RunnerSPE(object):
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
             loss_fuse2 = F.binary_cross_entropy_with_logits(gcn_logits, labels, reduction='sum')
             # loss = (loss_fuse1 + loss_fuse2) / iter_size
-            loss = loss_fuse1 / iter_size + 10 * loss_fuse2
+            loss = loss_fuse1 / iter_size + 20 * loss_fuse2
             # loss = loss_fuse1 / iter_size
 
             loss.backward()
@@ -908,47 +908,28 @@ class RunnerSPE(object):
 
 
 """
-# PoolNet
-2020-08-16 07:00:41 E:29, Train sod-mae-score=0.0090-0.9862 loss=213.5842
-2020-08-16 07:00:41 E:29, Test  sod-mae-score=0.0401-0.8738 loss=0.1594
+# GCN + PoolNet - Info + 10 * SOD
+2020-08-21 04:12:32 E:24, Train sod-mae-score=0.0094-0.9855 gcn-mae-score=0.0247-0.9395 loss=548.7136(2216.5903+32.7055)
+2020-08-21 04:12:32 E:24, Test  sod-mae-score=0.0401-0.8774 gcn-mae-score=0.0648-0.7592 loss=0.3376(0.1892+0.1483)
 
-# PoolNet
-2020-08-16 11:47:37 E:30, Train sod-mae-score=0.0081-0.9874 gcn-mae-score=0.0324-0.9349 loss=197.9764(1944.9164+34.8479)
-2020-08-16 11:47:37 E:30, Test  sod-mae-score=0.0395-0.8724 gcn-mae-score=0.0718-0.7478 loss=0.3733(0.1932+0.1801)
-
-# GCN -> PoolNet
-2020-08-17 05:54:19 E:26, Train sod-mae-score=0.0143-0.9788 gcn-mae-score=0.4746-0.3555 loss=327.3824(3273.8244+301.3948)
-2020-08-17 05:54:19 E:26, Test  sod-mae-score=0.0531-0.8400 gcn-mae-score=0.4765-0.2358 loss=0.8832(0.6926+0.1906)
-
-# GCN + PoolNet
-2020-08-18 10:20:36 E:29, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.4741-0.3423 loss=210.3782(2103.7822+298.6683)
-2020-08-18 10:20:36 E:29, Test  sod-mae-score=0.0390-0.8709 gcn-mae-score=0.4713-0.1946 loss=0.8491(0.6760+0.1730)
-
-
-# PoolNet - Info
-2020-08-19 06:31:14 E:29, Train sod-mae-score=0.0091-0.9860 loss=215.3468
-2020-08-19 06:31:14 E:29, Test  sod-mae-score=0.0392-0.8720 loss=0.1676
-
-# GCN + PoolNet - Info
-2020-08-19 06:13:06 E:29, Train sod-mae-score=0.0088-0.9865 gcn-mae-score=0.1049-0.8535 loss=218.1074(2096.1979+84.8759)
-2020-08-19 06:13:06 E:29, Test  sod-mae-score=0.0389-0.8763 gcn-mae-score=0.1308-0.6663 loss=0.4063(0.2405+0.1659)
-2020-08-19 14:12:13 E:27, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.4853-0.3322 loss=221.5410(2215.4099+309.6150)
-2020-08-19 14:12:13 E:27, Test  sod-mae-score=0.0394-0.8768 gcn-mae-score=0.4893-0.1866 loss=0.8766(0.7144+0.1622)
+# GCN + PoolNet - Info + 20 * SOD
+2020-08-21 03:28:47 E:22, Train sod-mae-score=0.0095-0.9855 gcn-mae-score=0.0217-0.9428 loss=839.9914(2242.9831+30.7847)
+2020-08-21 03:28:47 E:22, Test  sod-mae-score=0.0405-0.8758 gcn-mae-score=0.0639-0.7591 loss=0.3422(0.1942+0.1480)
 """
 
 
 if __name__ == '__main__':
 
     # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    _data_root_path = "/mnt/4T/ALISURE/DUTS"
+    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
     _num_workers = 10
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
@@ -962,7 +943,7 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio = 4, 4
-    _name = "PoolNet_Temp-{}".format(_is_sgd)
+    _name = "PoolNet_Temp-{}".format(_gpu_id)
 
     _root_ckpt_dir = "./ckpt/1_PYG_CONV_Fast-SOD_BAS_Temp/{}".format(_name)
     Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
