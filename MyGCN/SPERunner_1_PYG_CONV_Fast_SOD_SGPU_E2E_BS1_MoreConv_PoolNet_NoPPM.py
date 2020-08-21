@@ -471,6 +471,63 @@ class DeepPoolLayer(nn.Module):
         self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
+        self.conv_sum = nn.Conv2d(4 * k, k_out, 3, 1, 1, bias=False)
+        if self.has_gcn:
+            self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
+        if self.is_not_last:
+            self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
+        pass
+
+    def forward(self, x, x2=None, x_gcn=None):
+        x_size = x.size()
+
+        y1 = self.conv1(self.pool2(x))
+        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
+        y2 = self.conv2(self.pool4(x))
+        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
+        y3 = self.conv3(self.pool8(x))
+        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
+        res = torch.cat([x, y1, y2, y3], dim=1)
+        res = self.relu(res)
+
+        if self.is_not_last:
+            res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
+            pass
+
+        res = self.conv_sum(res)
+
+        if self.has_gcn:
+            x_gcn = F.interpolate(x_gcn, x2.size()[2:], mode='bilinear', align_corners=True)
+            x_gcn = self.conv_gcn(x_gcn)
+            pass
+
+        if self.is_not_last:
+            res = torch.add(res, x2)
+            if self.has_gcn:
+                res = torch.add(res, x_gcn)
+            res = self.conv_sum_c(res)
+            pass
+
+        return res
+
+    pass
+
+
+class DeepPoolLayer2(nn.Module):
+
+    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None):
+        super().__init__()
+        self.is_not_last = is_not_last
+        self.has_gcn = has_gcn
+
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
+        self.conv1 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+
+        self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
             self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
@@ -478,7 +535,7 @@ class DeepPoolLayer(nn.Module):
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         pass
 
-    def forward(self, x, x2=None, x3=None, x_gcn=None):
+    def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
 
         y1 = self.conv1(self.pool2(x))
@@ -501,7 +558,6 @@ class DeepPoolLayer(nn.Module):
             pass
 
         if self.is_not_last:
-            # res = torch.add(torch.add(res, x2), x3)
             res = torch.add(res, x2)
             if self.has_gcn:
                 res = torch.add(res, x_gcn)
@@ -527,19 +583,6 @@ class MyGCNNet(nn.Module):
                                    skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
                                    normalize=normalize, residual=residual, concat=concat)
 
-        # PPM
-        # ind = 512
-        # self.ppm1 = nn.Sequential(nn.AdaptiveAvgPool2d(1), nn.Conv2d(ind, ind, 1, 1, bias=False), nn.ReLU(inplace=True))
-        # self.ppm2 = nn.Sequential(nn.AdaptiveAvgPool2d(3), nn.Conv2d(ind, ind, 1, 1, bias=False), nn.ReLU(inplace=True))
-        # self.ppm3 = nn.Sequential(nn.AdaptiveAvgPool2d(4), nn.Conv2d(ind, ind, 1, 1, bias=False), nn.ReLU(inplace=True))
-        # self.ppm_cat = nn.Sequential(nn.Conv2d(ind * 4, ind, 3, 1, 1, bias=False), nn.ReLU(inplace=True))
-
-        # INFO
-        # out_dim = [128, 256, 512]
-        # self.info1 = nn.Sequential(nn.Conv2d(ind, out_dim[0], 3, 1, 1, bias=False), nn.ReLU(inplace=True))
-        # self.info2 = nn.Sequential(nn.Conv2d(ind, out_dim[1], 3, 1, 1, bias=False), nn.ReLU(inplace=True))
-        # self.info3 = nn.Sequential(nn.Conv2d(ind, out_dim[2], 3, 1, 1, bias=False), nn.ReLU(inplace=True))
-
         # DEEP POOL
         deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
         self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512)
@@ -560,10 +603,6 @@ class MyGCNNet(nn.Module):
 
         # SIZE
         x_size = x.size()[2:]
-        feature1_size = feature1.size()[2:]  # 128
-        feature2_size = feature2.size()[2:]  # 256
-        feature3_size = feature3.size()[2:]  # 512
-        feature4_size = feature4.size()[2:]  # 512
 
         # GCN 1
         data_where = batched_pixel_graph.data_where
@@ -576,19 +615,6 @@ class MyGCNNet(nn.Module):
         batched_graph.x = gcn1_feature
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
-        sod_gcn2_feature = F.interpolate(sod_gcn2_feature, feature3_size, mode='bilinear', align_corners=True)
-
-        # PPM
-        # ppm_list = [feature4,
-        #             F.interpolate(self.ppm1(feature4), feature4_size, mode='bilinear', align_corners=True),
-        #             F.interpolate(self.ppm2(feature4), feature4_size, mode='bilinear', align_corners=True),
-        #             F.interpolate(self.ppm3(feature4), feature4_size, mode='bilinear', align_corners=True)]
-        # ppm_cat = self.ppm_cat(torch.cat(ppm_list, dim=1))
-
-        # INFO
-        # info1 = self.info1(F.interpolate(ppm_cat, feature1_size, mode='bilinear', align_corners=True))
-        # info2 = self.info2(F.interpolate(ppm_cat, feature2_size, mode='bilinear', align_corners=True))
-        # info3 = self.info3(F.interpolate(ppm_cat, feature3_size, mode='bilinear', align_corners=True))
 
         # DEEP POOL
         merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
@@ -957,6 +983,12 @@ class RunnerSPE(object):
 2020-08-19 14:12:13 E:27, Test  sod-mae-score=0.0394-0.8768 gcn-mae-score=0.4893-0.1866 loss=0.8766(0.7144+0.1622)
 
 # GCN + PoolNet - Info + Pool + 100 * SOD
+2020-08-21 13:20:34 E:22, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.0244-0.9445 loss=518.3920(2221.5524+29.6237)
+2020-08-21 13:20:34 E:22, Test  sod-mae-score=0.0393-0.8750 gcn-mae-score=0.0653-0.7644 loss=0.3410(0.1886+0.1525)
+
+# GCN + PoolNet - Info + Pool + 100 * SOD + Cat
+2020-08-22 00:09:00 E:25, Train sod-mae-score=0.0087-0.9867 gcn-mae-score=0.0233-0.9457 loss=495.6597(2063.8189+28.9278)
+2020-08-22 00:09:00 E:25, Test  sod-mae-score=0.0393-0.8730 gcn-mae-score=0.0660-0.7617 loss=0.3644(0.1896+0.1748)
 """
 
 
@@ -969,8 +1001,8 @@ if __name__ == '__main__':
     _num_workers = 16
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
