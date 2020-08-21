@@ -649,11 +649,6 @@ class RunnerSPE(object):
         pass
 
     def train(self, epochs, start_epoch=0):
-        # test_loss, test_loss1, test_loss2, test_mae, test_score, test_mae2, test_score2 = self.test()
-        # Tools.print('E:{:2d}, Test  sod-mae-score={:.4f}-{:.4f} '
-        #             'gcn-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-        #     0, test_mae, test_score, test_mae2, test_score2, test_loss, test_loss1, test_loss2))
-
         for epoch in range(start_epoch, epochs):
             Tools.print()
             Tools.print("Start Epoch {}".format(epoch))
@@ -903,9 +898,11 @@ class RunnerSPE(object):
 
 
 """
-# GCN (change) + PoolNet - Info + Pool + 20 * SOD + Att
+# GCN (change) + PoolNet - Info + Pool + 2 * SOD + Att
 2020-08-20 14:40:30 E:28, Train sod-mae-score=0.0093-0.9857 gcn-mae-score=0.0426-0.9178 loss=310.7757(2204.1406+45.1808)
 2020-08-20 14:40:30 E:28, Test  sod-mae-score=0.0392-0.8785 gcn-mae-score=0.0744-0.7443 loss=0.3400(0.1824+0.1576)
+2020-08-20 14:35:11 E:27, Train sod-mae-score=0.0095-0.9854 gcn-mae-score=0.0430-0.9190 loss=316.7145(2265.4856+45.0830)
+2020-08-20 14:35:11 E:27, Test  sod-mae-score=0.0391-0.8760 gcn-mae-score=0.0761-0.7482 loss=0.3370(0.1842+0.1528)
 """
 
 

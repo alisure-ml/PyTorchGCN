@@ -24,7 +24,7 @@ pip install torch-scatter==latest+cu100 -f https://pytorch-geometric.com/whl/tor
 pip install torch-sparse==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
 pip install torch-cluster==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
 pip install torch-spline-conv==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-geometric=1.4.3
+pip install torch-geometric==1.4.3
 """
 
 
@@ -705,7 +705,7 @@ class RunnerSPE(object):
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
             loss_fuse2 = F.binary_cross_entropy_with_logits(gcn_logits, labels, reduction='sum')
             # loss = (loss_fuse1 + loss_fuse2) / iter_size
-            loss = loss_fuse1 / iter_size + 10 * loss_fuse2
+            loss = loss_fuse1 / iter_size + 20 * loss_fuse2
             # loss = loss_fuse1 / iter_size
 
             loss.backward()
@@ -901,47 +901,28 @@ class RunnerSPE(object):
 
 
 """
-# PoolNet
-2020-08-16 07:00:41 E:29, Train sod-mae-score=0.0090-0.9862 loss=213.5842
-2020-08-16 07:00:41 E:29, Test  sod-mae-score=0.0401-0.8738 loss=0.1594
+# GCN + PoolNet - Info + 10 * SOD
+2020-08-21 04:45:34 E:24, Train sod-mae-score=0.0094-0.9854 gcn-mae-score=0.0241-0.9398 loss=547.3604(2238.0991+32.3550)
+2020-08-21 04:45:34 E:24, Test  sod-mae-score=0.0391-0.8775 gcn-mae-score=0.0648-0.7574 loss=0.3452(0.1922+0.1530)
 
-# PoolNet
-2020-08-16 11:47:37 E:30, Train sod-mae-score=0.0081-0.9874 gcn-mae-score=0.0324-0.9349 loss=197.9764(1944.9164+34.8479)
-2020-08-16 11:47:37 E:30, Test  sod-mae-score=0.0395-0.8724 gcn-mae-score=0.0718-0.7478 loss=0.3733(0.1932+0.1801)
-
-# GCN -> PoolNet
-2020-08-17 05:54:19 E:26, Train sod-mae-score=0.0143-0.9788 gcn-mae-score=0.4746-0.3555 loss=327.3824(3273.8244+301.3948)
-2020-08-17 05:54:19 E:26, Test  sod-mae-score=0.0531-0.8400 gcn-mae-score=0.4765-0.2358 loss=0.8832(0.6926+0.1906)
-
-# GCN + PoolNet
-2020-08-18 10:20:36 E:29, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.4741-0.3423 loss=210.3782(2103.7822+298.6683)
-2020-08-18 10:20:36 E:29, Test  sod-mae-score=0.0390-0.8709 gcn-mae-score=0.4713-0.1946 loss=0.8491(0.6760+0.1730)
-
-
-# PoolNet - Info
-2020-08-19 06:31:14 E:29, Train sod-mae-score=0.0091-0.9860 loss=215.3468
-2020-08-19 06:31:14 E:29, Test  sod-mae-score=0.0392-0.8720 loss=0.1676
-
-# GCN + PoolNet - Info
-2020-08-19 06:13:06 E:29, Train sod-mae-score=0.0088-0.9865 gcn-mae-score=0.1049-0.8535 loss=218.1074(2096.1979+84.8759)
-2020-08-19 06:13:06 E:29, Test  sod-mae-score=0.0389-0.8763 gcn-mae-score=0.1308-0.6663 loss=0.4063(0.2405+0.1659)
-2020-08-19 14:12:13 E:27, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.4853-0.3322 loss=221.5410(2215.4099+309.6150)
-2020-08-19 14:12:13 E:27, Test  sod-mae-score=0.0394-0.8768 gcn-mae-score=0.4893-0.1866 loss=0.8766(0.7144+0.1622)
+# GCN + PoolNet - Info + 20 * SOD
+2020-08-21 04:44:07 E:24, Train sod-mae-score=0.0094-0.9855 gcn-mae-score=0.0217-0.9430 loss=839.1996(2236.2227+30.7789)
+2020-08-21 04:44:07 E:24, Test  sod-mae-score=0.0405-0.8746 gcn-mae-score=0.0625-0.7606 loss=0.3361(0.1899+0.1462)
 """
 
 
 if __name__ == '__main__':
 
     # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    _data_root_path = "/mnt/4T/ALISURE/DUTS"
+    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    # _gpu_id = "2"
+    _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
@@ -955,7 +936,7 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio = 4, 4
-    _name = "PoolNet_Temp-{}".format(_is_sgd)
+    _name = "PoolNet_Temp-{}".format(_gpu_id)
 
     _root_ckpt_dir = "./ckpt/1_PYG_CONV_Fast-SOD_BAS_Temp/{}".format(_name)
     Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
@@ -971,3 +952,4 @@ if __name__ == '__main__':
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     runner.train(_epochs, start_epoch=0)
     pass
+
