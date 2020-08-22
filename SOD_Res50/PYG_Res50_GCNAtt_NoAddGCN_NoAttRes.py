@@ -13,19 +13,7 @@ from alisuretool.Tools import Tools
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
-from torchvision.models import vgg13_bn, vgg16_bn
 from torch_geometric.nn import GCNConv, global_mean_pool, SAGEConv
-
-
-"""
-torch==1.4.0+cu100
-pip uninstall torch-sparse
-pip install torch-scatter==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-sparse==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-cluster==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-spline-conv==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-geometric=1.4.3
-"""
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -297,10 +285,10 @@ class SAGENet1(nn.Module):
         self.concat = concat
         self.out_num = self.hidden_dims[-1]
 
-        # self.embedding_h = nn.Linear(in_dim, in_dim)
+        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
         self.relu = nn.ReLU()
 
-        _in_dim = in_dim
+        _in_dim = self.hidden_dims[0]
         self.gcn_list = nn.ModuleList()
         self.bn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims:
@@ -311,8 +299,8 @@ class SAGENet1(nn.Module):
         pass
 
     def forward(self, data):
-        # hidden_nodes_feat = self.embedding_h(data.x)
-        hidden_nodes_feat = data.x
+        hidden_nodes_feat = self.embedding_h(data.x)
+        # hidden_nodes_feat = data.x
         for gcn, bn in zip(self.gcn_list, self.bn_list):
             h_in = hidden_nodes_feat
 
@@ -335,15 +323,15 @@ class SAGENet1(nn.Module):
 
 class SAGENet2(nn.Module):
 
-    def __init__(self, in_dim=512, hidden_dims=[512, 512, 512, 512], skip_which=[1, 3],
-                 out_dim=512, sout=1, has_bn=False, normalize=False, residual=False, concat=False):
+    def __init__(self, in_dim=128, hidden_dims=[128, 128, 128, 128], skip_which=[1, 2, 3],
+                 skip_dim=128, sout=1, has_bn=False, normalize=False, residual=False, concat=False):
         super().__init__()
         self.hidden_dims = hidden_dims
         self.normalize = normalize
         self.residual = residual
         self.has_bn = has_bn
         self.concat = concat
-        self.out_num = out_dim
+        self.out_num = len(skip_which) * skip_dim
 
         self.embedding_h = nn.Linear(in_dim, in_dim)
         self.relu = nn.ReLU()
@@ -358,10 +346,13 @@ class SAGENet2(nn.Module):
             pass
 
         # skip
-        self.skip_index = skip_which
-        _cat_dim = np.sum([self.hidden_dims[which-1] for which in self.skip_index])
-        self.skip_linear = nn.Linear(_cat_dim, self.out_num, bias=False)
-        self.skip_linear_bn = nn.BatchNorm1d(self.out_num)
+        self.skip_connect_index = skip_which
+        self.skip_connect_list = nn.ModuleList()
+        self.skip_connect_bn_list = nn.ModuleList()
+        for hidden_dim in [self.hidden_dims[which-1] for which in skip_which]:
+            self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
+            self.skip_connect_bn_list.append(nn.BatchNorm1d(skip_dim))
+            pass
 
         self.readout_mlp = nn.Linear(self.out_num, sout, bias=False)
         pass
@@ -386,61 +377,103 @@ class SAGENet2(nn.Module):
             gcn_hidden_nodes_feat.append(hidden_nodes_feat)
             pass
 
-        skip = [gcn_hidden_nodes_feat[index] for index in self.skip_index]
-        skip = torch.cat(skip, dim=1)
+        skip_connect = []
+        for sc, index, bn in zip(self.skip_connect_list, self.skip_connect_index, self.skip_connect_bn_list):
+            # Conv
+            sc_feat = sc(gcn_hidden_nodes_feat[index])
+            if self.has_bn:
+                sc_feat = bn(sc_feat)
+            sc_feat = self.relu(sc_feat)
 
-        sc_feat = self.skip_linear(skip)
-        if self.has_bn:
-            sc_feat = self.skip_linear_bn(sc_feat)
-        out_feat = self.relu(sc_feat)
+            skip_connect.append(sc_feat)
+            pass
 
+        out_feat = torch.cat(skip_connect, dim=1)
         logits = self.readout_mlp(out_feat).view(-1)
         return out_feat, logits, torch.sigmoid(logits)
 
     pass
 
 
-class VGG16(nn.Module):
+def conv3x3(in_planes, out_planes, stride=1):
+    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride, padding=1, bias=False)
 
-    def __init__(self):
-        super(VGG16, self).__init__()
-        self.cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
-        self.extract = [8, 15, 22, 29]  # [3, 8, 15, 22, 29]
-        self.features = self.vgg(self.cfg)
+
+class Bottleneck(nn.Module):
+    expansion = 4
+
+    def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
+        super(Bottleneck, self).__init__()
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+
+        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, stride=stride, bias=False) # change
+        self.bn1 = nn.BatchNorm2d(planes,)
+        self.conv2 = nn.Conv2d(planes, planes, 3, stride=1, padding=dilation, bias=False, dilation=dilation)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(planes * 4)
+
+        for i in self.bn1.parameters():
+            i.requires_grad = False
+        for i in self.bn2.parameters():
+            i.requires_grad = False
+        for i in self.bn3.parameters():
+            i.requires_grad = False
+        pass
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+    pass
+
+
+class ResNet(nn.Module):
+
+    def __init__(self, block, layers):
+        self.inplanes = 64
+        super(ResNet, self).__init__()
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.relu = nn.ReLU(inplace=True)
+        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)
+        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=True)
+
+        self.layer1 = self._make_layer(block, 64, layers[0])
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2)
+
+        for i in self.bn1.parameters():
+            i.requires_grad = False
 
         self.weight_init(self.modules())
 
         self.out_num1 = 128
         self.out_num2 = 256
         self.out_num3 = 512
-        self.out_num4 = 512
+        self.out_num4 = 1024
+        self.out_num5 = 2048
         pass
-
-    def forward(self, x):
-        tmp_x = []
-        for k in range(len(self.features)):
-            x = self.features[k](x)
-            if k in self.extract:
-                tmp_x.append(x)
-        return tmp_x
-
-    @staticmethod
-    def vgg(cfg, batch_norm=False):
-        layers = []
-        in_channels = 3
-        for v in cfg:
-            if v == 'M':
-                # layers += [nn.MaxPool2d(kernel_size=3, stride=2, padding=1)]
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-            else:
-                conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
-                if batch_norm:
-                    layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
-                else:
-                    layers += [conv2d, nn.ReLU(inplace=True)]
-                in_channels = v
-            pass
-        return nn.Sequential(*layers)
 
     @staticmethod
     def weight_init(modules):
@@ -454,18 +487,51 @@ class VGG16(nn.Module):
             pass
         pass
 
-    def load_pretrained_model(self, pretrained_model="./pretrained/vgg16-397923af.pth"):
+    def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion or dilation == 2 or dilation == 4:
+            downsample = nn.Sequential(nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1,
+                                                 stride=stride, bias=False), nn.BatchNorm2d(planes * block.expansion))
+            for i in downsample._modules['1'].parameters():
+                i.requires_grad = False
+        layers = [block(self.inplanes, planes, stride, dilation=dilation, downsample=downsample)]
+        self.inplanes = planes * block.expansion
+        for i in range(1, blocks):
+            layers.append(block(self.inplanes, planes, dilation=dilation))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        tmp_x = []
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        tmp_x.append(x)
+        x = self.maxpool(x)
+
+        x = self.layer1(x)
+        tmp_x.append(x)
+        x = self.layer2(x)
+        tmp_x.append(x)
+        x = self.layer3(x)
+        tmp_x.append(x)
+        x = self.layer4(x)
+        tmp_x.append(x)
+
+        return tmp_x
+
+    def load_pretrained_model(self, pretrained_model="./pretrained/resnet50_caffe.pth"):
         self.load_state_dict(torch.load(pretrained_model), strict=False)
         pass
-
     pass
 
 
 class DeepPoolLayer(nn.Module):
 
-    def __init__(self, k, k_out, is_not_last, has_gcn=False):
+    def __init__(self, k, k_out, need_x2, need_fuse, has_gcn=False, gcn_in=None):
         super(DeepPoolLayer, self).__init__()
-        self.is_not_last = is_not_last
+        self.need_x2 = need_x2
+        self.need_fuse = need_fuse
         self.has_gcn = has_gcn
 
         self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
@@ -478,8 +544,9 @@ class DeepPoolLayer(nn.Module):
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
+            self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
             self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
-        if self.is_not_last:
+        if self.need_fuse:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         pass
 
@@ -493,7 +560,7 @@ class DeepPoolLayer(nn.Module):
         res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
         res = self.relu(res)
 
-        if self.is_not_last:
+        if self.need_x2:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
             pass
 
@@ -501,12 +568,13 @@ class DeepPoolLayer(nn.Module):
 
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
+            x_gcn = self.conv_gcn(x_gcn)
             # res = x_gcn * res + res
             res = x_gcn * res
             res = self.conv_att(res)
             pass
 
-        if self.is_not_last:
+        if self.need_fuse:
             res = torch.add(res, x2)
             res = self.conv_sum_c(res)
             pass
@@ -521,39 +589,53 @@ class MyGCNNet(nn.Module):
     def __init__(self, has_bn=False, normalize=False, residual=False, concat=True):
         super(MyGCNNet, self).__init__()
         # BASE
-        self.vgg16 = VGG16()
+        self.resnet = ResNet(Bottleneck, [3, 4, 6, 3])
+
+        # Convert
+        self.relu = nn.ReLU(inplace=True)
+        self.convert1 = nn.Conv2d(64, 128, 1, 1, bias=False)
+        self.convert2 = nn.Conv2d(256, 256, 1, 1, bias=False)
+        self.convert3 = nn.Conv2d(512, 256, 1, 1, bias=False)
+        self.convert4 = nn.Conv2d(1024, 512, 1, 1, bias=False)
+        self.convert5 = nn.Conv2d(2048, 512, 1, 1, bias=False)
 
         # GCN
-        self.model_gnn1 = SAGENet1(in_dim=self.vgg16.out_num2, hidden_dims=[512, 512],
+        self.model_gnn1 = SAGENet1(in_dim=self.resnet.out_num2, hidden_dims=[512, 512],
                                    has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
-                                   skip_which=[2, 4], out_dim=512, has_bn=has_bn,
+                                   skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
                                    normalize=normalize, residual=residual, concat=concat)
 
         # DEEP POOL
-        deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True)
-        self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False)
-        self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False)
+        deep_pool = [[512, 512, 256, 256, 128], [512, 256, 256, 128, 128]]
+        self.deep_pool5 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], False, True, False)
+        self.deep_pool4 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, True, 512)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True, True, 512)
+        self.deep_pool2 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], True, True, False)
+        self.deep_pool1 = DeepPoolLayer(deep_pool[0][4], deep_pool[1][4], False, False, False)
 
         # ScoreLayer
         score = 128
         self.score = nn.Conv2d(score, 1, 1, 1)
 
-        VGG16.weight_init(self.modules())
+        ResNet.weight_init(self.modules())
         pass
 
     def forward(self, x, batched_graph, batched_pixel_graph):
         # BASE
-        feature1, feature2, feature3, feature4 = self.vgg16(x)
+        feature1, _feature2, feature3, feature4, _feature5 = self.resnet(x)
+        feature1 = self.relu(self.convert1(feature1))
+        feature2 = self.relu(self.convert2(_feature2))
+        feature3 = self.relu(self.convert3(feature3))
+        feature4 = self.relu(self.convert4(feature4))
+        feature5 = self.relu(self.convert5(_feature5))
 
         # SIZE
         x_size = x.size()[2:]
 
         # GCN 1
         data_where = batched_pixel_graph.data_where
-        pixel_nodes_feat = feature2[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
+        pixel_nodes_feat = _feature2[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
         sod_gcn1_feature = self.sod_feature(data_where, gcn1_feature, batched_pixel_graph=batched_pixel_graph)
@@ -567,8 +649,9 @@ class MyGCNNet(nn.Module):
                                             batched_pixel_graph=batched_pixel_graph)
         # For Eval
 
-        merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_sigmoid)  # A + F
-        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn2_sigmoid)  # A + F
+        merge = self.deep_pool5(feature5, feature4)  # A + F
+        merge = self.deep_pool4(merge, feature3, x_gcn=sod_gcn2_feature)  # A + F
+        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
         merge = self.deep_pool2(merge, feature1)  # A + F
         merge = self.deep_pool1(merge)  # A
 
@@ -617,11 +700,9 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, concat=concat).to(self.device)
-        self.model.vgg16.load_pretrained_model(
-            pretrained_model="./pretrained/vgg16-397923af.pth")
+        self.model.resnet.load_pretrained_model(pretrained_model="./pretrained/resnet50_caffe.pth")
 
         if is_sgd:
-            # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
             self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
             self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
                                              momentum=0.9, weight_decay=weight_decay)
@@ -903,10 +984,10 @@ class RunnerSPE(object):
 
 
 """
-2020-08-22 13:22:51 E:22, Train sod-mae-score=0.0114-0.9831 gcn-mae-score=0.0652-0.8989 loss=383.5722(2667.4730+58.4124)
-2020-08-22 13:22:51 E:22, Test  sod-mae-score=0.0425-0.8681 gcn-mae-score=0.0952-0.7280 loss=0.3495(0.1988+0.1507)
-2020-08-22 19:05:37 E:27, Train sod-mae-score=0.0105-0.9843 gcn-mae-score=0.0584-0.9093 loss=350.0533(2468.9029+51.5815)
-2020-08-22 19:05:37 E:27, Test  sod-mae-score=0.0416-0.8711 gcn-mae-score=0.0892-0.7435 loss=0.3452(0.1899+0.1553)
+2020-08-22 13:36:12 E:23, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.0437-0.9172 loss=315.4051(2235.9344+45.9059)
+2020-08-22 13:36:12 E:23, Test  sod-mae-score=0.0378-0.8823 gcn-mae-score=0.0749-0.7486 loss=0.3224(0.1781+0.1443)
+2020-08-22 16:47:28 E:29, Train sod-mae-score=0.0084-0.9870 gcn-mae-score=0.0385-0.9236 loss=285.2419(2008.3308+42.2044)
+2020-08-22 16:47:28 E:29, Test  sod-mae-score=0.0375-0.8818 gcn-mae-score=0.0728-0.7472 loss=0.3440(0.1827+0.1613)
 """
 
 
@@ -920,8 +1001,8 @@ if __name__ == '__main__':
     _num_workers = 20
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -938,7 +1019,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_Res50_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
