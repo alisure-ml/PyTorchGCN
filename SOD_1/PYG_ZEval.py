@@ -162,15 +162,16 @@ class RunnerSPE(object):
                 epoch_test_recall2 += recall2
 
                 if save_path is not None:
+                    im_size = Image.open(image_names[0]).size
                     image_name = os.path.splitext(os.path.basename(image_names[0]))[0]
 
                     save_file_name = Tools.new_dir(os.path.join(save_path, "SP", "{}.png".format(image_name)))
                     sp_result = torch.squeeze(sod_gcn2_sigmoid).detach().cpu().numpy()
-                    Image.fromarray(np.asarray(sp_result * 255, dtype=np.uint8)).save(save_file_name)
+                    Image.fromarray(np.asarray(sp_result * 255, dtype=np.uint8)).resize(im_size).save(save_file_name)
 
                     save_file_name = Tools.new_dir(os.path.join(save_path, "SOD", "{}.png".format(image_name)))
                     sod_result = torch.squeeze(sod_logits_sigmoid).detach().cpu().numpy()
-                    Image.fromarray(np.asarray(sod_result * 255, dtype=np.uint8)).save(save_file_name)
+                    Image.fromarray(np.asarray(sod_result * 255, dtype=np.uint8)).resize(im_size).save(save_file_name)
                     pass
 
                 # Print
