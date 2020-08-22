@@ -225,17 +225,28 @@ class RunnerSPE(object):
     pass
 
 
+"""
+model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes"
+from PYG_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
+model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/0/epoch_29.pkl"
+
+result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
+# _data_root_path = "/mnt/4T/Data/SOD"
+_data_root_path = "/media/ubuntu/data1/ALISURE"
+"""
+
+
 if __name__ == '__main__':
-    model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes"
-    from PYG_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
-    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/0/epoch_29.pkl"
+    model_name = "PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes"
+    from PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
+    model_file = "/mnt/4T/ALISURE/GCN/PyTorchGCN/SOD_1/ckpt/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/0/epoch_24.pkl"
 
-    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
-    # _data_root_path = "/mnt/4T/Data/SOD"
-    _data_root_path = "/media/ubuntu/data1/ALISURE"
+    result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result"
+    _data_root_path = "/mnt/4T/Data/SOD"
+    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
