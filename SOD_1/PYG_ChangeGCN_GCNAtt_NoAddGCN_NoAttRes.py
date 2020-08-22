@@ -201,7 +201,7 @@ class MyDataset(Dataset):
             # 超像素
             image_small_data = np.asarray(image.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp)))
             label_for_sp = np.asarray(label.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp))) / 255
-            graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp)
+            graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp, sp_size=self.sp_size)
         else:
             Tools.print('IMAGE ERROR, PASSING {}'.format(image_name))
             graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name = \
@@ -210,10 +210,11 @@ class MyDataset(Dataset):
         # 返回
         return graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name
 
-    def get_sp_info(self, image, label):
+    @staticmethod
+    def get_sp_info(image, label, sp_size):
         # Super Pixel
         #################################################################################
-        deal_super_pixel = DealSuperPixel(image_data=image, label_data=label, super_pixel_size=self.sp_size)
+        deal_super_pixel = DealSuperPixel(image_data=image, label_data=label, super_pixel_size=sp_size)
         segment, sp_adj, pixel_adj, sp_label = deal_super_pixel.run()
         #################################################################################
         # Graph
@@ -563,8 +564,10 @@ class MyGCNNet(nn.Module):
         batched_graph.x = gcn1_feature
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
+        # For Eval
         sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
                                             batched_pixel_graph=batched_pixel_graph)
+        # For Eval
 
         merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
         merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
@@ -575,7 +578,10 @@ class MyGCNNet(nn.Module):
         merge = self.score(merge)
         if x_size is not None:
             merge = F.interpolate(merge, x_size, mode='bilinear', align_corners=True)
-        return gcn2_logits, gcn2_logits_sigmoid, merge, torch.sigmoid(merge)
+            # For Eval
+            sod_gcn2_sigmoid = F.interpolate(sod_gcn2_sigmoid, x_size, mode='bilinear', align_corners=True)
+            # For Eval
+        return gcn2_logits, gcn2_logits_sigmoid, sod_gcn2_sigmoid, merge, torch.sigmoid(merge)
 
     @staticmethod
     def sod_feature(data_where, gcn_feature, batched_pixel_graph):
@@ -906,16 +912,16 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
 
-    # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    _data_root_path = "/mnt/4T/Data/SOD/DUTS"
+    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
-    _num_workers = 10
+    _num_workers = 20
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -931,12 +937,11 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio = 4, 4
-    _name = "PoolNet-{}".format(_is_sgd)
 
-    _root_ckpt_dir = "./ckpt/Temp3/{}".format(_name)
-    Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
-                "has_residual:{} is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
-        _name, _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
+    _root_ckpt_dir = "./ckpt/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
+    Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
+                "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
+        _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
         _has_residual, _is_normalize, _has_bn, _improved, _concat, _is_sgd, _weight_decay))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,

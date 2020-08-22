@@ -201,7 +201,7 @@ class MyDataset(Dataset):
             # 超像素
             image_small_data = np.asarray(image.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp)))
             label_for_sp = np.asarray(label.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp))) / 255
-            graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp)
+            graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp, sp_size=self.sp_size)
         else:
             Tools.print('IMAGE ERROR, PASSING {}'.format(image_name))
             graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name = \
@@ -210,10 +210,11 @@ class MyDataset(Dataset):
         # 返回
         return graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name
 
-    def get_sp_info(self, image, label):
+    @staticmethod
+    def get_sp_info(image, label, sp_size):
         # Super Pixel
         #################################################################################
-        deal_super_pixel = DealSuperPixel(image_data=image, label_data=label, super_pixel_size=self.sp_size)
+        deal_super_pixel = DealSuperPixel(image_data=image, label_data=label, super_pixel_size=sp_size)
         segment, sp_adj, pixel_adj, sp_label = deal_super_pixel.run()
         #################################################################################
         # Graph
@@ -567,8 +568,10 @@ class MyGCNNet(nn.Module):
         batched_graph.x = gcn1_feature
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
+        # For Eval
         sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
                                             batched_pixel_graph=batched_pixel_graph)
+        # For Eval
 
         merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature, x_att=sod_gcn2_sigmoid)  # A + F
         merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature, x_att=sod_gcn2_sigmoid)  # A + F
@@ -579,7 +582,10 @@ class MyGCNNet(nn.Module):
         merge = self.score(merge)
         if x_size is not None:
             merge = F.interpolate(merge, x_size, mode='bilinear', align_corners=True)
-        return gcn2_logits, gcn2_logits_sigmoid, merge, torch.sigmoid(merge)
+            # For Eval
+            sod_gcn2_sigmoid = F.interpolate(sod_gcn2_sigmoid, x_size, mode='bilinear', align_corners=True)
+            # For Eval
+        return gcn2_logits, gcn2_logits_sigmoid, sod_gcn2_sigmoid, merge, torch.sigmoid(merge)
 
     @staticmethod
     def sod_feature(data_where, gcn_feature, batched_pixel_graph):

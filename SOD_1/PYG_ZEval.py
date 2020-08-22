@@ -169,11 +169,11 @@ class RunnerSPE(object):
                 if save_path is not None:
                     image_name = os.path.splitext(os.path.basename(image_names[0]))[0]
 
-                    save_file_name = Tools.new_dir(os.path.join(save_path, "{}_sp.png".format(image_name)))
+                    save_file_name = Tools.new_dir(os.path.join(save_path, "SP", "{}.png".format(image_name)))
                     sp_result = torch.squeeze(sod_gcn2_sigmoid).detach().cpu().numpy()
                     Image.fromarray(np.asarray(sp_result * 255, dtype=np.uint8)).save(save_file_name)
 
-                    save_file_name = Tools.new_dir(os.path.join(save_path, "{}_sod.png".format(image_name)))
+                    save_file_name = Tools.new_dir(os.path.join(save_path, "SOD", "{}.png".format(image_name)))
                     sod_result = torch.squeeze(sod_logits_sigmoid).detach().cpu().numpy()
                     Image.fromarray(np.asarray(sod_result * 255, dtype=np.uint8)).save(save_file_name)
                     pass
@@ -230,20 +230,20 @@ class RunnerSPE(object):
 
 
 if __name__ == '__main__':
+    model_name = "PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes"
+    from PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
+    model_file = "/mnt/4T/ALISURE/GCN/PyTorchGCN/SOD_1/ckpt/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/0/epoch_22.pkl"
 
+    result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result"
     _data_root_path = "/mnt/4T/Data/SOD"
     # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
-
-    model_name = "PYG"
-    result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result"
-
-    _use_gpu = True
 
     # _gpu_id = "0"
     _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
+    _use_gpu = True
     _improved = True
     _has_bn = True
     _has_residual = True
@@ -263,7 +263,7 @@ if __name__ == '__main__':
         img_name_list, lbl_name_list, dataset_name_list = data_set()
         Tools.print("Begin eval {} {}".format(dataset_name_list[0], len(img_name_list)))
 
-        runner.save_result(model_file=None, image_name_list=img_name_list, label_name_list=lbl_name_list,
+        runner.save_result(model_file=model_file, image_name_list=img_name_list, label_name_list=lbl_name_list,
                            save_path="{}/{}/{}".format(result_path, model_name, dataset_name_list[0]))
         pass
     pass

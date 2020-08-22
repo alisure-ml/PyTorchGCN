@@ -570,10 +570,10 @@ class MyGCNNet(nn.Module):
         batched_graph.x = gcn1_feature
         gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
         sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
-        ####### For Eval
+        # For Eval
         sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
                                             batched_pixel_graph=batched_pixel_graph)
-        ####### For Eval
+        # For Eval
 
         merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
         merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
@@ -584,9 +584,9 @@ class MyGCNNet(nn.Module):
         merge = self.score(merge)
         if x_size is not None:
             merge = F.interpolate(merge, x_size, mode='bilinear', align_corners=True)
-            ####### For Eval
+            # For Eval
             sod_gcn2_sigmoid = F.interpolate(sod_gcn2_sigmoid, x_size, mode='bilinear', align_corners=True)
-            ####### For Eval
+            # For Eval
         return gcn2_logits, gcn2_logits_sigmoid, sod_gcn2_sigmoid, merge, torch.sigmoid(merge)
 
     @staticmethod
