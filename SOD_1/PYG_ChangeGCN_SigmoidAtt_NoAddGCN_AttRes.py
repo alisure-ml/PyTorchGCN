@@ -897,6 +897,8 @@ class RunnerSPE(object):
 
 
 """
+2020-08-22 14:09:08 E:23, Train sod-mae-score=0.0104-0.9844 gcn-mae-score=0.0431-0.9199 loss=334.6565(2443.8499+45.1358)
+2020-08-22 14:09:08 E:23, Test  sod-mae-score=0.0398-0.8739 gcn-mae-score=0.0766-0.7471 loss=0.3282(0.1849+0.1432)
 """
 
 
@@ -911,8 +913,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    _gpu_id = "1"
-    # _gpu_id = "2"
+    # _gpu_id = "1"
+    _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
@@ -927,12 +929,11 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio = 4, 4
-    _name = "PoolNet-{}".format(_is_sgd)
 
-    _root_ckpt_dir = "./ckpt/Temp3/{}".format(_name)
-    Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
-                "has_residual:{} is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
-        _name, _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
+    _root_ckpt_dir = "./ckpt/PYG_ChangeGCN_SigmoidAtt_NoAddGCN_AttRes/{}".format(_gpu_id)
+    Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
+                "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
+        _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
         _has_residual, _is_normalize, _has_bn, _improved, _concat, _is_sgd, _weight_decay))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
