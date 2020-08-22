@@ -1,13 +1,8 @@
 import os
-import cv2
-import glob
 import torch
-import random
-import skimage
 import numpy as np
 from PIL import Image
 from SODData import SODData
-from PYG import MyGCNNet, MyDataset
 from alisuretool.Tools import Tools
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
@@ -230,16 +225,16 @@ class RunnerSPE(object):
 
 
 if __name__ == '__main__':
-    model_name = "PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes"
-    from PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
-    model_file = "/mnt/4T/ALISURE/GCN/PyTorchGCN/SOD_1/ckpt/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/0/epoch_22.pkl"
+    model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes"
+    from PYG_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
+    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/0/epoch_29.pkl"
 
-    result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result"
-    _data_root_path = "/mnt/4T/Data/SOD"
-    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
+    # _data_root_path = "/mnt/4T/Data/SOD"
+    _data_root_path = "/media/ubuntu/data1/ALISURE"
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 

@@ -335,15 +335,15 @@ class SAGENet1(nn.Module):
 
 class SAGENet2(nn.Module):
 
-    def __init__(self, in_dim=512, hidden_dims=[512, 512, 512, 512], skip_which=[1, 3],
-                 out_dim=512, sout=1, has_bn=False, normalize=False, residual=False, concat=False):
+    def __init__(self, in_dim=128, hidden_dims=[128, 128, 128, 128], skip_which=[1, 2, 3],
+                 skip_dim=128, sout=1, has_bn=False, normalize=False, residual=False, concat=False):
         super().__init__()
         self.hidden_dims = hidden_dims
         self.normalize = normalize
         self.residual = residual
         self.has_bn = has_bn
         self.concat = concat
-        self.out_num = out_dim
+        self.out_num = len(skip_which) * skip_dim
 
         self.embedding_h = nn.Linear(in_dim, in_dim)
         self.relu = nn.ReLU()
@@ -358,10 +358,13 @@ class SAGENet2(nn.Module):
             pass
 
         # skip
-        self.skip_index = skip_which
-        _cat_dim = np.sum([self.hidden_dims[which-1] for which in self.skip_index])
-        self.skip_linear = nn.Linear(_cat_dim, self.out_num, bias=False)
-        self.skip_linear_bn = nn.BatchNorm1d(self.out_num)
+        self.skip_connect_index = skip_which
+        self.skip_connect_list = nn.ModuleList()
+        self.skip_connect_bn_list = nn.ModuleList()
+        for hidden_dim in [self.hidden_dims[which-1] for which in skip_which]:
+            self.skip_connect_list.append(nn.Linear(hidden_dim, skip_dim, bias=False))
+            self.skip_connect_bn_list.append(nn.BatchNorm1d(skip_dim))
+            pass
 
         self.readout_mlp = nn.Linear(self.out_num, sout, bias=False)
         pass
@@ -386,14 +389,18 @@ class SAGENet2(nn.Module):
             gcn_hidden_nodes_feat.append(hidden_nodes_feat)
             pass
 
-        skip = [gcn_hidden_nodes_feat[index] for index in self.skip_index]
-        skip = torch.cat(skip, dim=1)
+        skip_connect = []
+        for sc, index, bn in zip(self.skip_connect_list, self.skip_connect_index, self.skip_connect_bn_list):
+            # Conv
+            sc_feat = sc(gcn_hidden_nodes_feat[index])
+            if self.has_bn:
+                sc_feat = bn(sc_feat)
+            sc_feat = self.relu(sc_feat)
 
-        sc_feat = self.skip_linear(skip)
-        if self.has_bn:
-            sc_feat = self.skip_linear_bn(sc_feat)
-        out_feat = self.relu(sc_feat)
+            skip_connect.append(sc_feat)
+            pass
 
+        out_feat = torch.cat(skip_connect, dim=1)
         logits = self.readout_mlp(out_feat).view(-1)
         return out_feat, logits, torch.sigmoid(logits)
 
@@ -463,21 +470,28 @@ class VGG16(nn.Module):
 
 class DeepPoolLayer(nn.Module):
 
-    def __init__(self, k, k_out, is_not_last, has_gcn=False):
+    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None):
         super(DeepPoolLayer, self).__init__()
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
-        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
-        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
-        self.conv1 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.pool2 = nn.Conv2d(k, k, 2, padding=0, stride=2, groups=k, bias=False)
+        self.pool4 = nn.Conv2d(k, k, 4, padding=0, stride=4, groups=k, bias=False)
+        self.pool6 = nn.Conv2d(k, k, 6, padding=0, stride=6, groups=k, bias=False)
+        self.pool8 = nn.Conv2d(k, k, 8, padding=0, stride=8, groups=k, bias=False)
+        self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
+            self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
             self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         if self.is_not_last:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
@@ -485,12 +499,36 @@ class DeepPoolLayer(nn.Module):
 
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
-        y1 = self.conv1(self.pool2(x))
-        y2 = self.conv2(self.pool4(x))
-        y3 = self.conv3(self.pool8(x))
-        res = torch.add(x, F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True))
-        res = torch.add(res, F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True))
-        res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
+
+        y1 = self.conv11(self.pool2(x))
+        y2 = self.conv21(self.pool4(x))
+        y3 = self.conv31(self.pool6(x))
+        y4 = self.conv41(self.pool8(x))
+
+        y1 = torch.sigmoid(y1)
+        y2 = torch.sigmoid(y2)
+        y3 = torch.sigmoid(y3)
+        y4 = torch.sigmoid(y4)
+
+        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
+        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
+        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
+        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
+
+        y1 = y1 * x
+        y2 = y2 * x
+        y3 = y3 * x
+        y4 = y4 * x
+
+        y1 = self.conv12(y1)
+        y2 = self.conv22(y2)
+        y3 = self.conv32(y3)
+        y4 = self.conv42(y4)
+
+        res = torch.add(x, y1)
+        res = torch.add(res, y2)
+        res = torch.add(res, y3)
+        res = torch.add(res, y4)
         res = self.relu(res)
 
         if self.is_not_last:
@@ -501,8 +539,9 @@ class DeepPoolLayer(nn.Module):
 
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
-            res = x_gcn * res + res
-            # res = x_gcn * res
+            x_gcn = self.conv_gcn(x_gcn)
+            # res = x_gcn * res + res
+            res = x_gcn * res
             res = self.conv_att(res)
             pass
 
@@ -527,13 +566,13 @@ class MyGCNNet(nn.Module):
         self.model_gnn1 = SAGENet1(in_dim=self.vgg16.out_num2, hidden_dims=[512, 512],
                                    has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
-                                   skip_which=[2, 4], out_dim=512, has_bn=has_bn,
+                                   skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
                                    normalize=normalize, residual=residual, concat=concat)
 
         # DEEP POOL
         deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True)
+        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, 512)
         self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False)
         self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False)
 
@@ -567,8 +606,8 @@ class MyGCNNet(nn.Module):
                                             batched_pixel_graph=batched_pixel_graph)
         # For Eval
 
-        merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_sigmoid)  # A + F
-        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn2_sigmoid)  # A + F
+        merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
+        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
         merge = self.deep_pool2(merge, feature1)  # A + F
         merge = self.deep_pool1(merge)  # A
 
@@ -903,8 +942,6 @@ class RunnerSPE(object):
 
 
 """
-2020-08-22 14:09:08 E:23, Train sod-mae-score=0.0104-0.9844 gcn-mae-score=0.0431-0.9199 loss=334.6565(2443.8499+45.1358)
-2020-08-22 14:09:08 E:23, Test  sod-mae-score=0.0398-0.8739 gcn-mae-score=0.0766-0.7471 loss=0.3282(0.1849+0.1432)
 """
 
 
@@ -936,7 +973,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_ChangeGCN_SigmoidAtt_NoAddGCN_AttRes/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

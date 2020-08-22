@@ -706,7 +706,7 @@ class RunnerSPE(object):
             batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
             batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
 
-            gcn_logits, gcn_logits_sigmoid, sod_logits, sod_logits_sigmoid = self.model.forward(
+            gcn_logits, gcn_logits_sigmoid, _, sod_logits, sod_logits_sigmoid = self.model.forward(
                 images, batched_graph, batched_pixel_graph)
 
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
@@ -798,8 +798,8 @@ class RunnerSPE(object):
                 batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
                 batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
 
-                _, gcn_logits_sigmoid, _, sod_logits_sigmoid = self.model.forward(images, batched_graph,
-                                                                                  batched_pixel_graph)
+                _, gcn_logits_sigmoid, _, _, sod_logits_sigmoid = self.model.forward(
+                    images, batched_graph, batched_pixel_graph)
 
                 loss1 = self.loss_bce(gcn_logits_sigmoid, labels)
                 loss2 = self.loss_bce(sod_logits_sigmoid, labels_sod)

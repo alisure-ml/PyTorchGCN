@@ -710,7 +710,7 @@ class RunnerSPE(object):
             batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
             batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
 
-            gcn_logits, gcn_logits_sigmoid, sod_logits, sod_logits_sigmoid = self.model.forward(
+            gcn_logits, gcn_logits_sigmoid, _, sod_logits, sod_logits_sigmoid = self.model.forward(
                 images, batched_graph, batched_pixel_graph)
 
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
@@ -802,8 +802,8 @@ class RunnerSPE(object):
                 batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
                 batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
 
-                _, gcn_logits_sigmoid, _, sod_logits_sigmoid = self.model.forward(images, batched_graph,
-                                                                                  batched_pixel_graph)
+                _, gcn_logits_sigmoid, _, _, sod_logits_sigmoid = self.model.forward(
+                    images, batched_graph, batched_pixel_graph)
 
                 loss1 = self.loss_bce(gcn_logits_sigmoid, labels)
                 loss2 = self.loss_bce(sod_logits_sigmoid, labels_sod)
@@ -912,6 +912,10 @@ class RunnerSPE(object):
 
 
 """
+2020-08-22 13:36:12 E:23, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.0437-0.9172 loss=315.4051(2235.9344+45.9059)
+2020-08-22 13:36:12 E:23, Test  sod-mae-score=0.0378-0.8823 gcn-mae-score=0.0749-0.7486 loss=0.3224(0.1781+0.1443)
+2020-08-22 16:47:28 E:29, Train sod-mae-score=0.0084-0.9870 gcn-mae-score=0.0385-0.9236 loss=285.2419(2008.3308+42.2044)
+2020-08-22 16:47:28 E:29, Test  sod-mae-score=0.0375-0.8818 gcn-mae-score=0.0728-0.7472 loss=0.3440(0.1827+0.1613)
 """
 
 
@@ -925,8 +929,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -942,12 +946,11 @@ if __name__ == '__main__':
     _concat = True
 
     _sp_size, _down_ratio = 4, 4
-    _name = "PoolNet-{}".format(_is_sgd)
 
-    _root_ckpt_dir = "./ckpt/Temp3/{}".format(_name)
-    Tools.print("name:{} epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} "
-                "has_residual:{} is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
-        _name, _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
+    Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
+                "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
+        _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
         _has_residual, _is_normalize, _has_bn, _improved, _concat, _is_sgd, _weight_decay))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
