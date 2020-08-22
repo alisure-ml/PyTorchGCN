@@ -947,7 +947,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/2{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

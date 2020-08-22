@@ -1,5 +1,4 @@
 import os
-import cv2
 import glob
 import torch
 import random
@@ -13,8 +12,9 @@ from alisuretool.Tools import Tools
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
-from torchvision.models import ResNet, Bottleneck
-from torch_geometric.nn import GCNConv, global_mean_pool, SAGEConv
+from torchvision.models import resnet
+from torchvision.models._utils import IntermediateLayerGetter
+from torch_geometric.nn import global_mean_pool, SAGEConv
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -396,85 +396,6 @@ class SAGENet2(nn.Module):
     pass
 
 
-class MyResNet(ResNet):
-
-    def __init__(self, block, layers):
-        self.inplanes = 64
-        super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.bn1 = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU(inplace=True)
-        # self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1, ceil_mode=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0, ceil_mode=True)
-
-        self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=1, dilation=2)
-
-        for i in self.bn1.parameters():
-            i.requires_grad = False
-
-        self.weight_init(self.modules())
-
-        self.out_num1 = 128
-        self.out_num2 = 256
-        self.out_num3 = 512
-        self.out_num4 = 1024
-        self.out_num5 = 2048
-        pass
-
-    @staticmethod
-    def weight_init(modules):
-        for m in modules:
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, 0.01)
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            pass
-        pass
-
-    def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
-        downsample = None
-        if stride != 1 or self.inplanes != planes * block.expansion or dilation == 2 or dilation == 4:
-            downsample = nn.Sequential(nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1,
-                                                 stride=stride, bias=False), nn.BatchNorm2d(planes * block.expansion))
-            for i in downsample._modules['1'].parameters():
-                i.requires_grad = False
-        layers = [block(self.inplanes, planes, stride, dilation=dilation, downsample=downsample)]
-        self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes, dilation=dilation))
-
-        return nn.Sequential(*layers)
-
-    def forward(self, x):
-        tmp_x = []
-        x = self.conv1(x)
-        x = self.bn1(x)
-        x = self.relu(x)
-        tmp_x.append(x)
-        x = self.maxpool(x)
-
-        x = self.layer1(x)
-        tmp_x.append(x)
-        x = self.layer2(x)
-        tmp_x.append(x)
-        x = self.layer3(x)
-        tmp_x.append(x)
-        x = self.layer4(x)
-        tmp_x.append(x)
-
-        return tmp_x
-
-    def load_pretrained_model(self, pretrained_model="./pretrained/resnet50_caffe.pth"):
-        self.load_state_dict(torch.load(pretrained_model), strict=False)
-        pass
-    pass
-
-
 class DeepPoolLayer(nn.Module):
 
     def __init__(self, k, k_out, need_x2, need_fuse, has_gcn=False, gcn_in=None):
@@ -538,11 +459,7 @@ class MyGCNNet(nn.Module):
     def __init__(self, has_bn=False, normalize=False, residual=False, concat=True):
         super(MyGCNNet, self).__init__()
         # BASE
-        self.resnet = ResNet(Bottleneck, [3, 4, 6, 3])
-        backbone = resnet.__dict__["resnet50"](pretrained=is_supervised_pre_train,
-                                               replace_stride_with_dilation=[False, False, True])
-        if is_unsupervised_pre_train:
-            backbone = self.load_unsupervised_pre_train(backbone, unsupervised_pre_train_path)
+        backbone = resnet.__dict__["resnet50"](pretrained=True, replace_stride_with_dilation=[False, False, True])
         return_layers = {'relu': 'e0', 'layer1': 'e1', 'layer2': 'e2', 'layer3': 'e3', 'layer4': 'e4'}
         self.backbone = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
@@ -555,7 +472,7 @@ class MyGCNNet(nn.Module):
         self.convert5 = nn.Conv2d(2048, 512, 1, 1, bias=False)
 
         # GCN
-        self.model_gnn1 = SAGENet1(in_dim=self.resnet.out_num2, hidden_dims=[512, 512],
+        self.model_gnn1 = SAGENet1(in_dim=256, hidden_dims=[512, 512],
                                    has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
                                    skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
@@ -572,25 +489,23 @@ class MyGCNNet(nn.Module):
         # ScoreLayer
         score = 128
         self.score = nn.Conv2d(score, 1, 1, 1)
-
-        ResNet.weight_init(self.modules())
         pass
 
     def forward(self, x, batched_graph, batched_pixel_graph):
         # BASE
-        feature1, _feature2, feature3, feature4, _feature5 = self.resnet(x)
-        feature1 = self.relu(self.convert1(feature1))
-        feature2 = self.relu(self.convert2(_feature2))
-        feature3 = self.relu(self.convert3(feature3))
-        feature4 = self.relu(self.convert4(feature4))
-        feature5 = self.relu(self.convert5(_feature5))
+        feature = self.backbone(x)
+        feature1 = self.relu(self.convert1(feature["e0"]))
+        feature2 = self.relu(self.convert2(feature["e1"]))
+        feature3 = self.relu(self.convert3(feature["e2"]))
+        feature4 = self.relu(self.convert4(feature["e3"]))
+        feature5 = self.relu(self.convert5(feature["e4"]))
 
         # SIZE
         x_size = x.size()[2:]
 
         # GCN 1
         data_where = batched_pixel_graph.data_where
-        pixel_nodes_feat = _feature2[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
+        pixel_nodes_feat = feature["e1"][data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
         sod_gcn1_feature = self.sod_feature(data_where, gcn1_feature, batched_pixel_graph=batched_pixel_graph)
@@ -655,7 +570,6 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, concat=concat).to(self.device)
-        self.model.resnet.load_pretrained_model(pretrained_model="./pretrained/resnet50_caffe.pth")
 
         if is_sgd:
             self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
@@ -948,16 +862,16 @@ class RunnerSPE(object):
 
 if __name__ == '__main__':
 
-    _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
+    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
-    _num_workers = 20
+    _num_workers = 5
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -974,7 +888,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_Res50_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_ResNet_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
