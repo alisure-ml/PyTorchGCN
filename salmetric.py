@@ -22,9 +22,19 @@ def get_file(mask_path, result_path):
 """
 
 
+"""
+mask_path = "/mnt/4T/Data/SOD/DUTS/DUTS-TE/DUTS-TE-Mask"
+result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/DUTS-TE/SOD"
+
+mask_path = "/media/ubuntu/data1/ALISURE/DUTS/DUTS-TE/DUTS-TE-Mask"
+result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result/PYG_GCNAtt_NoAddGCN_NoAttRes/DUTS-TE/SOD"
+"""
+
+
 if __name__ == '__main__':
-    mask_path = "/mnt/4T/Data/SOD/DUTS/DUTS-TE/DUTS-TE-Mask"
-    result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/DUTS-TE/SOD"
+    mask_path = "/media/ubuntu/data1/ALISURE/DUTS/DUTS-TE/DUTS-TE-Mask"
+    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result/PYG_GCNAtt_NoAddGCN_NoAttRes/DUTS-TE/SOD"
+
     _result_files = get_file(mask_path, result_path)
     _txt = "\n".join(_result_files)
     Tools.write_to_txt("salmetric.txt", _txt, reset=True)

@@ -226,24 +226,33 @@ class RunnerSPE(object):
 
 
 """
+DUTS-TR sod-mae-score=0.0083-0.9872 gcn-mae-score=0.0378-0.9249
+DUTS-TE sod-mae-score=0.0376-0.8817 gcn-mae-score=0.0729-0.7472
 model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes"
 from PYG_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
 model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/0/epoch_29.pkl"
 
 result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
-# _data_root_path = "/mnt/4T/Data/SOD"
 _data_root_path = "/media/ubuntu/data1/ALISURE"
+
+
+model_name = "PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes"
+from PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
+model_file = "/mnt/4T/ALISURE/GCN/PyTorchGCN/SOD_1/ckpt/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/0/epoch_24.pkl"
+
+result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result"
+_data_root_path = "/mnt/4T/Data/SOD"
 """
 
 
 if __name__ == '__main__':
-    model_name = "PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes"
-    from PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
-    model_file = "/mnt/4T/ALISURE/GCN/PyTorchGCN/SOD_1/ckpt/PYG_ChangeGCN_GCNAtt_NoAddGCN_NoAttRes/0/epoch_24.pkl"
+    model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes"
+    from PYG_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
+    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/0/epoch_29.pkl"
 
-    result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result"
-    _data_root_path = "/mnt/4T/Data/SOD"
-    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
+    # _data_root_path = "/mnt/4T/Data/SOD"
+    _data_root_path = "/media/ubuntu/data1/ALISURE"
 
     # _gpu_id = "0"
     _gpu_id = "1"
