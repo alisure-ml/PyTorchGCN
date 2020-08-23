@@ -286,10 +286,9 @@ class SAGENet1(nn.Module):
         self.concat = concat
         self.out_num = self.hidden_dims[-1]
 
-        self.embedding_h = nn.Linear(in_dim, self.hidden_dims[0])
         self.relu = nn.ReLU()
 
-        _in_dim = self.hidden_dims[0]
+        _in_dim = in_dim
         self.gcn_list = nn.ModuleList()
         self.bn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims:
@@ -300,8 +299,7 @@ class SAGENet1(nn.Module):
         pass
 
     def forward(self, data):
-        hidden_nodes_feat = self.embedding_h(data.x)
-        # hidden_nodes_feat = data.x
+        hidden_nodes_feat = data.x
         for gcn, bn in zip(self.gcn_list, self.bn_list):
             h_in = hidden_nodes_feat
 
@@ -332,7 +330,7 @@ class SAGENet2(nn.Module):
         self.residual = residual
         self.has_bn = has_bn
         self.concat = concat
-        self.out_num = len(skip_which) * skip_dim
+        self.out_num = skip_dim
 
         self.embedding_h = nn.Linear(in_dim, in_dim)
         self.relu = nn.ReLU()
@@ -389,9 +387,11 @@ class SAGENet2(nn.Module):
             skip_connect.append(sc_feat)
             pass
 
-        out_feat = torch.cat(skip_connect, dim=1)
+        out_feat = skip_connect[0]
+        for skip in skip_connect[1:]:
+            out_feat = out_feat + skip
         logits = self.readout_mlp(out_feat).view(-1)
-        return out_feat, logits, torch.sigmoid(logits)
+        return skip_connect, out_feat, logits, torch.sigmoid(logits)
 
     pass
 
@@ -465,24 +465,24 @@ class MyGCNNet(nn.Module):
 
         # Convert
         self.relu = nn.ReLU(inplace=True)
-        self.convert1 = nn.Conv2d(64, 128, 1, 1, bias=False)
-        self.convert2 = nn.Conv2d(256, 256, 1, 1, bias=False)
-        self.convert3 = nn.Conv2d(512, 256, 1, 1, bias=False)
-        self.convert4 = nn.Conv2d(1024, 512, 1, 1, bias=False)
-        self.convert5 = nn.Conv2d(2048, 512, 1, 1, bias=False)
+        self.convert5 = nn.Conv2d(2048, 512, 1, 1, bias=False)  # 25
+        self.convert4 = nn.Conv2d(1024, 512, 1, 1, bias=False)  # 25
+        self.convert3 = nn.Conv2d(512, 256, 1, 1, bias=False)  # 50
+        self.convert2 = nn.Conv2d(256, 256, 1, 1, bias=False)  # 100
+        self.convert1 = nn.Conv2d(64, 128, 1, 1, bias=False)  # 200
 
         # GCN
-        self.model_gnn1 = SAGENet1(in_dim=256, hidden_dims=[512, 512],
+        self.model_gnn1 = SAGENet1(in_dim=256, hidden_dims=[256, 256],
                                    has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
-                                   skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
+                                   skip_which=[2, 4], skip_dim=512, has_bn=has_bn,
                                    normalize=normalize, residual=residual, concat=concat)
 
         # DEEP POOL
         deep_pool = [[512, 512, 256, 256, 128], [512, 256, 256, 128, 128]]
-        self.deep_pool5 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], False, True, False)
+        self.deep_pool5 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, True, 512)
         self.deep_pool4 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, True, 512)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True, True, 512)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True, True, 256)
         self.deep_pool2 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], True, True, False)
         self.deep_pool1 = DeepPoolLayer(deep_pool[0][4], deep_pool[1][4], False, False, False)
 
@@ -494,11 +494,11 @@ class MyGCNNet(nn.Module):
     def forward(self, x, batched_graph, batched_pixel_graph):
         # BASE
         feature = self.backbone(x)
-        feature1 = self.relu(self.convert1(feature["e0"]))
-        feature2 = self.relu(self.convert2(feature["e1"]))
-        feature3 = self.relu(self.convert3(feature["e2"]))
-        feature4 = self.relu(self.convert4(feature["e3"]))
-        feature5 = self.relu(self.convert5(feature["e4"]))
+        feature1 = self.relu(self.convert1(feature["e0"]))  # 128, 200
+        feature2 = self.relu(self.convert2(feature["e1"]))  # 256, 100
+        feature3 = self.relu(self.convert3(feature["e2"]))  # 256, 50
+        feature4 = self.relu(self.convert4(feature["e3"]))  # 512, 25
+        feature5 = self.relu(self.convert5(feature["e4"]))  # 512, 25
 
         # SIZE
         x_size = x.size()[2:]
@@ -512,15 +512,16 @@ class MyGCNNet(nn.Module):
 
         # GCN 2
         batched_graph.x = gcn1_feature
-        gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
-        sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
+        skip_connect, gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
+        sod_gcn2_feature1 = self.sod_feature(data_where, skip_connect[0], batched_pixel_graph=batched_pixel_graph)
+        sod_gcn2_feature2 = self.sod_feature(data_where, skip_connect[1], batched_pixel_graph=batched_pixel_graph)
         # For Eval
         sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
                                             batched_pixel_graph=batched_pixel_graph)
         # For Eval
 
-        merge = self.deep_pool5(feature5, feature4)  # A + F
-        merge = self.deep_pool4(merge, feature3, x_gcn=sod_gcn2_feature)  # A + F
+        merge = self.deep_pool5(feature5, feature4, x_gcn=sod_gcn2_feature2)  # A + F
+        merge = self.deep_pool4(merge, feature3, x_gcn=sod_gcn2_feature1)  # A + F
         merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
         merge = self.deep_pool2(merge, feature1)  # A + F
         merge = self.deep_pool1(merge)  # A
@@ -860,15 +861,16 @@ class RunnerSPE(object):
 if __name__ == '__main__':
 
     # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    _data_root_path = "/mnt/4T/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
     _num_workers = 5
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
