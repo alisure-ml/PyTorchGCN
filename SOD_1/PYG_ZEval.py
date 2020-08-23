@@ -242,22 +242,25 @@ model_file = "/mnt/4T/ALISURE/GCN/PyTorchGCN/SOD_1/ckpt/PYG_ChangeGCN_GCNAtt_NoA
 
 result_path = "/mnt/4T/ALISURE/GCN/PyTorchGCN_Result"
 _data_root_path = "/mnt/4T/Data/SOD"
+
+DUTS-TE sod-mae-score=0.0367-0.8845 gcn-mae-score=0.0745-0.7489
+DUTS-TR sod-mae-score=0.0088-0.9868 gcn-mae-score=0.0440-0.9183
+model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool"
+from PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool import MyGCNNet, MyDataset
+model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/2/epoch_28.pkl"
 """
 
 
 if __name__ == '__main__':
-    model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes"
-    from PYG_GCNAtt_NoAddGCN_NoAttRes import MyGCNNet, MyDataset
-    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/0/epoch_29.pkl"
+    model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool"
+    from PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool import MyGCNNet, MyDataset
+    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/2/epoch_28.pkl"
 
     result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
     # _data_root_path = "/mnt/4T/Data/SOD"
     _data_root_path = "/media/ubuntu/data1/ALISURE"
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
-    # _gpu_id = "2"
-    # _gpu_id = "3"
+    _gpu_id = "2"
 
     _use_gpu = True
     _improved = True
