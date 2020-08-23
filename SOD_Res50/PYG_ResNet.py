@@ -31,55 +31,6 @@ def gpu_setup(use_gpu, gpu_id):
     return device
 
 
-class DealSuperPixel(object):
-
-    def __init__(self, image_data, label_data, super_pixel_size=14, slic_sigma=1, slic_max_iter=5):
-        image_size = image_data.shape[0: 2]
-        self.super_pixel_num = (image_size[0] * image_size[1]) // (super_pixel_size * super_pixel_size)
-        self.image_data = image_data
-        self.label_data = label_data
-        try:
-            self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                             sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
-        except TypeError:
-            self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                             sigma=slic_sigma, max_iter=slic_max_iter)
-            pass
-
-        _measure_region_props = skimage.measure.regionprops(self.segment + 1)
-        self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
-        pass
-
-    def run(self):
-        edge_index, sp_label, pixel_adj = [], [], []
-        for i in range(self.segment.max() + 1):
-            where = self.segment == i
-            # 计算标签
-            label = np.mean(self.label_data[where])
-            sp_label.append(label)
-
-            # 计算邻接矩阵
-            _now_adj = skimage.morphology.dilation(where, selem=skimage.morphology.square(3))
-            edge_index.extend([[i, sp_id] for sp_id in np.unique(self.segment[_now_adj]) if sp_id != i])
-
-            # 计算单个超像素中的邻接矩阵
-            _now_where = self.region_props[i][1]
-            pixel_data_where = np.concatenate([[[0]] * len(_now_where), _now_where], axis=-1)
-            _a = np.tile([_now_where], (len(_now_where), 1, 1))
-            _dis = np.sum(np.power(_a - np.transpose(_a, (1, 0, 2)), 2), axis=-1)
-            _dis[_dis == 0] = 111
-            pixel_edge_index = np.argwhere(_dis <= 2)
-            pixel_edge_w = np.ones(len(pixel_edge_index))
-            pixel_adj.append([pixel_data_where, pixel_edge_index, pixel_edge_w, label])
-            pass
-
-        sp_adj = np.asarray(edge_index)
-        sp_label = np.asarray(sp_label)
-        return self.segment, sp_adj, pixel_adj, sp_label
-
-    pass
-
-
 class FixedResize(object):
 
     def __init__(self, size):
@@ -190,61 +141,22 @@ class MyDataset(Dataset):
             # 超像素
             image_small_data = np.asarray(image.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp)))
             label_for_sp = np.asarray(label.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp))) / 255
-            graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp, sp_size=self.sp_size)
         else:
             Tools.print('IMAGE ERROR, PASSING {}'.format(image_name))
             graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name = \
                 self.__getitem__(np.random.randint(0, len(self.image_name_list)))
             pass
         # 返回
-        return graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name
-
-    @staticmethod
-    def get_sp_info(image, label, sp_size):
-        # Super Pixel
-        #################################################################################
-        deal_super_pixel = DealSuperPixel(image_data=image, label_data=label, super_pixel_size=sp_size)
-        segment, sp_adj, pixel_adj, sp_label = deal_super_pixel.run()
-        #################################################################################
-        # Graph
-        #################################################################################
-        graph = Data(edge_index=torch.from_numpy(np.transpose(sp_adj, axes=(1, 0))),
-                     num_nodes=len(pixel_adj), y=torch.from_numpy(sp_label).float(), num_sp=len(pixel_adj))
-        #################################################################################
-        # Small Graph
-        #################################################################################
-        pixel_graph = []
-        for super_pixel in pixel_adj:
-            small_graph = Data(edge_index=torch.from_numpy(np.transpose(super_pixel[1], axes=(1, 0))),
-                               data_where=torch.from_numpy(super_pixel[0]).long(),
-                               num_nodes=len(super_pixel[0]), y=torch.tensor([super_pixel[3]]),
-                               edge_w=torch.from_numpy(super_pixel[2]).unsqueeze(1).float())
-            pixel_graph.append(small_graph)
-            pass
-        #################################################################################
-        return graph, pixel_graph, segment
+        return img_data, label_for_sp, label_for_sod, image_small_data, image_name
 
     @staticmethod
     def collate_fn(samples):
-        graphs, pixel_graphs, images, labels_sp, labels_sod, segments, images_small, image_name = map(list,
-                                                                                                      zip(*samples))
+        images, labels_sp, labels_sod, images_small, image_name = map(list, zip(*samples))
 
         images = torch.cat(images)
         images_small = torch.tensor(images_small)
 
-        # 超像素图
-        batched_graph = Batch.from_data_list(graphs)
-
-        # 像素图
-        _pixel_graphs = []
-        for super_pixel_i, pixel_graph in enumerate(pixel_graphs):
-            for now_graph in pixel_graph:
-                now_graph.data_where[:, 0] = super_pixel_i
-                _pixel_graphs.append(now_graph)
-            pass
-        batched_pixel_graph = Batch.from_data_list(_pixel_graphs)
-
-        return images, labels_sp, labels_sod, batched_graph, batched_pixel_graph, segments, images_small, image_name
+        return images, labels_sp, labels_sod, images_small, image_name
 
     pass
 
@@ -398,11 +310,10 @@ class SAGENet2(nn.Module):
 
 class DeepPoolLayer(nn.Module):
 
-    def __init__(self, k, k_out, need_x2, need_fuse, has_gcn=False, gcn_in=None):
+    def __init__(self, k, k_out, need_x2, need_fuse):
         super(DeepPoolLayer, self).__init__()
         self.need_x2 = need_x2
         self.need_fuse = need_fuse
-        self.has_gcn = has_gcn
 
         self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
         self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
@@ -413,9 +324,6 @@ class DeepPoolLayer(nn.Module):
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
-        if self.has_gcn:
-            self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
-            self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         if self.need_fuse:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         pass
@@ -436,19 +344,10 @@ class DeepPoolLayer(nn.Module):
 
         res = self.conv_sum(res)
 
-        if self.has_gcn:
-            x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
-            x_gcn = self.conv_gcn(x_gcn)
-            # res = x_gcn * res + res
-            res = x_gcn * res
-            res = self.conv_att(res)
-            pass
-
         if self.need_fuse:
             res = torch.add(res, x2)
             res = self.conv_sum_c(res)
             pass
-
         return res
 
     pass
@@ -456,7 +355,7 @@ class DeepPoolLayer(nn.Module):
 
 class MyGCNNet(nn.Module):
 
-    def __init__(self, has_bn=False, normalize=False, residual=False, concat=True):
+    def __init__(self):
         super(MyGCNNet, self).__init__()
         # BASE
         backbone = resnet.__dict__["resnet50"](pretrained=True, replace_stride_with_dilation=[False, False, True])
@@ -471,27 +370,20 @@ class MyGCNNet(nn.Module):
         self.convert2 = nn.Conv2d(256, 256, 1, 1, bias=False)  # 100
         self.convert1 = nn.Conv2d(64, 128, 1, 1, bias=False)  # 200
 
-        # GCN
-        self.model_gnn1 = SAGENet1(in_dim=256, hidden_dims=[256, 256],
-                                   has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
-        self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
-                                   skip_which=[2, 4], skip_dim=512, has_bn=has_bn,
-                                   normalize=normalize, residual=residual, concat=concat)
-
         # DEEP POOL
         deep_pool = [[512, 512, 256, 256, 128], [512, 256, 256, 128, 128]]
-        self.deep_pool5 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, True, 512)
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, True, 512)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True, True, 256)
-        self.deep_pool2 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], True, True, False)
-        self.deep_pool1 = DeepPoolLayer(deep_pool[0][4], deep_pool[1][4], False, False, False)
+        self.deep_pool5 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True)
+        self.deep_pool4 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True)
+        self.deep_pool2 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], True, True)
+        self.deep_pool1 = DeepPoolLayer(deep_pool[0][4], deep_pool[1][4], False, False)
 
         # ScoreLayer
         score = 128
         self.score = nn.Conv2d(score, 1, 1, 1)
         pass
 
-    def forward(self, x, batched_graph, batched_pixel_graph):
+    def forward(self, x):
         # BASE
         feature = self.backbone(x)
         feature1 = self.relu(self.convert1(feature["e0"]))  # 128, 200
@@ -503,26 +395,9 @@ class MyGCNNet(nn.Module):
         # SIZE
         x_size = x.size()[2:]
 
-        # GCN 1
-        data_where = batched_pixel_graph.data_where
-        pixel_nodes_feat = feature["e1"][data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
-        batched_pixel_graph.x = pixel_nodes_feat
-        gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
-        sod_gcn1_feature = self.sod_feature(data_where, gcn1_feature, batched_pixel_graph=batched_pixel_graph)
-
-        # GCN 2
-        batched_graph.x = gcn1_feature
-        skip_connect, gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
-        sod_gcn2_feature1 = self.sod_feature(data_where, skip_connect[0], batched_pixel_graph=batched_pixel_graph)
-        sod_gcn2_feature2 = self.sod_feature(data_where, skip_connect[1], batched_pixel_graph=batched_pixel_graph)
-        # For Eval
-        sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
-                                            batched_pixel_graph=batched_pixel_graph)
-        # For Eval
-
-        merge = self.deep_pool5(feature5, feature4, x_gcn=sod_gcn2_feature2)  # A + F
-        merge = self.deep_pool4(merge, feature3, x_gcn=sod_gcn2_feature1)  # A + F
-        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
+        merge = self.deep_pool5(feature5, feature4)  # A + F
+        merge = self.deep_pool4(merge, feature3)  # A + F
+        merge = self.deep_pool3(merge, feature2)  # A + F
         merge = self.deep_pool2(merge, feature1)  # A + F
         merge = self.deep_pool1(merge)  # A
 
@@ -530,21 +405,7 @@ class MyGCNNet(nn.Module):
         merge = self.score(merge)
         if x_size is not None:
             merge = F.interpolate(merge, x_size, mode='bilinear', align_corners=True)
-            # For Eval
-            sod_gcn2_sigmoid = F.interpolate(sod_gcn2_sigmoid, x_size, mode='bilinear', align_corners=True)
-            # For Eval
-        return gcn2_logits, gcn2_logits_sigmoid, sod_gcn2_sigmoid, merge, torch.sigmoid(merge)
-
-    @staticmethod
-    def sod_feature(data_where, gcn_feature, batched_pixel_graph):
-        # 构造特征
-        _shape = torch.max(data_where, dim=0)[0] + 1
-        _size = (_shape[0], gcn_feature.shape[-1], _shape[1], _shape[2])
-        _gcn_feature_for_sod = gcn_feature[batched_pixel_graph.batch]
-
-        sod_gcn_feature = torch.Tensor(size=_size).to(gcn_feature.device)
-        sod_gcn_feature[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]] = _gcn_feature_for_sod
-        return sod_gcn_feature
+        return merge, torch.sigmoid(merge)
 
     pass
 
@@ -553,7 +414,7 @@ class RunnerSPE(object):
 
     def __init__(self, data_root_path, down_ratio=4, sp_size=4, train_print_freq=100, test_print_freq=50,
                  root_ckpt_dir="./ckpt2/norm3", lr=None, num_workers=8, use_gpu=True, gpu_id="1",
-                 has_bn=True, normalize=True, residual=False, concat=True, weight_decay=0.0, is_sgd=False):
+                 weight_decay=0.0, is_sgd=False):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
 
@@ -570,7 +431,7 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=1, shuffle=False,
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, concat=concat).to(self.device)
+        self.model = MyGCNNet().to(self.device)
 
         if is_sgd:
             self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
@@ -612,17 +473,14 @@ class RunnerSPE(object):
             self._lr(epoch)
             Tools.print('Epoch:{:02d},lr={:.4f}'.format(epoch, self.optimizer.param_groups[0]['lr']))
 
-            (train_loss, train_loss1, train_loss2,
-             train_mae, train_score, train_mae2, train_score2) = self._train_epoch()
+            train_loss, train_mae, train_score = self._train_epoch()
             self._save_checkpoint(self.model, self.root_ckpt_dir, epoch)
-            test_loss, test_loss1, test_loss2, test_mae, test_score, test_mae2, test_score2 = self.test()
+            test_loss, test_mae, test_score = self.test()
 
-            Tools.print('E:{:2d}, Train sod-mae-score={:.4f}-{:.4f} '
-                        'gcn-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-                epoch, train_mae, train_score, train_mae2, train_score2, train_loss, train_loss1, train_loss2))
-            Tools.print('E:{:2d}, Test  sod-mae-score={:.4f}-{:.4f} '
-                        'gcn-mae-score={:.4f}-{:.4f} loss={:.4f}({:.4f}+{:.4f})'.format(
-                epoch, test_mae, test_score, test_mae2, test_score2, test_loss, test_loss1, test_loss2))
+            Tools.print('E:{:2d}, Train sod-mae-score={:.4f}-{:.4f} loss={:.4f}'.format(epoch, train_mae,
+                                                                                        train_score, train_loss))
+            Tools.print('E:{:2d}, Test  sod-mae-score={:.4f}-{:.4f} loss={:.4f}'.format(epoch, test_mae,
+                                                                                        test_score, test_loss))
             pass
         pass
 
@@ -631,35 +489,22 @@ class RunnerSPE(object):
 
         # 统计
         th_num = 25
-        epoch_loss, epoch_loss1, epoch_loss2, nb_data = 0, 0, 0, 0
+        epoch_loss, nb_data = 0, 0
         epoch_mae, epoch_prec, epoch_recall = 0.0, np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
-        epoch_mae2, epoch_prec2, epoch_recall2 = 0.0, np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
 
         # Run
         iter_size = 10
         self.model.zero_grad()
         tr_num = len(self.train_loader)
-        for i, (images, _, labels_sod, batched_graph,
-                batched_pixel_graph, segments, _, _) in enumerate(self.train_loader):
+        for i, (images, _, labels_sod, _, _) in enumerate(self.train_loader):
             # Data
             images = images.float().to(self.device)
-            labels = batched_graph.y.to(self.device)
             labels_sod = torch.unsqueeze(torch.Tensor(labels_sod), dim=1).to(self.device)
-            batched_graph.batch = batched_graph.batch.to(self.device)
-            batched_graph.edge_index = batched_graph.edge_index.to(self.device)
 
-            batched_pixel_graph.batch = batched_pixel_graph.batch.to(self.device)
-            batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
-            batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
-
-            gcn_logits, gcn_logits_sigmoid, _, sod_logits, sod_logits_sigmoid = self.model.forward(
-                images, batched_graph, batched_pixel_graph)
+            sod_logits, sod_logits_sigmoid = self.model.forward(images)
 
             loss_fuse1 = F.binary_cross_entropy_with_logits(sod_logits, labels_sod, reduction='sum')
-            loss_fuse2 = F.binary_cross_entropy_with_logits(gcn_logits, labels, reduction='sum')
-            # loss = (loss_fuse1 + loss_fuse2) / iter_size
-            loss = loss_fuse1 / iter_size + 2 * loss_fuse2
-            # loss = loss_fuse1 / iter_size
+            loss = loss_fuse1 / iter_size
 
             loss.backward()
 
@@ -668,16 +513,12 @@ class RunnerSPE(object):
                 self.optimizer.zero_grad()
                 pass
 
-            labels_val = labels.cpu().detach().numpy()
             labels_sod_val = labels_sod.cpu().detach().numpy()
-            gcn_logits_sigmoid_val = gcn_logits_sigmoid.cpu().detach().numpy()
             sod_logits_sigmoid_val = sod_logits_sigmoid.cpu().detach().numpy()
 
             # Stat
             nb_data += images.size(0)
             epoch_loss += loss.detach().item()
-            epoch_loss1 += loss_fuse1.detach().item()
-            epoch_loss2 += loss_fuse2.detach().item()
 
             # cal 1
             mae = self._eval_mae(sod_logits_sigmoid_val, labels_sod_val)
@@ -686,32 +527,19 @@ class RunnerSPE(object):
             epoch_prec += prec
             epoch_recall += recall
 
-            # cal 2
-            mae2 = self._eval_mae(gcn_logits_sigmoid_val, labels_val)
-            prec2, recall2 = self._eval_pr(gcn_logits_sigmoid_val, labels_val, th_num)
-            epoch_mae2 += mae2
-            epoch_prec2 += prec2
-            epoch_recall2 += recall2
-
             # Print
             if i % self.train_print_freq == 0:
-                Tools.print("{:4d}-{:4d} loss={:.4f}({:.4f}+{:.4f})-{:.4f}({:.4f}+{:.4f}) "
-                            "sod-mse={:.4f}({:.4f}) gcn-mse={:.4f}({:.4f})".format(
-                    i, tr_num, loss.detach().item(), loss_fuse1.detach().item(), loss_fuse2.detach().item(),
-                    epoch_loss / (i + 1), epoch_loss1 / (i + 1), epoch_loss2 / (i + 1),
-                    mae, epoch_mae / (i + 1), mae2, epoch_mae2 / nb_data))
+                Tools.print("{:4d}-{:4d} loss={:.4f}({:.4f}) sod-mse={:.4f}({:.4f})".format(
+                    i, tr_num, loss.detach().item(), epoch_loss / (i + 1), mae, epoch_mae / (i + 1)))
                 pass
             pass
 
         # 结果
-        avg_loss, avg_loss1, avg_loss2 = epoch_loss / tr_num, epoch_loss1 / tr_num, epoch_loss2 / tr_num
-
+        avg_loss = epoch_loss / tr_num
         avg_mae, avg_prec, avg_recall = epoch_mae / tr_num, epoch_prec / tr_num, epoch_recall / tr_num
         score = (1 + 0.3) * avg_prec * avg_recall / (0.3 * avg_prec + avg_recall)
-        avg_mae2, avg_prec2, avg_recall2 = epoch_mae2/nb_data, epoch_prec2/nb_data, epoch_recall2/nb_data
-        score2 = (1 + 0.3) * avg_prec2 * avg_recall2 / (0.3 * avg_prec2 + avg_recall2)
 
-        return avg_loss, avg_loss1, avg_loss2, avg_mae, score.max(), avg_mae2, score2.max()
+        return avg_loss, avg_mae, score.max()
 
     def test(self, model_file=None, is_train_loader=False):
         if model_file:
@@ -723,44 +551,28 @@ class RunnerSPE(object):
         th_num = 25
 
         # 统计
-        epoch_test_loss, epoch_test_loss1, epoch_test_loss2, nb_data = 0, 0, 0, 0
-        epoch_test_mae, epoch_test_mae2 = 0.0, 0.0
+        epoch_test_loss, nb_data = 0, 0
+        epoch_test_mae = 0.0
         epoch_test_prec, epoch_test_recall = np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
-        epoch_test_prec2, epoch_test_recall2 = np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
 
         loader = self.train_loader if is_train_loader else self.test_loader
         tr_num = len(loader)
         with torch.no_grad():
-            for i, (images, _, labels_sod,
-                    batched_graph, batched_pixel_graph, segments, _, _) in enumerate(loader):
+            for i, (images, _, labels_sod, _, _) in enumerate(loader):
                 # Data
                 images = images.float().to(self.device)
-                labels = batched_graph.y.to(self.device)
                 labels_sod = torch.unsqueeze(torch.Tensor(labels_sod), dim=1).to(self.device)
-                batched_graph.batch = batched_graph.batch.to(self.device)
-                batched_graph.edge_index = batched_graph.edge_index.to(self.device)
 
-                batched_pixel_graph.batch = batched_pixel_graph.batch.to(self.device)
-                batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
-                batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
+                _, sod_logits_sigmoid = self.model.forward(images)
 
-                _, gcn_logits_sigmoid, _, _, sod_logits_sigmoid = self.model.forward(
-                    images, batched_graph, batched_pixel_graph)
+                loss = self.loss_bce(sod_logits_sigmoid, labels_sod)
 
-                loss1 = self.loss_bce(gcn_logits_sigmoid, labels)
-                loss2 = self.loss_bce(sod_logits_sigmoid, labels_sod)
-                loss = loss1 + loss2
-
-                labels_val = labels.cpu().detach().numpy()
                 labels_sod_val = labels_sod.cpu().detach().numpy()
-                gcn_logits_sigmoid_val = gcn_logits_sigmoid.cpu().detach().numpy()
                 sod_logits_sigmoid_val = sod_logits_sigmoid.cpu().detach().numpy()
 
                 # Stat
                 nb_data += images.size(0)
                 epoch_test_loss += loss.detach().item()
-                epoch_test_loss1 += loss1.detach().item()
-                epoch_test_loss2 += loss2.detach().item()
 
                 # cal 1
                 mae = self._eval_mae(sod_logits_sigmoid_val, labels_sod_val)
@@ -769,33 +581,21 @@ class RunnerSPE(object):
                 epoch_test_prec += prec
                 epoch_test_recall += recall
 
-                # cal 2
-                mae2 = self._eval_mae(gcn_logits_sigmoid_val, labels_val)
-                prec2, recall2 = self._eval_pr(gcn_logits_sigmoid_val, labels_val, th_num)
-                epoch_test_mae2 += mae2
-                epoch_test_prec2 += prec2
-                epoch_test_recall2 += recall2
-
                 # Print
                 if i % self.test_print_freq == 0:
-                    Tools.print("{:4d}-{:4d} loss={:.4f}({:.4f}+{:.4f})-{:.4f}({:.4f}+{:.4f}) "
-                                "sod-mse={:.4f}({:.4f}) gcn-mse={:.4f}({:.4f})".format(
-                        i, len(loader), loss.detach().item(), loss1.detach().item(), loss2.detach().item(),
-                        epoch_test_loss/(i+1), epoch_test_loss1/(i+1), epoch_test_loss2/(i+1),
-                        mae, epoch_test_mae/(i+1), mae2, epoch_test_mae2/nb_data))
+                    Tools.print("{:4d}-{:4d} loss={:.4f}({:.4f}) sod-mse={:.4f}({:.4f})".format(
+                        i, len(loader), loss.detach().item(), epoch_test_loss/(i+1), mae, epoch_test_mae/(i+1)))
                     pass
                 pass
             pass
 
         # 结果1
-        avg_loss,  avg_loss1, avg_loss2 = epoch_test_loss/tr_num, epoch_test_loss1/tr_num, epoch_test_loss2/tr_num
+        avg_loss = epoch_test_loss/tr_num
 
         avg_mae, avg_prec, avg_recall = epoch_test_mae/tr_num, epoch_test_prec/tr_num, epoch_test_recall/tr_num
         score = (1 + 0.3) * avg_prec * avg_recall / (0.3 * avg_prec + avg_recall)
-        avg_mae2, avg_prec2, avg_recall2 = epoch_test_mae2/nb_data, epoch_test_prec2/nb_data, epoch_test_recall2/nb_data
-        score2 = (1 + 0.3) * avg_prec2 * avg_recall2 / (0.3 * avg_prec2 + avg_recall2)
 
-        return avg_loss, avg_loss1, avg_loss2, avg_mae, score.max(), avg_mae2, score2.max()
+        return avg_loss, avg_mae, score.max()
 
     @staticmethod
     def _print_network(model):
@@ -869,8 +669,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -879,24 +679,14 @@ if __name__ == '__main__':
     _weight_decay = 5e-4
     _lr = [[0, 5e-5], [20, 5e-6]]
 
-    _improved = True
-    _has_bn = True
-    _has_residual = True
-    _is_normalize = True
-    _concat = True
-
     _sp_size, _down_ratio = 4, 4
 
     _root_ckpt_dir = "./ckpt/PYG_ResNet_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
-    Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
-                "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
-        _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
-        _has_residual, _is_normalize, _has_bn, _improved, _concat, _is_sgd, _weight_decay))
+    Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} is_sgd:{} weight_decay:{}".format(
+        _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id, _is_sgd, _weight_decay))
 
     runner = RunnerSPE(data_root_path=_data_root_path, root_ckpt_dir=_root_ckpt_dir,
-                       sp_size=_sp_size, is_sgd=_is_sgd, lr=_lr,
-                       residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
-                       has_bn=_has_bn, concat=_concat, weight_decay=_weight_decay,
+                       sp_size=_sp_size, is_sgd=_is_sgd, lr=_lr, down_ratio=_down_ratio, weight_decay=_weight_decay,
                        train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
                        num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id)
     runner.train(_epochs, start_epoch=0)
