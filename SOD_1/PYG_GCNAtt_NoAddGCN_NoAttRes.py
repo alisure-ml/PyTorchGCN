@@ -916,6 +916,9 @@ class RunnerSPE(object):
 2020-08-22 13:36:12 E:23, Test  sod-mae-score=0.0378-0.8823 gcn-mae-score=0.0749-0.7486 loss=0.3224(0.1781+0.1443)
 2020-08-22 16:47:28 E:29, Train sod-mae-score=0.0084-0.9870 gcn-mae-score=0.0385-0.9236 loss=285.2419(2008.3308+42.2044)
 2020-08-22 16:47:28 E:29, Test  sod-mae-score=0.0375-0.8818 gcn-mae-score=0.0728-0.7472 loss=0.3440(0.1827+0.1613)
+
+2020-08-25 01:31:04 E:28, Train sod-mae-score=0.0088-0.9864 gcn-mae-score=0.0406-0.9207 loss=297.1919(2100.0706+43.5924)
+2020-08-25 01:31:04 E:28, Test  sod-mae-score=0.0384-0.8776 gcn-mae-score=0.0726-0.7484 loss=0.3419(0.1820+0.1599)
 """
 
 
@@ -947,7 +950,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/2{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/3{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

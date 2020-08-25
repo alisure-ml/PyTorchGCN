@@ -475,10 +475,10 @@ class DeepPoolLayer(nn.Module):
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.Conv2d(k, k, 2, padding=0, stride=2, groups=k, bias=False)
-        self.pool4 = nn.Conv2d(k, k, 4, padding=0, stride=4, groups=k, bias=False)
-        self.pool6 = nn.Conv2d(k, k, 6, padding=0, stride=6, groups=k, bias=False)
-        self.pool8 = nn.Conv2d(k, k, 8, padding=0, stride=8, groups=k, bias=False)
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
+        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
         self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
@@ -942,12 +942,9 @@ class RunnerSPE(object):
 
 
 """
-75515841
-2020-08-23 10:19:17 E:28, Train sod-mae-score=0.0087-0.9866 gcn-mae-score=0.0445-0.9167 loss=302.4589(2098.5020+46.3043)
-2020-08-23 10:19:17 E:28, Test  sod-mae-score=0.0367-0.8847 gcn-mae-score=0.0744-0.7490 loss=0.3228(0.1803+0.1424)
-
-2020-08-25 05:34:43 E:27, Train sod-mae-score=0.0089-0.9865 gcn-mae-score=0.0451-0.9151 loss=307.3814(2138.9922+46.7411)
-2020-08-25 05:34:43 E:27, Test  sod-mae-score=0.0377-0.8800 gcn-mae-score=0.0749-0.7473 loss=0.3364(0.1824+0.1540)
+75346881
+2020-08-25 05:47:18 E:27, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0466-0.9135 loss=310.2780(2144.1882+47.9296)
+2020-08-25 05:47:18 E:27, Test  sod-mae-score=0.0375-0.8823 gcn-mae-score=0.0770-0.7442 loss=0.3227(0.1815+0.1412)
 """
 
 
@@ -962,8 +959,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    _gpu_id = "1"
-    # _gpu_id = "2"
+    # _gpu_id = "1"
+    _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
@@ -979,7 +976,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/2{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool_Avg/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
