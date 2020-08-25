@@ -362,11 +362,6 @@ class MyGCNNet(nn.Module):
         return_layers = {'relu': 'e0', 'layer1': 'e1', 'layer2': 'e2', 'layer3': 'e3', 'layer4': 'e4'}
         self.backbone = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
-        for param in self.backbone.named_parameters():
-            if "bn" in param[0]:
-                param[1].requires_grad = False
-            pass
-
         # Convert
         self.relu = nn.ReLU(inplace=True)
         self.convert5 = nn.Conv2d(2048, 512, 1, 1, bias=False)  # 25
@@ -388,6 +383,7 @@ class MyGCNNet(nn.Module):
         self.score = nn.Conv2d(score, 1, 1, 1)
 
         self.weight_init(self.modules())
+        self.load_pretrained_model()
         pass
 
     def forward(self, x):
@@ -414,10 +410,6 @@ class MyGCNNet(nn.Module):
             merge = F.interpolate(merge, x_size, mode='bilinear', align_corners=True)
         return merge, torch.sigmoid(merge)
 
-    def load_pretrained_model(self, pretrained_model="./pretrained/resnet50-19c8e357.pth"):
-        self.backbone.load_state_dict(torch.load(pretrained_model), strict=False)
-        pass
-
     @staticmethod
     def weight_init(modules):
         for m in modules:
@@ -428,6 +420,10 @@ class MyGCNNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
             pass
+        pass
+
+    def load_pretrained_model(self, pretrained_model="./pretrained/resnet50-19c8e357.pth"):
+        self.backbone.load_state_dict(torch.load(pretrained_model), strict=False)
         pass
 
     pass
@@ -455,10 +451,7 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        self.model.eval()
-        self.model.load_pretrained_model()
-
-        parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+        parameters = self.model.parameters()
         if is_sgd:
             self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
             self.optimizer = torch.optim.SGD(parameters, lr=self.lr_s[0][1], momentum=0.9, weight_decay=weight_decay)
@@ -479,13 +472,6 @@ class RunnerSPE(object):
 
     def load_model(self, model_file_name):
         ckpt = torch.load(model_file_name, map_location=self.device)
-
-        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
-        # for c in keys:
-        #     del ckpt[c]
-        #     Tools.print(c)
-        #     pass
-
         self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
@@ -679,15 +665,7 @@ class RunnerSPE(object):
 
 
 """
-51680449
-2020-08-24 07:42:35 E:29, Train sod-mae-score=0.0101-0.9846 loss=236.8370
-2020-08-24 07:42:35 E:29, Test  sod-mae-score=0.0453-0.8692 loss=0.1631
 
-Total param: 51680449 lr_s=[[0, 5e-05], [20, 5e-06]]
-2020-08-25 19:00:44 E:24, Train sod-mae-score=0.0123-0.9815 loss=284.3247
-2020-08-25 19:00:44 E:24, Test  sod-mae-score=0.0412-0.8721 loss=0.1339
-
-Total param: 51680449 lr_s=[[0, 1e-05], [20, 1e-06]]
 """
 
 
@@ -702,19 +680,20 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
     _weight_decay = 5e-4
-    _lr = [[0, 1e-5], [20, 1e-6]]
+    # _lr = [[0, 1e-5], [20, 1e-6]]
+    _lr = [[0, 5e-5], [20, 5e-6]]
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_ResNet/1_{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_ResNet2/3_{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id, _is_sgd, _weight_decay))
 

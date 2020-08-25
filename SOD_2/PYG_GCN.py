@@ -886,22 +886,25 @@ class RunnerSPE(object):
 
 
 """
+2020-08-24 11:38:13 E:28, Train sod-mae-score=0.0091-0.9857 gcn-mae-score=0.0353-0.9278 loss=294.1604(2145.3026+39.8151)
+2020-08-24 11:38:13 E:28, Test  sod-mae-score=0.0459-0.8518 gcn-mae-score=0.0723-0.7518 loss=0.3684(0.1847+0.1836)
 """
 
 
 if __name__ == '__main__':
 
     # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    _data_root_path = "/mnt/4T/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
     _num_workers = 10
     _use_gpu = True
 
-    _gpu_id = "0"
+    # _gpu_id = "0"
     # _gpu_id = "1"
-    # _gpu_id = "2"
+    _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
