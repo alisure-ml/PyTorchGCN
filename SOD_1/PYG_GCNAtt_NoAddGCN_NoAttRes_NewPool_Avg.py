@@ -475,18 +475,18 @@ class DeepPoolLayer(nn.Module):
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.Conv2d(k, k, 2, padding=0, stride=2, groups=k, bias=False)
-        self.pool4 = nn.Conv2d(k, k, 4, padding=0, stride=4, groups=k, bias=False)
-        self.pool6 = nn.Conv2d(k, k, 6, padding=0, stride=6, groups=k, bias=False)
-        self.pool8 = nn.Conv2d(k, k, 8, padding=0, stride=8, groups=k, bias=False)
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
+        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
         self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv12 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
-        self.conv22 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
-        self.conv32 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
-        self.conv42 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
+        self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
@@ -942,9 +942,9 @@ class RunnerSPE(object):
 
 
 """
-56117185
-2020-08-24 04:58:20 E:25, Train sod-mae-score=0.0093-0.9857 gcn-mae-score=0.0460-0.9141 loss=317.4869(2225.8092+47.4530)
-2020-08-24 04:58:20 E:25, Test  sod-mae-score=0.0384-0.8750 gcn-mae-score=0.0765-0.7416 loss=0.3398(0.1816+0.1582)
+75346881
+2020-08-25 05:47:18 E:27, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0466-0.9135 loss=310.2780(2144.1882+47.9296)
+2020-08-25 05:47:18 E:27, Test  sod-mae-score=0.0375-0.8823 gcn-mae-score=0.0770-0.7442 loss=0.3227(0.1815+0.1412)
 """
 
 
@@ -976,7 +976,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool_1x1/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool_Avg/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
