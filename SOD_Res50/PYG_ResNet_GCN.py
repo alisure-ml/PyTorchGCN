@@ -330,7 +330,7 @@ class SAGENet2(nn.Module):
         self.residual = residual
         self.has_bn = has_bn
         self.concat = concat
-        self.out_num = skip_dim
+        self.out_num = len(skip_which) * skip_dim
 
         self.embedding_h = nn.Linear(in_dim, in_dim)
         self.relu = nn.ReLU()
@@ -387,11 +387,9 @@ class SAGENet2(nn.Module):
             skip_connect.append(sc_feat)
             pass
 
-        out_feat = skip_connect[0]
-        for skip in skip_connect[1:]:
-            out_feat = out_feat + skip
+        out_feat = torch.cat(skip_connect, dim=1)
         logits = self.readout_mlp(out_feat).view(-1)
-        return skip_connect, out_feat, logits, torch.sigmoid(logits)
+        return out_feat, logits, torch.sigmoid(logits)
 
     pass
 
@@ -477,17 +475,17 @@ class MyGCNNet(nn.Module):
         self.convert1 = nn.Conv2d(64, 128, 1, 1, bias=False)  # 200
 
         # GCN
-        self.model_gnn1 = SAGENet1(in_dim=256, hidden_dims=[256, 256],
+        self.model_gnn1 = SAGENet1(in_dim=512, hidden_dims=[512, 512],
                                    has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
-                                   skip_which=[2, 4], skip_dim=512, has_bn=has_bn,
+                                   skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
                                    normalize=normalize, residual=residual, concat=concat)
 
         # DEEP POOL
         deep_pool = [[512, 512, 256, 256, 128], [512, 256, 256, 128, 128]]
         self.deep_pool5 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, True, 512)
         self.deep_pool4 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, True, 512)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True, True, 256)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True, False)
         self.deep_pool2 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], True, True, False)
         self.deep_pool1 = DeepPoolLayer(deep_pool[0][4], deep_pool[1][4], False, False, False)
 
@@ -510,24 +508,23 @@ class MyGCNNet(nn.Module):
 
         # GCN 1
         data_where = batched_pixel_graph.data_where
-        pixel_nodes_feat = feature["e1"][data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
+        pixel_nodes_feat = feature["e2"][data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
         sod_gcn1_feature = self.sod_feature(data_where, gcn1_feature, batched_pixel_graph=batched_pixel_graph)
 
         # GCN 2
         batched_graph.x = gcn1_feature
-        skip_connect, gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
-        sod_gcn2_feature1 = self.sod_feature(data_where, skip_connect[0], batched_pixel_graph=batched_pixel_graph)
-        sod_gcn2_feature2 = self.sod_feature(data_where, skip_connect[1], batched_pixel_graph=batched_pixel_graph)
+        gcn2_feature, gcn2_logits, gcn2_logits_sigmoid = self.model_gnn2.forward(batched_graph)
+        sod_gcn2_feature = self.sod_feature(data_where, gcn2_feature, batched_pixel_graph=batched_pixel_graph)
         # For Eval
         sod_gcn2_sigmoid = self.sod_feature(data_where, gcn2_logits_sigmoid.unsqueeze(1),
                                             batched_pixel_graph=batched_pixel_graph)
         # For Eval
 
-        merge = self.deep_pool5(feature5, feature4, x_gcn=sod_gcn2_feature2)  # A + F
-        merge = self.deep_pool4(merge, feature3, x_gcn=sod_gcn2_feature1)  # A + F
-        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
+        merge = self.deep_pool5(feature5, feature4, x_gcn=sod_gcn2_feature)  # A + F
+        merge = self.deep_pool4(merge, feature3, x_gcn=sod_gcn1_feature)  # A + F
+        merge = self.deep_pool3(merge, feature2)  # A + F
         merge = self.deep_pool2(merge, feature1)  # A + F
         merge = self.deep_pool1(merge)  # A
 
@@ -866,8 +863,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    _gpu_id = "1"
-    # _gpu_id = "2"
+    # _gpu_id = "1"
+    _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
@@ -881,9 +878,9 @@ if __name__ == '__main__':
     _is_normalize = True
     _concat = True
 
-    _sp_size, _down_ratio = 4, 4
+    _sp_size, _down_ratio = 3, 8
 
-    _root_ckpt_dir = "./ckpt/PYG_ResNet_GCNAtt_NoAddGCN_NoAttRes/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_ResNet_GCN/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
