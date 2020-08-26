@@ -17,17 +17,6 @@ from torchvision.models import vgg13_bn, vgg16_bn
 from torch_geometric.nn import GCNConv, global_mean_pool, SAGEConv
 
 
-"""
-torch==1.4.0+cu100
-pip uninstall torch-sparse
-pip install torch-scatter==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-sparse==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-cluster==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-spline-conv==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-geometric=1.4.3
-"""
-
-
 def set_seed(seed):
     random.seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
@@ -41,7 +30,7 @@ def set_seed(seed):
     pass
 
 
-set_seed(2020520)
+set_seed(520)
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -493,10 +482,16 @@ class DeepPoolLayer(nn.Module):
 
         self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
         self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
         self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
-        self.conv1 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        # self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        # self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        # self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        # self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
@@ -509,12 +504,40 @@ class DeepPoolLayer(nn.Module):
 
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
-        y1 = self.conv1(self.pool2(x))
-        y2 = self.conv2(self.pool4(x))
-        y3 = self.conv3(self.pool8(x))
-        res = torch.add(x, F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True))
-        res = torch.add(res, F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True))
-        res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
+
+        # y1 = self.conv11(self.pool1(x))
+        # y2 = self.conv21(self.pool2(x))
+        # y3 = self.conv31(self.pool4(x))
+        # y4 = self.conv41(self.pool8(x))
+        y1 = self.pool2(x)
+        y2 = self.pool4(x)
+        y3 = self.pool6(x)
+        y4 = self.pool8(x)
+
+        y1 = torch.sigmoid(y1)
+        y2 = torch.sigmoid(y2)
+        y3 = torch.sigmoid(y3)
+        y4 = torch.sigmoid(y4)
+
+        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
+        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
+        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
+        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
+
+        y1 = y1 * x
+        y2 = y2 * x
+        y3 = y3 * x
+        y4 = y4 * x
+
+        y1 = self.conv12(y1)
+        y2 = self.conv22(y2)
+        y3 = self.conv32(y3)
+        y4 = self.conv42(y4)
+
+        res = torch.add(x, y1)
+        res = torch.add(res, y2)
+        res = torch.add(res, y3)
+        res = torch.add(res, y4)
         res = self.relu(res)
 
         if self.is_not_last:
@@ -928,19 +951,9 @@ class RunnerSPE(object):
 
 
 """
-2020-08-22 13:36:12 E:23, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.0437-0.9172 loss=315.4051(2235.9344+45.9059)
-2020-08-22 13:36:12 E:23, Test  sod-mae-score=0.0378-0.8823 gcn-mae-score=0.0749-0.7486 loss=0.3224(0.1781+0.1443)
-2020-08-22 16:47:28 E:29, Train sod-mae-score=0.0084-0.9870 gcn-mae-score=0.0385-0.9236 loss=285.2419(2008.3308+42.2044)
-2020-08-22 16:47:28 E:29, Test  sod-mae-score=0.0375-0.8818 gcn-mae-score=0.0728-0.7472 loss=0.3440(0.1827+0.1613)
-
-2020-08-25 01:31:04 E:28, Train sod-mae-score=0.0088-0.9864 gcn-mae-score=0.0406-0.9207 loss=297.1919(2100.0706+43.5924)
-2020-08-25 01:31:04 E:28, Test  sod-mae-score=0.0384-0.8776 gcn-mae-score=0.0726-0.7484 loss=0.3419(0.1820+0.1599)
-
-seed=520
-2020-08-26 04:18:15 E:22, Train sod-mae-score=0.0103-0.9844 gcn-mae-score=0.0476-0.9124 loss=340.0675(2428.6251+48.6025)
-2020-08-26 04:18:15 E:22, Test  sod-mae-score=0.0396-0.8800 gcn-mae-score=0.0778-0.7418 loss=0.3190(0.1830+0.1359)
-2020-08-26 09:11:14 E:28, Train sod-mae-score=0.0089-0.9863 gcn-mae-score=0.0410-0.9197 loss=299.7454(2117.8641+43.9795)
-2020-08-26 09:11:14 E:28, Test  sod-mae-score=0.0382-0.8790 gcn-mae-score=0.0724-0.7451 loss=0.3406(0.1801+0.1606)
+75346881
+2020-08-25 05:47:18 E:27, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0466-0.9135 loss=310.2780(2144.1882+47.9296)
+2020-08-25 05:47:18 E:27, Test  sod-mae-score=0.0375-0.8823 gcn-mae-score=0.0770-0.7442 loss=0.3227(0.1815+0.1412)
 """
 
 
@@ -954,8 +967,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -972,7 +985,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/520_{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool2_NoParam_2468/520_{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
