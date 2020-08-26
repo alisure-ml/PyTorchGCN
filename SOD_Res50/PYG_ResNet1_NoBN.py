@@ -677,6 +677,8 @@ PYG_ResNet1_NoBN Total param: 51680449 lr_s=[[0, 5e-05], [20, 5e-06]]
 2020-08-25 19:57:05 E:27, Test  sod-mae-score=0.0398-0.8721 loss=0.1341
 
 PYG_ResNet1_NoBN Total param: 51680449 lr_s=[[0, 1e-05], [20, 1e-06]]
+2020-08-26 04:59:26 E:26, Train sod-mae-score=0.0111-0.9828 loss=253.5631
+2020-08-26 04:59:26 E:26, Test  sod-mae-score=0.0385-0.8658 loss=0.1574
 """
 
 

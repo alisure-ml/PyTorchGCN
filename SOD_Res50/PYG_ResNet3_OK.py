@@ -651,27 +651,9 @@ class RunnerSPE(object):
 
 
 """
-51680449
-2020-08-24 07:42:35 E:29, Train sod-mae-score=0.0101-0.9846 loss=236.8370
-2020-08-24 07:42:35 E:29, Test  sod-mae-score=0.0453-0.8692 loss=0.1631
-
-51680449
-2020-08-24 20:36:26 E:29, Train sod-mae-score=0.0103-0.9842 loss=240.8203
-2020-08-24 20:36:26 E:29, Test  sod-mae-score=0.0387-0.8769 loss=0.1401
-
-51680449 [[0, 1e-05], [20, 1e-06]]
-2020-08-24 21:35:18 E:25, Train sod-mae-score=0.0108-0.9833 loss=247.5093
-2020-08-24 21:35:18 E:25, Test  sod-mae-score=0.0375-0.8741 loss=0.1471
-
-51680449 [[0, 1e-4], [20, 1e-5]]
-2020-08-25 18:44:06 E:29, Train sod-mae-score=0.0114-0.9827 loss=264.9770
-2020-08-25 18:44:06 E:29, Test  sod-mae-score=0.0440-0.8647 loss=0.1556
-
-51680449 [[0, 1e-5], [20, 1e-6]]
-2020-08-25 17:27:30 E:23, Train sod-mae-score=0.0113-0.9826 loss=258.7485
-2020-08-25 17:27:30 E:23, Test  sod-mae-score=0.0381-0.8724 loss=0.1505
-2020-08-25 19:23:05 E:29, Train sod-mae-score=0.0104-0.9839 loss=239.4872
-2020-08-25 19:23:05 E:29, Test  sod-mae-score=0.0377-0.8709 loss=0.1580
+Total param: 51680449 lr_s=[[0, 5e-05], [20, 5e-06]]
+2020-08-26 11:10:32 E:26, Train sod-mae-score=0.0109-0.9834 loss=254.3236
+2020-08-26 11:10:32 E:26, Test  sod-mae-score=0.0390-0.8773 loss=0.1411
 """
 
 
@@ -687,18 +669,18 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    # _gpu_id = "1"
-    _gpu_id = "2"
+    _gpu_id = "1"
+    # _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
     _weight_decay = 5e-4
-    _lr = [[0, 1e-5], [20, 1e-6]]
+    _lr = [[0, 5e-5], [20, 5e-6]]
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_ResNet2/3_{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_ResNet2_Temp_2/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id, _is_sgd, _weight_decay))
 

@@ -9,12 +9,12 @@ from PIL import Image
 import torch.nn.functional as F
 from skimage import segmentation
 from alisuretool.Tools import Tools
+from torchvision.models import resnet
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
-from torchvision.models import resnet
-from torchvision.models._utils import IntermediateLayerGetter
 from torch_geometric.nn import global_mean_pool, SAGEConv
+from torchvision.models._utils import IntermediateLayerGetter
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -463,6 +463,11 @@ class MyGCNNet(nn.Module):
         return_layers = {'relu': 'e0', 'layer1': 'e1', 'layer2': 'e2', 'layer3': 'e3', 'layer4': 'e4'}
         self.backbone = IntermediateLayerGetter(backbone, return_layers=return_layers)
 
+        for para in self.backbone.named_parameters():
+            if "bn" in para[0]:
+                para[1].requires_grad = False
+            pass
+
         # Convert
         self.relu = nn.ReLU(inplace=True)
         self.convert5 = nn.Conv2d(2048, 512, 1, 1, bias=False)  # 25
@@ -571,14 +576,13 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, concat=concat).to(self.device)
-
+        parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         if is_sgd:
             self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
-                                             momentum=0.9, weight_decay=weight_decay)
+            self.optimizer = torch.optim.SGD(parameters, lr=self.lr_s[0][1], momentum=0.9, weight_decay=weight_decay)
         else:
             self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]] if lr is None else lr
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
+            self.optimizer = torch.optim.Adam(parameters, lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
             self._view_model_param(self.model), self.lr_s, self.optimizer))
@@ -593,13 +597,6 @@ class RunnerSPE(object):
 
     def load_model(self, model_file_name):
         ckpt = torch.load(model_file_name, map_location=self.device)
-
-        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
-        # for c in keys:
-        #     del ckpt[c]
-        #     Tools.print(c)
-        #     pass
-
         self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
@@ -627,7 +624,7 @@ class RunnerSPE(object):
         pass
 
     def _train_epoch(self):
-        self.model.train()
+        self.model.eval()
 
         # 统计
         th_num = 25
@@ -714,10 +711,10 @@ class RunnerSPE(object):
         return avg_loss, avg_loss1, avg_loss2, avg_mae, score.max(), avg_mae2, score2.max()
 
     def test(self, model_file=None, is_train_loader=False):
+        self.model.eval()
+
         if model_file:
             self.load_model(model_file_name=model_file)
-
-        self.model.train()
 
         Tools.print()
         th_num = 25
@@ -854,8 +851,6 @@ class RunnerSPE(object):
 
 
 """
-2020-08-24 12:28:45 E:29, Train sod-mae-score=0.0100-0.9845 gcn-mae-score=0.0562-0.9031 loss=342.5399(2351.3723+53.7013)
-2020-08-24 12:28:45 E:29, Test  sod-mae-score=0.0449-0.8701 gcn-mae-score=0.1013-0.6950 loss=0.3870(0.2289+0.1582)
 """
 
 

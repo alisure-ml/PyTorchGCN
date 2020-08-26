@@ -358,9 +358,14 @@ class MyGCNNet(nn.Module):
     def __init__(self):
         super(MyGCNNet, self).__init__()
         # BASE
-        backbone = resnet.__dict__["resnet50"](pretrained=False, replace_stride_with_dilation=[False, False, True])
+        backbone = resnet.__dict__["resnet50"](pretrained=True, replace_stride_with_dilation=[False, False, True])
         return_layers = {'relu': 'e0', 'layer1': 'e1', 'layer2': 'e2', 'layer3': 'e3', 'layer4': 'e4'}
         self.backbone = IntermediateLayerGetter(backbone, return_layers=return_layers)
+
+        for para in self.backbone.named_parameters():
+            if "bn" in para[0]:
+                para[1].requires_grad = False
+            pass
 
         # Convert
         self.relu = nn.ReLU(inplace=True)
@@ -381,9 +386,6 @@ class MyGCNNet(nn.Module):
         # ScoreLayer
         score = 128
         self.score = nn.Conv2d(score, 1, 1, 1)
-
-        self.weight_init(self.modules())
-        self.load_pretrained_model()
         pass
 
     def forward(self, x):
@@ -410,22 +412,6 @@ class MyGCNNet(nn.Module):
             merge = F.interpolate(merge, x_size, mode='bilinear', align_corners=True)
         return merge, torch.sigmoid(merge)
 
-    @staticmethod
-    def weight_init(modules):
-        for m in modules:
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, 0.01)
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            pass
-        pass
-
-    def load_pretrained_model(self, pretrained_model="./pretrained/resnet50-19c8e357.pth"):
-        self.backbone.load_state_dict(torch.load(pretrained_model), strict=False)
-        pass
-
     pass
 
 
@@ -451,7 +437,7 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet().to(self.device)
-        parameters = self.model.parameters()
+        parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         if is_sgd:
             self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
             self.optimizer = torch.optim.SGD(parameters, lr=self.lr_s[0][1], momentum=0.9, weight_decay=weight_decay)
@@ -496,7 +482,7 @@ class RunnerSPE(object):
         pass
 
     def _train_epoch(self):
-        self.model.train()
+        self.model.eval()
 
         # 统计
         th_num = 25
@@ -665,7 +651,31 @@ class RunnerSPE(object):
 
 
 """
+51680449
+2020-08-24 07:42:35 E:29, Train sod-mae-score=0.0101-0.9846 loss=236.8370
+2020-08-24 07:42:35 E:29, Test  sod-mae-score=0.0453-0.8692 loss=0.1631
 
+51680449
+2020-08-24 20:36:26 E:29, Train sod-mae-score=0.0103-0.9842 loss=240.8203
+2020-08-24 20:36:26 E:29, Test  sod-mae-score=0.0387-0.8769 loss=0.1401
+
+51680449 [[0, 1e-05], [20, 1e-06]]
+2020-08-24 21:35:18 E:25, Train sod-mae-score=0.0108-0.9833 loss=247.5093
+2020-08-24 21:35:18 E:25, Test  sod-mae-score=0.0375-0.8741 loss=0.1471
+
+51680449 [[0, 1e-4], [20, 1e-5]]
+2020-08-25 18:44:06 E:29, Train sod-mae-score=0.0114-0.9827 loss=264.9770
+2020-08-25 18:44:06 E:29, Test  sod-mae-score=0.0440-0.8647 loss=0.1556
+
+51680449 [[0, 1e-5], [20, 1e-6]]
+2020-08-25 17:27:30 E:23, Train sod-mae-score=0.0113-0.9826 loss=258.7485
+2020-08-25 17:27:30 E:23, Test  sod-mae-score=0.0381-0.8724 loss=0.1505
+2020-08-25 19:23:05 E:29, Train sod-mae-score=0.0104-0.9839 loss=239.4872
+2020-08-25 19:23:05 E:29, Test  sod-mae-score=0.0377-0.8709 loss=0.1580
+
+Total param: 51680449 lr_s=[[0, 5e-05], [20, 5e-06]]
+2020-08-26 09:57:33 E:28, Train sod-mae-score=0.0105-0.9840 loss=244.4118
+2020-08-26 09:57:33 E:28, Test  sod-mae-score=0.0397-0.8772 loss=0.1480
 """
 
 
@@ -680,20 +690,19 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
     _weight_decay = 5e-4
-    # _lr = [[0, 1e-5], [20, 1e-6]]
     _lr = [[0, 5e-5], [20, 5e-6]]
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_ResNet3_HasBN/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_ResNet2_Temp/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id, _is_sgd, _weight_decay))
 
