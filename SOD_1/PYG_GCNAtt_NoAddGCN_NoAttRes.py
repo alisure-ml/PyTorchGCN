@@ -28,22 +28,6 @@ pip install torch-geometric=1.4.3
 """
 
 
-def set_seed(seed):
-    random.seed(seed)
-    os.environ['PYTHONHASHSEED'] = str(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    # torch.backends.cudnn.deterministic = True
-    # torch.backends.cudnn.benchmark = False
-    # torch.backends.cudnn.enabled = False
-    pass
-
-
-set_seed(2020520)
-
-
 def gpu_setup(use_gpu, gpu_id):
     if torch.cuda.is_available() and use_gpu:
         Tools.print()
@@ -941,6 +925,9 @@ seed=520
 2020-08-26 04:18:15 E:22, Test  sod-mae-score=0.0396-0.8800 gcn-mae-score=0.0778-0.7418 loss=0.3190(0.1830+0.1359)
 2020-08-26 09:11:14 E:28, Train sod-mae-score=0.0089-0.9863 gcn-mae-score=0.0410-0.9197 loss=299.7454(2117.8641+43.9795)
 2020-08-26 09:11:14 E:28, Test  sod-mae-score=0.0382-0.8790 gcn-mae-score=0.0724-0.7451 loss=0.3406(0.1801+0.1606)
+
+2020-08-27 08:23:15 E:29, Train sod-mae-score=0.0087-0.9865 gcn-mae-score=0.0405-0.9208 loss=295.3093(2082.0083+43.5542)
+2020-08-27 08:23:15 E:29, Test  sod-mae-score=0.0387-0.8780 gcn-mae-score=0.0724-0.7482 loss=0.3347(0.1812+0.1535)
 """
 
 
@@ -954,10 +941,10 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    _gpu_id = "0"
+    # _gpu_id = "0"
     # _gpu_id = "1"
     # _gpu_id = "2"
-    # _gpu_id = "3"
+    _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False
@@ -972,7 +959,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/520_{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/3_{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
