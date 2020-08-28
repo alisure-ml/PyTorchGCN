@@ -479,10 +479,12 @@ class DeepPoolLayer(nn.Module):
         self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
         self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
         self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
-        self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+
+        self.conv11 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
+        self.conv21 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
+        self.conv31 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
+        self.conv41 = nn.Conv2d(k, k, 1, 1, 0, bias=False)
+
         self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
@@ -540,8 +542,9 @@ class DeepPoolLayer(nn.Module):
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
-            # res = x_gcn * res + res
-            res = x_gcn * res
+            x_gcn = torch.sigmoid(x_gcn)
+            res = x_gcn * res + res
+            # res = x_gcn * res
             res = self.conv_att(res)
             pass
 
@@ -942,9 +945,9 @@ class RunnerSPE(object):
 
 
 """
-75346881
-2020-08-25 05:47:18 E:27, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0466-0.9135 loss=310.2780(2144.1882+47.9296)
-2020-08-25 05:47:18 E:27, Test  sod-mae-score=0.0375-0.8823 gcn-mae-score=0.0770-0.7442 loss=0.3227(0.1815+0.1412)
+55948225
+2020-08-28 08:05:52 E:26, Train sod-mae-score=0.0092-0.9860 gcn-mae-score=0.0459-0.9148 loss=315.8011(2209.3165+47.4347)
+2020-08-28 08:05:52 E:26, Test  sod-mae-score=0.0404-0.8671 gcn-mae-score=0.0768-0.7445 loss=0.3449(0.1800+0.1649)
 """
 
 
@@ -959,8 +962,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    # _gpu_id = "1"
-    _gpu_id = "2"
+    _gpu_id = "1"
+    # _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
@@ -976,7 +979,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool_Avg/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

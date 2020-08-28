@@ -477,10 +477,12 @@ class DeepPoolLayer(nn.Module):
 
         self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
         self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
         self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
         self.conv1 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
         self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv4 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
@@ -495,10 +497,13 @@ class DeepPoolLayer(nn.Module):
         x_size = x.size()
         y1 = self.conv1(self.pool2(x))
         y2 = self.conv2(self.pool4(x))
-        y3 = self.conv3(self.pool8(x))
+        y3 = self.conv3(self.pool6(x))
+        y4 = self.conv4(self.pool8(x))
+
         res = torch.add(x, F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True))
         res = torch.add(res, F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True))
         res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
+        res = torch.add(res, F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True))
         res = self.relu(res)
 
         if self.is_not_last:
@@ -511,8 +516,8 @@ class DeepPoolLayer(nn.Module):
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
             x_gcn = torch.sigmoid(x_gcn)
-            # res = x_gcn * res + res
-            res = x_gcn * res
+            res = x_gcn * res + res
+            # res = x_gcn * res
             res = self.conv_att(res)
             pass
 
@@ -915,6 +920,14 @@ class RunnerSPE(object):
 """
 2020-08-23 02:16:33 E:25, Train sod-mae-score=0.0093-0.9858 gcn-mae-score=0.0404-0.9212 loss=307.0487(2201.0249+43.4731)
 2020-08-23 02:16:33 E:25, Test  sod-mae-score=0.0389-0.8797 gcn-mae-score=0.0750-0.7454 loss=0.3403(0.1829+0.1574)
+
+res = x_gcn * res
+2020-08-28 04:06:42 E:23, Train sod-mae-score=0.0102-0.9846 gcn-mae-score=0.0456-0.9156 loss=333.8831(2394.3604+47.2236)
+2020-08-28 04:06:42 E:23, Test  sod-mae-score=0.0393-0.8780 gcn-mae-score=0.0781-0.7482 loss=0.3250(0.1843+0.1407)
+
+res = x_gcn * res + res
+2020-08-28 07:38:09 E:29, Train sod-mae-score=0.0089-0.9863 gcn-mae-score=0.0369-0.9249 loss=293.6640(2115.7757+41.0432)
+2020-08-28 07:38:09 E:29, Test  sod-mae-score=0.0392-0.8760 gcn-mae-score=0.0709-0.7538 loss=0.3441(0.1826+0.1615)
 """
 
 
@@ -929,9 +942,9 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    _gpu_id = "1"
+    # _gpu_id = "1"
     # _gpu_id = "2"
-    # _gpu_id = "3"
+    _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
     _is_sgd = False

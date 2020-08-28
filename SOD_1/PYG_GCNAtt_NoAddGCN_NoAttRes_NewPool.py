@@ -954,6 +954,12 @@ Total param: 75515841 lr_s=[[0, 5e-05], [20, 5e-06]]
 2020-08-28 01:56:54 E:25, Test  sod-mae-score=0.0371-0.8833 gcn-mae-score=0.0763-0.7454 loss=0.3287(0.1815+0.1472)
 2020-08-28 04:09:39 E:29, Train sod-mae-score=0.0085-0.9869 gcn-mae-score=0.0434-0.9181 loss=295.3804(2042.4350+45.5684)
 2020-08-28 04:09:39 E:29, Test  sod-mae-score=0.0369-0.8820 gcn-mae-score=0.0757-0.7469 loss=0.3329(0.1832+0.1497)
+
+2020-08-27 14:20:49 E:29, Train sod-mae-score=0.0087-0.9866 gcn-mae-score=0.0442-0.9168 loss=302.4538(2102.6880+46.0925)
+2020-08-27 14:20:49 E:29, Test  sod-mae-score=0.0371-0.8791 gcn-mae-score=0.0748-0.7482 loss=0.3279(0.1790+0.1488)
+
+2020-08-28 06:59:06 E:29, Train sod-mae-score=0.0087-0.9867 gcn-mae-score=0.0439-0.9175 loss=301.1649(2092.8173+45.9416)
+2020-08-28 06:59:06 E:29, Test  sod-mae-score=0.0375-0.8810 gcn-mae-score=0.0748-0.7475 loss=0.3297(0.1823+0.1475)
 """
 
 
@@ -969,8 +975,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    # _gpu_id = "1"
-    _gpu_id = "2"
+    _gpu_id = "1"
+    # _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
@@ -986,7 +992,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/2{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
