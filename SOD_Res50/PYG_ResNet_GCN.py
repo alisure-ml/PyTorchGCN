@@ -437,8 +437,9 @@ class DeepPoolLayer(nn.Module):
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
-            res = x_gcn * res + res
-            # res = x_gcn * res
+            x_gcn = torch.sigmoid(x_gcn)
+            # res = x_gcn * res + res
+            res = x_gcn * res
             res = self.conv_att(res)
             pass
 
@@ -848,6 +849,13 @@ class RunnerSPE(object):
 
 
 """
+res = x_gcn * res
+2020-08-27 07:58:59 E:29, Train sod-mae-score=0.0103-0.9843 gcn-mae-score=0.0668-0.8638 loss=304.6992(2404.1350+32.1429)
+2020-08-27 07:58:59 E:29, Test  sod-mae-score=0.0386-0.8800 gcn-mae-score=0.0878-0.6609 loss=0.3633(0.2129+0.1504)
+
+res = x_gcn * res + res
+2020-08-27 07:34:17 E:28, Train sod-mae-score=0.0108-0.9836 gcn-mae-score=0.0600-0.8720 loss=312.0722(2522.8428+29.8940)
+2020-08-27 07:34:17 E:28, Test  sod-mae-score=0.0399-0.8769 gcn-mae-score=0.0856-0.6731 loss=0.3434(0.2086+0.1349)
 """
 
 
@@ -880,7 +888,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 3, 8
 
-    _root_ckpt_dir = "./ckpt/PYG_ResNet_GCN/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_ResNet_GCN/sigmoid_{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

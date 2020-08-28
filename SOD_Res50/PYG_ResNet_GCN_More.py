@@ -1,5 +1,4 @@
 import os
-import cv2
 import glob
 import torch
 import random
@@ -10,22 +9,12 @@ from PIL import Image
 import torch.nn.functional as F
 from skimage import segmentation
 from alisuretool.Tools import Tools
+from torchvision.models import resnet
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
-from torchvision.models import vgg13_bn, vgg16_bn
-from torch_geometric.nn import GCNConv, global_mean_pool, SAGEConv
-
-
-"""
-torch==1.4.0+cu100
-pip uninstall torch-sparse
-pip install torch-scatter==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-sparse==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-cluster==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-spline-conv==latest+cu100 -f https://pytorch-geometric.com/whl/torch-1.4.0.html
-pip install torch-geometric=1.4.3
-"""
+from torch_geometric.nn import global_mean_pool, SAGEConv
+from torchvision.models._utils import IntermediateLayerGetter
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -297,7 +286,6 @@ class SAGENet1(nn.Module):
         self.concat = concat
         self.out_num = self.hidden_dims[-1]
 
-        # self.embedding_h = nn.Linear(in_dim, in_dim)
         self.relu = nn.ReLU()
 
         _in_dim = in_dim
@@ -311,7 +299,6 @@ class SAGENet1(nn.Module):
         pass
 
     def forward(self, data):
-        # hidden_nodes_feat = self.embedding_h(data.x)
         hidden_nodes_feat = data.x
         for gcn, bn in zip(self.gcn_list, self.bn_list):
             h_in = hidden_nodes_feat
@@ -407,131 +394,41 @@ class SAGENet2(nn.Module):
     pass
 
 
-class VGG16(nn.Module):
-
-    def __init__(self):
-        super(VGG16, self).__init__()
-        self.cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
-        self.extract = [8, 15, 22, 29]  # [3, 8, 15, 22, 29]
-        self.features = self.vgg(self.cfg)
-
-        self.weight_init(self.modules())
-
-        self.out_num1 = 128
-        self.out_num2 = 256
-        self.out_num3 = 512
-        self.out_num4 = 512
-        pass
-
-    def forward(self, x):
-        tmp_x = []
-        for k in range(len(self.features)):
-            x = self.features[k](x)
-            if k in self.extract:
-                tmp_x.append(x)
-        return tmp_x
-
-    @staticmethod
-    def vgg(cfg, batch_norm=False):
-        layers = []
-        in_channels = 3
-        for v in cfg:
-            if v == 'M':
-                # layers += [nn.MaxPool2d(kernel_size=3, stride=2, padding=1)]
-                layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
-            else:
-                conv2d = nn.Conv2d(in_channels, v, kernel_size=3, padding=1)
-                if batch_norm:
-                    layers += [conv2d, nn.BatchNorm2d(v), nn.ReLU(inplace=True)]
-                else:
-                    layers += [conv2d, nn.ReLU(inplace=True)]
-                in_channels = v
-            pass
-        return nn.Sequential(*layers)
-
-    @staticmethod
-    def weight_init(modules):
-        for m in modules:
-            if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, 0.01)
-            elif isinstance(m, nn.BatchNorm2d):
-                m.weight.data.fill_(1)
-                m.bias.data.zero_()
-            pass
-        pass
-
-    def load_pretrained_model(self, pretrained_model="./pretrained/vgg16-397923af.pth"):
-        self.load_state_dict(torch.load(pretrained_model), strict=False)
-        pass
-
-    pass
-
-
 class DeepPoolLayer(nn.Module):
 
-    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None):
+    def __init__(self, k, k_out, need_x2, need_fuse, has_gcn=False, gcn_in=None):
         super(DeepPoolLayer, self).__init__()
-        self.is_not_last = is_not_last
+        self.need_x2 = need_x2
+        self.need_fuse = need_fuse
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.Conv2d(k, k, 2, padding=0, stride=2, groups=k, bias=False)
-        self.pool4 = nn.Conv2d(k, k, 4, padding=0, stride=4, groups=k, bias=False)
-        self.pool6 = nn.Conv2d(k, k, 6, padding=0, stride=6, groups=k, bias=False)
-        self.pool8 = nn.Conv2d(k, k, 8, padding=0, stride=8, groups=k, bias=False)
-        self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv42 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
+        self.conv1 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
             self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
             self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
-        if self.is_not_last:
+        if self.need_fuse:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         pass
 
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
-
-        y1 = self.conv11(self.pool2(x))
-        y2 = self.conv21(self.pool4(x))
-        y3 = self.conv31(self.pool6(x))
-        y4 = self.conv41(self.pool8(x))
-
-        y1 = torch.sigmoid(y1)
-        y2 = torch.sigmoid(y2)
-        y3 = torch.sigmoid(y3)
-        y4 = torch.sigmoid(y4)
-
-        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
-        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
-        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
-        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
-
-        y1 = y1 * x
-        y2 = y2 * x
-        y3 = y3 * x
-        y4 = y4 * x
-
-        y1 = self.conv12(y1)
-        y2 = self.conv22(y2)
-        y3 = self.conv32(y3)
-        y4 = self.conv42(y4)
-
-        res = torch.add(x, y1)
-        res = torch.add(res, y2)
-        res = torch.add(res, y3)
-        res = torch.add(res, y4)
+        y1 = self.conv1(self.pool2(x))
+        y2 = self.conv2(self.pool4(x))
+        y3 = self.conv3(self.pool8(x))
+        res = torch.add(x, F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True))
+        res = torch.add(res, F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True))
+        res = torch.add(res, F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True))
         res = self.relu(res)
 
-        if self.is_not_last:
+        if self.need_x2:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
             pass
 
@@ -540,12 +437,13 @@ class DeepPoolLayer(nn.Module):
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
+            x_gcn = torch.sigmoid(x_gcn)
             # res = x_gcn * res + res
             res = x_gcn * res
             res = self.conv_att(res)
             pass
 
-        if self.is_not_last:
+        if self.need_fuse:
             res = torch.add(res, x2)
             res = self.conv_sum_c(res)
             pass
@@ -560,39 +458,58 @@ class MyGCNNet(nn.Module):
     def __init__(self, has_bn=False, normalize=False, residual=False, concat=True):
         super(MyGCNNet, self).__init__()
         # BASE
-        self.vgg16 = VGG16()
+        backbone = resnet.__dict__["resnet50"](pretrained=True, replace_stride_with_dilation=[False, False, True])
+        return_layers = {'relu': 'e0', 'layer1': 'e1', 'layer2': 'e2', 'layer3': 'e3', 'layer4': 'e4'}
+        self.backbone = IntermediateLayerGetter(backbone, return_layers=return_layers)
+
+        for para in self.backbone.named_parameters():
+            if "bn" in para[0]:
+                para[1].requires_grad = False
+            pass
+
+        # Convert
+        self.relu = nn.ReLU(inplace=True)
+        self.convert5 = nn.Conv2d(2048, 512, 1, 1, bias=False)  # 25
+        self.convert4 = nn.Conv2d(1024, 512, 1, 1, bias=False)  # 25
+        self.convert3 = nn.Conv2d(512, 256, 1, 1, bias=False)  # 50
+        self.convert2 = nn.Conv2d(256, 256, 1, 1, bias=False)  # 100
+        self.convert1 = nn.Conv2d(64, 128, 1, 1, bias=False)  # 200
 
         # GCN
-        self.model_gnn1 = SAGENet1(in_dim=self.vgg16.out_num2, hidden_dims=[512, 512],
+        self.model_gnn1 = SAGENet1(in_dim=512, hidden_dims=[512, 512],
                                    has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[512, 512, 512, 512],
                                    skip_which=[2, 4], skip_dim=256, has_bn=has_bn,
                                    normalize=normalize, residual=residual, concat=concat)
 
         # DEEP POOL
-        deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, 512)
-        self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False)
-        self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False)
+        deep_pool = [[512, 512, 256, 256, 128], [512, 256, 256, 128, 128]]
+        self.deep_pool5 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, True, 512)
+        self.deep_pool4 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, True, 512)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, True, True, 512)
+        self.deep_pool2 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], True, True, True, 512)
+        self.deep_pool1 = DeepPoolLayer(deep_pool[0][4], deep_pool[1][4], False, False, False)
 
         # ScoreLayer
         score = 128
         self.score = nn.Conv2d(score, 1, 1, 1)
-
-        VGG16.weight_init(self.modules())
         pass
 
     def forward(self, x, batched_graph, batched_pixel_graph):
         # BASE
-        feature1, feature2, feature3, feature4 = self.vgg16(x)
+        feature = self.backbone(x)
+        feature1 = self.relu(self.convert1(feature["e0"]))  # 128, 200
+        feature2 = self.relu(self.convert2(feature["e1"]))  # 256, 100
+        feature3 = self.relu(self.convert3(feature["e2"]))  # 256, 50
+        feature4 = self.relu(self.convert4(feature["e3"]))  # 512, 25
+        feature5 = self.relu(self.convert5(feature["e4"]))  # 512, 25
 
         # SIZE
         x_size = x.size()[2:]
 
         # GCN 1
         data_where = batched_pixel_graph.data_where
-        pixel_nodes_feat = feature2[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
+        pixel_nodes_feat = feature["e2"][data_where[:, 0], :, data_where[:, 1], data_where[:, 2]]
         batched_pixel_graph.x = pixel_nodes_feat
         gcn1_feature = self.model_gnn1.forward(batched_pixel_graph)
         sod_gcn1_feature = self.sod_feature(data_where, gcn1_feature, batched_pixel_graph=batched_pixel_graph)
@@ -606,9 +523,10 @@ class MyGCNNet(nn.Module):
                                             batched_pixel_graph=batched_pixel_graph)
         # For Eval
 
-        merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
+        merge = self.deep_pool5(feature5, feature4, x_gcn=sod_gcn2_feature)  # A + F
+        merge = self.deep_pool4(merge, feature3, x_gcn=sod_gcn2_feature)  # A + F
         merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
-        merge = self.deep_pool2(merge, feature1)  # A + F
+        merge = self.deep_pool2(merge, feature1, x_gcn=sod_gcn1_feature)  # A + F
         merge = self.deep_pool1(merge)  # A
 
         # ScoreLayer
@@ -656,17 +574,13 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, concat=concat).to(self.device)
-        self.model.vgg16.load_pretrained_model(
-            pretrained_model="./pretrained/vgg16-397923af.pth")
-
+        parameters = filter(lambda p: p.requires_grad, self.model.parameters())
         if is_sgd:
-            # self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]]
             self.lr_s = [[0, 0.01], [50, 0.001], [90, 0.0001]] if lr is None else lr
-            self.optimizer = torch.optim.SGD(self.model.parameters(), lr=self.lr_s[0][1],
-                                             momentum=0.9, weight_decay=weight_decay)
+            self.optimizer = torch.optim.SGD(parameters, lr=self.lr_s[0][1], momentum=0.9, weight_decay=weight_decay)
         else:
             self.lr_s = [[0, 0.001], [50, 0.0001], [90, 0.00001]] if lr is None else lr
-            self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr_s[0][1], weight_decay=weight_decay)
+            self.optimizer = torch.optim.Adam(parameters, lr=self.lr_s[0][1], weight_decay=weight_decay)
 
         Tools.print("Total param: {} lr_s={} Optimizer={}".format(
             self._view_model_param(self.model), self.lr_s, self.optimizer))
@@ -681,13 +595,6 @@ class RunnerSPE(object):
 
     def load_model(self, model_file_name):
         ckpt = torch.load(model_file_name, map_location=self.device)
-
-        # keys = [c for c in ckpt if "model_gnn1.gcn_list.0" in c]
-        # for c in keys:
-        #     del ckpt[c]
-        #     Tools.print(c)
-        #     pass
-
         self.model.load_state_dict(ckpt, strict=False)
         Tools.print('Load Model: {}'.format(model_file_name))
         pass
@@ -715,7 +622,7 @@ class RunnerSPE(object):
         pass
 
     def _train_epoch(self):
-        self.model.train()
+        self.model.eval()
 
         # 统计
         th_num = 25
@@ -802,10 +709,10 @@ class RunnerSPE(object):
         return avg_loss, avg_loss1, avg_loss2, avg_mae, score.max(), avg_mae2, score2.max()
 
     def test(self, model_file=None, is_train_loader=False):
+        self.model.eval()
+
         if model_file:
             self.load_model(model_file_name=model_file)
-
-        self.model.train()
 
         Tools.print()
         th_num = 25
@@ -942,18 +849,8 @@ class RunnerSPE(object):
 
 
 """
-75515841
-2020-08-23 10:19:17 E:28, Train sod-mae-score=0.0087-0.9866 gcn-mae-score=0.0445-0.9167 loss=302.4589(2098.5020+46.3043)
-2020-08-23 10:19:17 E:28, Test  sod-mae-score=0.0367-0.8847 gcn-mae-score=0.0744-0.7490 loss=0.3228(0.1803+0.1424)
-
-2020-08-25 05:34:43 E:27, Train sod-mae-score=0.0089-0.9865 gcn-mae-score=0.0451-0.9151 loss=307.3814(2138.9922+46.7411)
-2020-08-25 05:34:43 E:27, Test  sod-mae-score=0.0377-0.8800 gcn-mae-score=0.0749-0.7473 loss=0.3364(0.1824+0.1540)
-
-Total param: 75515841 lr_s=[[0, 5e-05], [20, 5e-06]]
-2020-08-28 01:56:54 E:25, Train sod-mae-score=0.0091-0.9859 gcn-mae-score=0.0472-0.9137 loss=316.2569(2197.9780+48.2295)
-2020-08-28 01:56:54 E:25, Test  sod-mae-score=0.0371-0.8833 gcn-mae-score=0.0763-0.7454 loss=0.3287(0.1815+0.1472)
-2020-08-28 04:09:39 E:29, Train sod-mae-score=0.0085-0.9869 gcn-mae-score=0.0434-0.9181 loss=295.3804(2042.4350+45.5684)
-2020-08-28 04:09:39 E:29, Test  sod-mae-score=0.0369-0.8820 gcn-mae-score=0.0757-0.7469 loss=0.3329(0.1832+0.1497)
+2020-08-28 00:35:16 E:29, Train sod-mae-score=0.0107-0.9838 gcn-mae-score=0.0676-0.8640 loss=314.7763(2501.5707+32.3096)
+2020-08-28 00:35:16 E:29, Test  sod-mae-score=0.0393-0.8741 gcn-mae-score=0.0909-0.6604 loss=0.3600(0.2145+0.1456)
 """
 
 
@@ -968,9 +865,9 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
+    _gpu_id = "0"
     # _gpu_id = "1"
-    _gpu_id = "2"
+    # _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
@@ -984,9 +881,9 @@ if __name__ == '__main__':
     _is_normalize = True
     _concat = True
 
-    _sp_size, _down_ratio = 4, 4
+    _sp_size, _down_ratio = 3, 8
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_ResNet_GCN_more/sigmoid_{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

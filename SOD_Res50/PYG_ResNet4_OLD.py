@@ -851,6 +851,17 @@ class RunnerSPE(object):
 
 
 """
+Total param: 62045633 lr_s=[[0, 5e-05], [20, 5e-06]]
+res = x_gcn * res
+2020-08-27 00:40:21 E:26, Train sod-mae-score=0.0111-0.9832 gcn-mae-score=0.1042-0.8368 loss=436.9912(2593.2634+88.8324)
+2020-08-27 00:40:21 E:26, Test  sod-mae-score=0.0400-0.8763 gcn-mae-score=0.1280-0.6308 loss=0.4002(0.2626+0.1376)
+2020-08-27 02:10:28 E:29, Train sod-mae-score=0.0105-0.9841 gcn-mae-score=0.1022-0.8387 loss=420.3873(2453.6238+87.5125)
+2020-08-27 02:10:28 E:29, Test  sod-mae-score=0.0391-0.8752 gcn-mae-score=0.1252-0.6347 loss=0.3848(0.2453+0.1395)
+
+Total param: 62045633 lr_s=[[0, 5e-05], [20, 5e-06]]
+res = x_gcn * res + res
+2020-08-27 01:19:52 E:25, Train sod-mae-score=0.0107-0.9837 gcn-mae-score=0.1054-0.8364 loss=429.3523(2504.4197+89.4552)
+2020-08-27 01:19:52 E:25, Test  sod-mae-score=0.0393-0.8794 gcn-mae-score=0.1302-0.6288 loss=0.4015(0.2599+0.1416)
 """
 
 
