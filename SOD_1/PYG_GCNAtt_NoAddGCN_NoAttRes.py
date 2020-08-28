@@ -920,6 +920,15 @@ class RunnerSPE(object):
 2020-08-25 01:31:04 E:28, Train sod-mae-score=0.0088-0.9864 gcn-mae-score=0.0406-0.9207 loss=297.1919(2100.0706+43.5924)
 2020-08-25 01:31:04 E:28, Test  sod-mae-score=0.0384-0.8776 gcn-mae-score=0.0726-0.7484 loss=0.3419(0.1820+0.1599)
 
+seed=520
+2020-08-26 04:18:15 E:22, Train sod-mae-score=0.0103-0.9844 gcn-mae-score=0.0476-0.9124 loss=340.0675(2428.6251+48.6025)
+2020-08-26 04:18:15 E:22, Test  sod-mae-score=0.0396-0.8800 gcn-mae-score=0.0778-0.7418 loss=0.3190(0.1830+0.1359)
+2020-08-26 09:11:14 E:28, Train sod-mae-score=0.0089-0.9863 gcn-mae-score=0.0410-0.9197 loss=299.7454(2117.8641+43.9795)
+2020-08-26 09:11:14 E:28, Test  sod-mae-score=0.0382-0.8790 gcn-mae-score=0.0724-0.7451 loss=0.3406(0.1801+0.1606)
+
+2020-08-27 08:23:15 E:29, Train sod-mae-score=0.0087-0.9865 gcn-mae-score=0.0405-0.9208 loss=295.3093(2082.0083+43.5542)
+2020-08-27 08:23:15 E:29, Test  sod-mae-score=0.0387-0.8780 gcn-mae-score=0.0724-0.7482 loss=0.3347(0.1812+0.1535)
+
 2020-08-28 00:52:16 E:29, Train sod-mae-score=0.0088-0.9864 gcn-mae-score=0.0403-0.9218 loss=296.6004(2097.8096+43.4097)
 2020-08-28 00:52:16 E:29, Test  sod-mae-score=0.0387-0.8766 gcn-mae-score=0.0723-0.7512 loss=0.3415(0.1815+0.1600)
 """
@@ -936,8 +945,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -954,7 +963,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/1{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/3{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
