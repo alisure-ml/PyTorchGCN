@@ -937,16 +937,16 @@ seed=520
 if __name__ == '__main__':
 
     # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
-    _data_root_path = "/mnt/4T/ALISURE/DUTS"
+    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    # _data_root_path = "/mnt/4T/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
     _num_workers = 10
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -963,7 +963,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/3{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes/4{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
