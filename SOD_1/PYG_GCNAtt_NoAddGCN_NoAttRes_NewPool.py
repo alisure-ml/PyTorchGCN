@@ -960,6 +960,11 @@ Total param: 75515841 lr_s=[[0, 5e-05], [20, 5e-06]]
 
 2020-08-28 06:59:06 E:29, Train sod-mae-score=0.0087-0.9867 gcn-mae-score=0.0439-0.9175 loss=301.1649(2092.8173+45.9416)
 2020-08-28 06:59:06 E:29, Test  sod-mae-score=0.0375-0.8810 gcn-mae-score=0.0748-0.7475 loss=0.3297(0.1823+0.1475)
+
+Total param: 75515841 lr_s=[[0, 5e-05], [20, 5e-06]]
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/30
+2020-08-29 05:42:50 E:29, Train sod-mae-score=0.0084-0.9870 gcn-mae-score=0.0430-0.9175 loss=293.7736(2033.1069+45.2315)
+2020-08-29 05:42:50 E:29, Test  sod-mae-score=0.0375-0.8784 gcn-mae-score=0.0755-0.7445 loss=0.3441(0.1834+0.1607)
 """
 
 
@@ -974,8 +979,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -992,7 +997,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/2{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/3{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
