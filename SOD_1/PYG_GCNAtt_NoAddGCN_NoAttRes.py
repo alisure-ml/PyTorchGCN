@@ -942,8 +942,8 @@ Total param: 48067521 lr_s=[[0, 5e-05], [20, 5e-06]]
 if __name__ == '__main__':
 
     # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
-    _data_root_path = "/mnt/4T/ALISURE/DUTS"
+    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    # _data_root_path = "/mnt/4T/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
