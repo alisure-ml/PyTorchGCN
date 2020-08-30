@@ -475,12 +475,20 @@ class DeepPoolLayer(nn.Module):
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.Conv2d(k, k, 2, padding=0, stride=2, groups=k, bias=False)
-        self.pool4 = nn.Conv2d(k, k, 4, padding=0, stride=4, groups=k, bias=False)
-        self.pool8 = nn.Conv2d(k, k, 8, padding=0, stride=8, groups=k, bias=False)
-        self.conv1 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
+        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
+
+        self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+
+        self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
@@ -494,17 +502,35 @@ class DeepPoolLayer(nn.Module):
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
 
-        y1 = self.conv1(self.relu(self.pool2(x)))
-        y2 = self.conv2(self.relu(self.pool4(x)))
-        y3 = self.conv3(self.relu(self.pool8(x)))
+        y1 = self.conv11(self.pool2(x))
+        y2 = self.conv21(self.pool4(x))
+        y3 = self.conv31(self.pool6(x))
+        y4 = self.conv41(self.pool8(x))
+
+        y1 = torch.sigmoid(y1)
+        y2 = torch.sigmoid(y2)
+        y3 = torch.sigmoid(y3)
+        y4 = torch.sigmoid(y4)
 
         y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
         y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
         y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
+        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
+
+        y1 = y1 * x
+        y2 = y2 * x
+        y3 = y3 * x
+        y4 = y4 * x
+
+        y1 = self.conv12(y1)
+        y2 = self.conv22(y2)
+        y3 = self.conv32(y3)
+        y4 = self.conv42(y4)
 
         res = torch.add(x, y1)
         res = torch.add(res, y2)
         res = torch.add(res, y3)
+        res = torch.add(res, y4)
         res = self.relu(res)
 
         if self.is_not_last:
@@ -516,6 +542,7 @@ class DeepPoolLayer(nn.Module):
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
+            x_gcn = torch.sigmoid(x_gcn)
             # res = x_gcn * res + res
             res = x_gcn * res
             res = self.conv_att(res)
@@ -918,9 +945,36 @@ class RunnerSPE(object):
 
 
 """
-48185793
-2020-08-23 07:01:14 E:28, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0432-0.9173 loss=302.6222(2119.1018+45.3560)
-2020-08-23 07:01:14 E:28, Test  sod-mae-score=0.0383-0.8764 gcn-mae-score=0.0745-0.7457 loss=0.3482(0.1814+0.1668)
+Total param: 75346881 lr_s=[[0, 5e-05], [20, 5e-06]]
+res = x_gcn * res + res
+2020-08-29 05:05:16 E:27, Train sod-mae-score=0.0090-0.9862 gcn-mae-score=0.0423-0.9189 loss=306.2381(2166.6483+44.7866)
+2020-08-29 05:05:16 E:27, Test  sod-mae-score=0.0388-0.8780 gcn-mae-score=0.0743-0.7481 loss=0.3275(0.1815+0.1460)
+
+Total param: 75346881 lr_s=[[0, 5e-05], [20, 5e-06]]
+res = x_gcn * res
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/32
+2020-08-29 08:08:53 E:27, Train sod-mae-score=0.0088-0.9865 gcn-mae-score=0.0442-0.9172 loss=303.6382(2113.8964+46.1243)
+2020-08-29 08:08:53 E:27, Test  sod-mae-score=0.0374-0.8863 gcn-mae-score=0.0780-0.7465 loss=0.3277(0.1848+0.1429)
+2020-08-29 09:29:38 E:29, Train sod-mae-score=0.0085-0.9869 gcn-mae-score=0.0425-0.9193 loss=294.5120(2048.4705+44.8325)
+2020-08-29 09:29:38 E:29, Test  sod-mae-score=0.0368-0.8865 gcn-mae-score=0.0764-0.7462 loss=0.3348(0.1828+0.1520)
+
+Total param: 75346881 lr_s=[[0, 5e-05], [20, 5e-06]]
+res = x_gcn * res
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/30
+2020-08-30 00:47:12 E:23, Train sod-mae-score=0.0097-0.9854 gcn-mae-score=0.0485-0.9119 loss=328.9961(2308.1470+49.0907)
+2020-08-30 00:47:12 E:23, Test  sod-mae-score=0.0371-0.8869 gcn-mae-score=0.0798-0.7418 loss=0.3245(0.1858+0.1388)
+
+Total param: 75346881 lr_s=[[0, 5e-05], [20, 5e-06]]
+res = x_gcn * res
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/42
+2020-08-30 05:42:16 E:27, Train sod-mae-score=0.0087-0.9865 gcn-mae-score=0.0421-0.9197 loss=299.4696(2103.9661+44.5365)
+2020-08-30 05:42:16 E:27, Test  sod-mae-score=0.0369-0.8861 gcn-mae-score=0.0741-0.7493 loss=0.3257(0.1799+0.1459)
+
+Total param: 75346881 lr_s=[[0, 5e-05], [20, 5e-06]]
+res = x_gcn * res
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/43
+2020-08-30 05:30:50 E:27, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0442-0.9170 loss=306.8692(2148.2395+46.0226)
+2020-08-30 05:30:50 E:27, Test  sod-mae-score=0.0368-0.8837 gcn-mae-score=0.0770-0.7430 loss=0.3274(0.1823+0.1451)
 """
 
 
@@ -952,7 +1006,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_2468/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/4{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
