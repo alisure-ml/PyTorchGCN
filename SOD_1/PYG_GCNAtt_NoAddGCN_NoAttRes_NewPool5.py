@@ -459,37 +459,41 @@ class VGG16(nn.Module):
 
 class DeepPoolLayer(nn.Module):
 
-    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None):
+    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None, which=0):
         super(DeepPoolLayer, self).__init__()
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
-        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
-        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
-        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
+        if which == 0:
+            self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+            self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+            self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
+            self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
+        elif which == 1:
+            self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+            self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+            self.pool6 = nn.AvgPool2d(kernel_size=8, stride=8)
+            self.pool8 = nn.AvgPool2d(kernel_size=16, stride=16)
+            pass
 
-        self.conv11 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv21 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv31 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv41 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
+        s = 4
+        self.conv11 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv21 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv31 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv41 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
 
-        self.conv12 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv22 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv32 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv42 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv14 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv24 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv34 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv44 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
+        self.conv12 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
 
-        self.conv13 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv23 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv33 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv43 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
+        self.conv13 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv23 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv33 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv43 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
-        self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
+        self.conv_sum = nn.Conv2d(k//s*4, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
             self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
             self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
@@ -500,10 +504,10 @@ class DeepPoolLayer(nn.Module):
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
 
-        y1 = self.conv14(self.relu(self.conv12(self.relu(self.conv11(self.pool2(x))))))
-        y2 = self.conv24(self.relu(self.conv22(self.relu(self.conv21(self.pool4(x))))))
-        y3 = self.conv34(self.relu(self.conv32(self.relu(self.conv31(self.pool6(x))))))
-        y4 = self.conv44(self.relu(self.conv42(self.relu(self.conv41(self.pool8(x))))))
+        y1 = self.conv12(self.relu(self.conv11(self.pool2(x))))
+        y2 = self.conv22(self.relu(self.conv21(self.pool4(x))))
+        y3 = self.conv32(self.relu(self.conv31(self.pool6(x))))
+        y4 = self.conv42(self.relu(self.conv41(self.pool8(x))))
 
         y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
         y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
@@ -568,10 +572,10 @@ class MyGCNNet(nn.Module):
 
         # DEEP POOL
         deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, 512)
-        self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False)
-        self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False)
+        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512, which=0)
+        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, 512, which=0)
+        self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False, which=1)
+        self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False, which=1)
 
         # ScoreLayer
         score = 128
@@ -939,9 +943,12 @@ class RunnerSPE(object):
 
 
 """
-./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool3/11
-2020-08-30 15:26:31 E:29, Train sod-mae-score=0.0091-0.9861 gcn-mae-score=0.0398-0.9220 loss=302.7160(2168.2221+42.9469)
-2020-08-30 15:26:31 E:29, Test  sod-mae-score=0.0374-0.8785 gcn-mae-score=0.0741-0.7494 loss=0.3394(0.1840+0.1554)
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool5/10
+Total param: 43975617 lr_s=[[0, 5e-05], [20, 5e-06]]
+2020-08-31 23:52:25 E:26, Train sod-mae-score=0.0095-0.9853 gcn-mae-score=0.0432-0.9183 loss=318.5652(2277.6635+45.3994)
+2020-08-31 23:52:25 E:26, Test  sod-mae-score=0.0379-0.8805 gcn-mae-score=0.0750-0.7487 loss=0.3307(0.1806+0.1500)
+2020-09-01 01:20:58 E:29, Train sod-mae-score=0.0091-0.9859 gcn-mae-score=0.0405-0.9213 loss=305.2745(2183.6101+43.4567)
+2020-09-01 01:20:58 E:29, Test  sod-mae-score=0.0379-0.8799 gcn-mae-score=0.0766-0.7422 loss=0.3415(0.1870+0.1544)
 """
 
 
@@ -956,8 +963,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -974,7 +981,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool3/1{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool5/1{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

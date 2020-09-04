@@ -173,6 +173,10 @@ class RunnerSPE(object):
                     save_file_name = Tools.new_dir(os.path.join(save_path, "SOD", "{}.png".format(image_name)))
                     sod_result = torch.squeeze(sod_logits_sigmoid).detach().cpu().numpy()
                     Image.fromarray(np.asarray(sod_result * 255, dtype=np.uint8)).resize(im_size).save(save_file_name)
+
+                    save_file_name = Tools.new_dir(os.path.join(save_path, "SP-GT", "{}.png".format(image_name)))
+                    tar_sod = self._cal_sod(labels_val.tolist(), segments[0])
+                    Image.fromarray(np.asarray(tar_sod * 255, dtype=np.uint8)).resize(im_size).save(save_file_name)
                     pass
 
                 # Print
@@ -202,6 +206,14 @@ class RunnerSPE(object):
         pass
 
     @staticmethod
+    def _cal_sod(pre, segment):
+        result = np.asarray(segment.copy(), dtype=np.float32)
+        for i in range(len(pre)):
+            result[segment == i] = pre[i]
+            pass
+        return result
+
+    @staticmethod
     def _eval_mae(y_pred, y):
         return np.abs(y_pred - y).mean()
 
@@ -212,7 +224,7 @@ class RunnerSPE(object):
         for i in range(th_num):
             y_temp = y_pred >= th_list[i]
             tp = (y_temp * y).sum()
-            prec[i], recall[i] = tp / (y_temp.sum() + 1e-20), tp / y.sum()
+            prec[i], recall[i] = tp / (y_temp.sum() + 1e-20), tp / (y.sum() + 1e-20)
             pass
         return prec, recall
 
@@ -260,16 +272,22 @@ model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAdd
 
 
 if __name__ == '__main__':
-    model_name = "FPN_Baseline"
-    from PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid import MyGCNNet, MyDataset
-    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/42/epoch_27.pkl"
+    # model_name = "FPN_Baseline"
+    # from PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid import MyGCNNet, MyDataset
+    # model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/42/epoch_27.pkl"
 
-    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
+    model_name = "PYG_GCN"
+    from PYG_GCN_Only import MyGCNNet, MyDataset
+    model_file = "/mnt/4T/ALISURE/PyTorchGCN/SOD_2/ckpt/PYG_GCN/1_2/epoch_28.pkl"
+
+    # result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
+    result_path = "/mnt/4T/ALISURE/PyTorchGCN_Result"
+
     # _data_root_path = "/mnt/4T/Data/SOD"
     # _data_root_path = "/media/ubuntu/data1/ALISURE"
     _data_root_path = "/media/ubuntu/ALISURE/data/SOD"
 
-    _gpu_id = "1"
+    _gpu_id = "0"
 
     _use_gpu = True
     _improved = True
@@ -284,11 +302,18 @@ if __name__ == '__main__':
 
     sod_data = SODData(data_root_path=_data_root_path)
     # for data_set in [sod_data.cssd, sod_data.ecssd, sod_data.msra_1000_asd, sod_data.msra10k,
-    #                  sod_data.msra_b, sod_data.sed2, sod_data.dut_dmron_5166, sod_data.hku_is,
+    #                  sod_data.msra_b, sod_data.sed1, sod_data.sed2, sod_data.dut_dmron_5168,
+    #                  sod_data.dut_dmron_5166, sod_data.hku_is,
     #                  sod_data.sod, sod_data.thur15000, sod_data.pascal1500, sod_data.pascal_s,
     #                  sod_data.judd, sod_data.duts_te, sod_data.duts_tr, sod_data.cub_200_2011]:
     # for data_set in [sod_data.duts_te, sod_data.duts_tr]:
-    for data_set in [sod_data.sed1, sod_data.dut_dmron_5168]:
+    # for data_set in [sod_data.sed1, sod_data.dut_dmron_5168]:
+    # for data_set in [
+        # sod_data.cssd, sod_data.ecssd, sod_data.msra_1000_asd, sod_data.msra10k, sod_data.msra_b, sod_data.sed1,
+        # sod_data.sed2, sod_data.dut_dmron_5168, sod_data.dut_dmron_5166, sod_data.hku_is, sod_data.sod, sod_data.thur15000,
+        # sod_data.pascal1500, sod_data.pascal_s, sod_data.judd, sod_data.duts_te, sod_data.duts_tr, sod_data.cub_200_2011
+    # ]:
+    for data_set in [sod_data.pascal_s]:
         img_name_list, lbl_name_list, dataset_name_list = data_set()
         Tools.print("Begin eval {} {}".format(dataset_name_list[0], len(img_name_list)))
 

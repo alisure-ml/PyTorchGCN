@@ -457,92 +457,39 @@ class VGG16(nn.Module):
     pass
 
 
-class DeepPoolLayer(nn.Module):
+class FuseLayer(nn.Module):
 
-    def __init__(self, k, k_out, is_not_last, has_gcn=False, gcn_in=None):
-        super(DeepPoolLayer, self).__init__()
-        self.is_not_last = is_not_last
+    def __init__(self, k, k_out, is_fuse, has_gcn=False, gcn_in=None):
+        super(FuseLayer, self).__init__()
+        self.is_fuse = is_fuse
         self.has_gcn = has_gcn
-
-        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
-        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
-        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
-        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
-
-        self.conv11 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv21 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv31 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv41 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-
-        self.conv12 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv22 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv32 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv42 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv14 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv24 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv34 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv44 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-
-        self.conv13 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv23 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv33 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv43 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
+
         if self.has_gcn:
             self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
             self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
-        if self.is_not_last:
+
+        if self.is_fuse:
             self.conv_sum_c = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
         pass
 
     def forward(self, x, x2=None, x_gcn=None):
-        x_size = x.size()
-
-        y1 = self.conv14(self.relu(self.conv12(self.relu(self.conv11(self.pool2(x))))))
-        y2 = self.conv24(self.relu(self.conv22(self.relu(self.conv21(self.pool4(x))))))
-        y3 = self.conv34(self.relu(self.conv32(self.relu(self.conv31(self.pool6(x))))))
-        y4 = self.conv44(self.relu(self.conv42(self.relu(self.conv41(self.pool8(x))))))
-
-        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
-        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
-        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
-        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
-
-        y1 = torch.sigmoid(y1)
-        y2 = torch.sigmoid(y2)
-        y3 = torch.sigmoid(y3)
-        y4 = torch.sigmoid(y4)
-
-        _x1 = self.conv13(x)
-        _x2 = self.conv23(x)
-        _x3 = self.conv33(x)
-        _x4 = self.conv43(x)
-
-        c1 = y1 * _x1
-        c2 = y2 * _x2
-        c3 = y3 * _x3
-        c4 = y4 * _x4
-
-        res = torch.cat([c1, c2, c3, c4], dim=1)
-
-        if self.is_not_last:
-            res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
+        if self.is_fuse:
+            x = F.interpolate(x, x2.size()[2:], mode='bilinear', align_corners=True)
             pass
-
-        res = self.conv_sum(res)
+        res = self.conv_sum(x)
 
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
-            x_gcn = torch.sigmoid(x_gcn)
             # res = x_gcn * res + res
             res = x_gcn * res
             res = self.conv_att(res)
             pass
 
-        if self.is_not_last:
+        if self.is_fuse:
             res = torch.add(res, x2)
             res = self.conv_sum_c(res)
             pass
@@ -567,11 +514,11 @@ class MyGCNNet(nn.Module):
                                    normalize=normalize, residual=residual, concat=concat)
 
         # DEEP POOL
-        deep_pool = [[512, 512, 256, 128], [512, 256, 128, 128]]
-        self.deep_pool4 = DeepPoolLayer(deep_pool[0][0], deep_pool[1][0], True, True, 512)
-        self.deep_pool3 = DeepPoolLayer(deep_pool[0][1], deep_pool[1][1], True, True, 512)
-        self.deep_pool2 = DeepPoolLayer(deep_pool[0][2], deep_pool[1][2], True, False)
-        self.deep_pool1 = DeepPoolLayer(deep_pool[0][3], deep_pool[1][3], False, False)
+        fuse = [[512, 512, 256, 128], [512, 256, 128, 128]]
+        self.fuse_layer4 = FuseLayer(fuse[0][0], fuse[1][0], True, True, 512)
+        self.fuse_layer3 = FuseLayer(fuse[0][1], fuse[1][1], True, True, 512)
+        self.fuse_layer2 = FuseLayer(fuse[0][2], fuse[1][2], True, False)
+        self.fuse_layer1 = FuseLayer(fuse[0][3], fuse[1][3], False, False)
 
         # ScoreLayer
         score = 128
@@ -603,10 +550,10 @@ class MyGCNNet(nn.Module):
                                             batched_pixel_graph=batched_pixel_graph)
         # For Eval
 
-        merge = self.deep_pool4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
-        merge = self.deep_pool3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
-        merge = self.deep_pool2(merge, feature1)  # A + F
-        merge = self.deep_pool1(merge)  # A
+        merge = self.fuse_layer4(feature4, feature3, x_gcn=sod_gcn2_feature)  # A + F
+        merge = self.fuse_layer3(merge, feature2, x_gcn=sod_gcn1_feature)  # A + F
+        merge = self.fuse_layer2(merge, feature1)  # A + F
+        merge = self.fuse_layer1(merge)  # A
 
         # ScoreLayer
         merge = self.score(merge)
@@ -939,9 +886,8 @@ class RunnerSPE(object):
 
 
 """
-./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool3/11
-2020-08-30 15:26:31 E:29, Train sod-mae-score=0.0091-0.9861 gcn-mae-score=0.0398-0.9220 loss=302.7160(2168.2221+42.9469)
-2020-08-30 15:26:31 E:29, Test  sod-mae-score=0.0374-0.8785 gcn-mae-score=0.0741-0.7494 loss=0.3394(0.1840+0.1554)
+2020-08-24 11:38:13 E:28, Train sod-mae-score=0.0091-0.9857 gcn-mae-score=0.0353-0.9278 loss=294.1604(2145.3026+39.8151)
+2020-08-24 11:38:13 E:28, Test  sod-mae-score=0.0459-0.8518 gcn-mae-score=0.0723-0.7518 loss=0.3684(0.1847+0.1836)
 """
 
 
@@ -957,8 +903,8 @@ if __name__ == '__main__':
     _use_gpu = True
 
     # _gpu_id = "0"
-    _gpu_id = "1"
-    # _gpu_id = "2"
+    # _gpu_id = "1"
+    _gpu_id = "2"
     # _gpu_id = "3"
 
     _epochs = 30  # Super Param Group 1
@@ -974,7 +920,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool3/1{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCN/1_{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

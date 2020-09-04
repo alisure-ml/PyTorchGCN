@@ -886,6 +886,7 @@ class RunnerSPE(object):
 
 
 """
+/mnt/4T/ALISURE/PyTorchGCN/SOD_2/ckpt/PYG_GCN/1_2/epoch_28.pkl
 2020-08-24 11:38:13 E:28, Train sod-mae-score=0.0091-0.9857 gcn-mae-score=0.0353-0.9278 loss=294.1604(2145.3026+39.8151)
 2020-08-24 11:38:13 E:28, Test  sod-mae-score=0.0459-0.8518 gcn-mae-score=0.0723-0.7518 loss=0.3684(0.1847+0.1836)
 """

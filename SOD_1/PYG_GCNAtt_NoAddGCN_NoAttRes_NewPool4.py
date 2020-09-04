@@ -936,6 +936,11 @@ class RunnerSPE(object):
 
 
 """
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool4/12
+2020-08-30 15:49:00 E:26, Train sod-mae-score=0.0096-0.9854 gcn-mae-score=0.0453-0.9160 loss=323.2791(2295.6720+46.8559)
+2020-08-30 15:49:00 E:26, Test  sod-mae-score=0.0383-0.8830 gcn-mae-score=0.0773-0.7456 loss=0.3242(0.1820+0.1423)
+2020-08-30 16:53:15 E:28, Train sod-mae-score=0.0093-0.9857 gcn-mae-score=0.0430-0.9186 loss=312.8712(2224.4274+45.2142)
+2020-08-30 16:53:15 E:28, Test  sod-mae-score=0.0378-0.8812 gcn-mae-score=0.0760-0.7471 loss=0.3297(0.1816+0.1481)
 """
 
 

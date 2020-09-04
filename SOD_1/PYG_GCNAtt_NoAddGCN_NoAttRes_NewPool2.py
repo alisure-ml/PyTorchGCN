@@ -946,6 +946,11 @@ x_gcn = torch.sigmoid(x_gcn)
 res = x_gcn * res
 2020-08-30 00:31:46 E:27, Train sod-mae-score=0.0094-0.9856 gcn-mae-score=0.0421-0.9192 loss=314.4703(2252.9347+44.5884)
 2020-08-30 00:31:46 E:27, Test  sod-mae-score=0.0377-0.8846 gcn-mae-score=0.0742-0.7442 loss=0.3299(0.1827+0.1472)
+
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool2/30
+Total param: 43975617 lr_s=[[0, 5e-05], [20, 5e-06]]
+2020-08-31 05:08:38 E:25, Train sod-mae-score=0.0099-0.9850 gcn-mae-score=0.0450-0.9165 loss=328.8424(2355.6550+46.6385)
+2020-08-31 05:08:38 E:25, Test  sod-mae-score=0.0379-0.8825 gcn-mae-score=0.0757-0.7460 loss=0.3230(0.1820+0.1410)
 """
 
 
@@ -978,7 +983,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool2/2{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool2/3{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

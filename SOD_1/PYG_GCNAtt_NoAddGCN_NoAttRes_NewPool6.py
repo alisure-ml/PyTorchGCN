@@ -464,32 +464,29 @@ class DeepPoolLayer(nn.Module):
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
-        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
-        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
-        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
+        self.pool2 = nn.AvgPool2d(kernel_size=3, stride=2, padding=1)
+        self.pool4 = nn.AvgPool2d(kernel_size=6, stride=4, padding=2)
+        self.pool6 = nn.AvgPool2d(kernel_size=9, stride=6, padding=3)
+        self.pool8 = nn.AvgPool2d(kernel_size=12, stride=8, padding=4)
 
-        self.conv11 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv21 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv31 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv41 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
+        s = 4
+        self.conv11 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv21 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv31 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv41 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
 
-        self.conv12 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv22 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv32 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv42 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv14 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv24 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv34 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv44 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
+        self.conv12 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k//s, k//s, 3, 1, 1, bias=False)
 
-        self.conv13 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv23 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv33 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv43 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
+        self.conv13 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv23 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv33 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
+        self.conv43 = nn.Conv2d(k, k//s, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
-        self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
+        self.conv_sum = nn.Conv2d(k//s*4, k_out, 3, 1, 1, bias=False)
         if self.has_gcn:
             self.conv_gcn = nn.Conv2d(gcn_in, k_out, 3, 1, 1, bias=False)
             self.conv_att = nn.Conv2d(k_out, k_out, 3, 1, 1, bias=False)
@@ -500,10 +497,10 @@ class DeepPoolLayer(nn.Module):
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
 
-        y1 = self.conv14(self.relu(self.conv12(self.relu(self.conv11(self.pool2(x))))))
-        y2 = self.conv24(self.relu(self.conv22(self.relu(self.conv21(self.pool4(x))))))
-        y3 = self.conv34(self.relu(self.conv32(self.relu(self.conv31(self.pool6(x))))))
-        y4 = self.conv44(self.relu(self.conv42(self.relu(self.conv41(self.pool8(x))))))
+        y1 = self.conv12(self.relu(self.conv11(self.pool2(x))))
+        y2 = self.conv22(self.relu(self.conv21(self.pool4(x))))
+        y3 = self.conv32(self.relu(self.conv31(self.pool6(x))))
+        y4 = self.conv42(self.relu(self.conv41(self.pool8(x))))
 
         y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
         y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
@@ -939,9 +936,10 @@ class RunnerSPE(object):
 
 
 """
-./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool3/11
-2020-08-30 15:26:31 E:29, Train sod-mae-score=0.0091-0.9861 gcn-mae-score=0.0398-0.9220 loss=302.7160(2168.2221+42.9469)
-2020-08-30 15:26:31 E:29, Test  sod-mae-score=0.0374-0.8785 gcn-mae-score=0.0741-0.7494 loss=0.3394(0.1840+0.1554)
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool6/11
+Total param: 43975617 lr_s=[[0, 5e-05], [20, 5e-06]]
+2020-09-01 00:18:25 E:27, Train sod-mae-score=0.0096-0.9854 gcn-mae-score=0.0439-0.9175 loss=321.0931(2292.6660+45.9132)
+2020-09-01 00:18:25 E:27, Test  sod-mae-score=0.0385-0.8800 gcn-mae-score=0.0744-0.7504 loss=0.3268(0.1812+0.1455)
 """
 
 
@@ -974,7 +972,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool3/1{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool6/1{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
