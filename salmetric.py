@@ -35,12 +35,20 @@ Recall:       0.817062
 MAE:          0.0368984
 mask_path = "/media/ubuntu/data1/ALISURE/DUTS/DUTS-TE/DUTS-TE-Mask"
 result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/DUTS-TE/SOD"
+
+
+Max F-measre: 0.894308
+Precision:    0.916229
+Recall:       0.828253
+MAE:          0.0370773
+mask_path = "/media/ubuntu/data1/ALISURE/DUTS/DUTS-TE/DUTS-TE-Mask"
+result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/DUTS-TE/SOD"
 """
 
 
 if __name__ == '__main__':
     mask_path = "/media/ubuntu/data1/ALISURE/DUTS/DUTS-TE/DUTS-TE-Mask"
-    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result/PYG_GCNAtt_NoAddGCN_NoAttRes_NewPool/DUTS-TE/SOD"
+    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/DUTS-TE/SOD"
 
     _result_files = get_file(mask_path, result_path)
     _txt = "\n".join(_result_files)

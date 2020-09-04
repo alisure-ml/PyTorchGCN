@@ -475,12 +475,20 @@ class DeepPoolLayer(nn.Module):
         self.is_not_last = is_not_last
         self.has_gcn = has_gcn
 
-        self.pool2 = nn.Conv2d(k, k, 2, padding=0, stride=2, groups=k, bias=False)
-        self.pool4 = nn.Conv2d(k, k, 4, padding=0, stride=4, groups=k, bias=False)
-        self.pool8 = nn.Conv2d(k, k, 8, padding=0, stride=8, groups=k, bias=False)
-        self.conv1 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv2 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
-        self.conv3 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.pool2 = nn.AvgPool2d(kernel_size=2, stride=2)
+        self.pool4 = nn.AvgPool2d(kernel_size=4, stride=4)
+        self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
+        self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
+
+        self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+
+        self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
@@ -494,28 +502,47 @@ class DeepPoolLayer(nn.Module):
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
 
-        y1 = self.conv1(self.pool2(x))
-        y2 = self.conv2(self.pool4(x))
-        y3 = self.conv3(self.pool8(x))
+        y1 = self.conv11(self.pool2(x))
+        y2 = self.conv21(self.pool4(x))
+        y3 = self.conv31(self.pool6(x))
+        y4 = self.conv41(self.pool8(x))
+
+        y1 = torch.sigmoid(y1)
+        y2 = torch.sigmoid(y2)
+        y3 = torch.sigmoid(y3)
+        y4 = torch.sigmoid(y4)
 
         y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
         y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
         y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
+        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
+
+        y1 = y1 * x
+        y2 = y2 * x
+        y3 = y3 * x
+        y4 = y4 * x
+
+        y1 = self.conv12(y1)
+        y2 = self.conv22(y2)
+        y3 = self.conv32(y3)
+        y4 = self.conv42(y4)
 
         res = torch.add(x, y1)
         res = torch.add(res, y2)
         res = torch.add(res, y3)
+        res = torch.add(res, y4)
         res = self.relu(res)
+
+        res = self.conv_sum(res)
 
         if self.is_not_last:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
             pass
 
-        res = self.conv_sum(res)
-
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
             x_gcn = self.conv_gcn(x_gcn)
+            x_gcn = torch.sigmoid(x_gcn)
             # res = x_gcn * res + res
             res = x_gcn * res
             res = self.conv_att(res)
@@ -918,9 +945,11 @@ class RunnerSPE(object):
 
 
 """
-48185793
-2020-08-24 05:53:22 E:29, Train sod-mae-score=0.0082-0.9872 gcn-mae-score=0.0386-0.9232 loss=282.4063(1981.0088+42.1527)
-2020-08-24 05:53:22 E:29, Test  sod-mae-score=0.0383-0.8763 gcn-mae-score=0.0722-0.7465 loss=0.3509(0.1817+0.1692)
+Total param: 75346881 lr_s=[[0, 5e-05], [20, 5e-06]]
+ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/51
+res = self.conv_sum(res)
+2020-09-01 04:11:00 E:27, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0451-0.9157 loss=307.8744(2147.0428+46.5851)
+2020-09-01 04:11:00 E:27, Test  sod-mae-score=0.0368-0.8833 gcn-mae-score=0.0771-0.7416 loss=0.3258(0.1821+0.1438)
 """
 
 
@@ -934,8 +963,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    _gpu_id = "0"
-    # _gpu_id = "1"
+    # _gpu_id = "0"
+    _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -952,7 +981,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_2468_NoReLU/{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/5{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,

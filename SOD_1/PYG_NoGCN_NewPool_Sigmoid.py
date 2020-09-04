@@ -214,20 +214,15 @@ class DeepPoolLayer(nn.Module):
         self.pool6 = nn.AvgPool2d(kernel_size=6, stride=6)
         self.pool8 = nn.AvgPool2d(kernel_size=8, stride=8)
 
-        self.conv11 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv21 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv31 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv41 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
+        self.conv11 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv21 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv31 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv41 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
-        self.conv12 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv22 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv32 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-        self.conv42 = nn.Conv2d(k//4, k//4, 3, 1, 1, bias=False)
-
-        self.conv13 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv23 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv33 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
-        self.conv43 = nn.Conv2d(k, k//4, 3, 1, 1, bias=False)
+        self.conv12 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv22 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv32 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
+        self.conv42 = nn.Conv2d(k, k, 3, 1, 1, bias=False)
 
         self.relu = nn.ReLU()
         self.conv_sum = nn.Conv2d(k, k_out, 3, 1, 1, bias=False)
@@ -238,32 +233,36 @@ class DeepPoolLayer(nn.Module):
     def forward(self, x, x2=None, x_gcn=None):
         x_size = x.size()
 
-        y1 = self.conv12(self.relu(self.conv11(self.pool2(x))))
-        y2 = self.conv22(self.relu(self.conv21(self.pool4(x))))
-        y3 = self.conv32(self.relu(self.conv31(self.pool6(x))))
-        y4 = self.conv42(self.relu(self.conv41(self.pool8(x))))
-
-        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
-        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
-        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
-        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
+        y1 = self.conv11(self.pool2(x))
+        y2 = self.conv21(self.pool4(x))
+        y3 = self.conv31(self.pool6(x))
+        y4 = self.conv41(self.pool8(x))
 
         y1 = torch.sigmoid(y1)
         y2 = torch.sigmoid(y2)
         y3 = torch.sigmoid(y3)
         y4 = torch.sigmoid(y4)
 
-        _x1 = self.conv13(x)
-        _x2 = self.conv23(x)
-        _x3 = self.conv33(x)
-        _x4 = self.conv43(x)
+        y1 = F.interpolate(y1, x_size[2:], mode='bilinear', align_corners=True)
+        y2 = F.interpolate(y2, x_size[2:], mode='bilinear', align_corners=True)
+        y3 = F.interpolate(y3, x_size[2:], mode='bilinear', align_corners=True)
+        y4 = F.interpolate(y4, x_size[2:], mode='bilinear', align_corners=True)
 
-        c1 = y1 * _x1
-        c2 = y2 * _x2
-        c3 = y3 * _x3
-        c4 = y4 * _x4
+        y1 = y1 * x
+        y2 = y2 * x
+        y3 = y3 * x
+        y4 = y4 * x
 
-        res = torch.cat([c1, c2, c3, c4], dim=1)
+        y1 = self.conv12(y1)
+        y2 = self.conv22(y2)
+        y3 = self.conv32(y3)
+        y4 = self.conv42(y4)
+
+        res = torch.add(x, y1)
+        res = torch.add(res, y2)
+        res = torch.add(res, y3)
+        res = torch.add(res, y4)
+        res = self.relu(res)
 
         if self.is_not_last:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
@@ -562,22 +561,19 @@ class RunnerSPE(object):
 
 
 """
-ckpt:./ckpt/PYG_NoGCN_NewPool/10
-Total param: 34068417 lr_s=[[0, 5e-05], [20, 5e-06]]
-2020-08-29 10:40:15 E:29, Train sod-mae-score=0.0092-0.9859 loss=220.0416
-2020-08-29 10:40:15 E:29, Test  sod-mae-score=0.0383-0.8775 loss=0.1652
-
-c1 = y1 * _x1 + _x1
-2020-08-29 21:52:06 E:23, Train sod-mae-score=0.0111-0.9834 loss=258.1225
-2020-08-29 21:52:06 E:23, Test  sod-mae-score=0.0420-0.8653 loss=0.1597
+ckpt:./ckpt/PYG_NoGCN_NewPool_Sigmoid/10
+2020-08-30 22:28:35 E:25, Train sod-mae-score=0.0093-0.9859 loss=222.2319
+2020-08-30 22:28:35 E:25, Test  sod-mae-score=0.0393-0.8770 loss=0.1611
+2020-08-31 00:17:28 E:29, Train sod-mae-score=0.0086-0.9868 loss=206.5725
+2020-08-31 00:17:28 E:29, Test  sod-mae-score=0.0391-0.8757 loss=0.1628
 """
 
 
 if __name__ == '__main__':
 
     # _data_root_path = "/mnt/4T/Data/SOD/DUTS"
-    # _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
-    _data_root_path = "/mnt/4T/ALISURE/DUTS"
+    _data_root_path = "/media/ubuntu/data1/ALISURE/DUTS"
+    # _data_root_path = "/mnt/4T/ALISURE/DUTS"
 
     _train_print_freq = 1000
     _test_print_freq = 1000
@@ -596,7 +592,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_NoGCN_NewPool/1{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt/PYG_NoGCN_NewPool_Sigmoid/1{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id, _is_sgd, _weight_decay))
 

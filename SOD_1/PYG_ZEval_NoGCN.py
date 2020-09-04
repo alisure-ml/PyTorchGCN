@@ -24,11 +24,8 @@ def gpu_setup(use_gpu, gpu_id):
 
 class MyEvalDataset(Dataset):
 
-    def __init__(self, image_name_list, label_name_list=None, down_ratio=4, down_ratio2=1, sp_size=4, min_size=256):
+    def __init__(self, image_name_list, label_name_list=None, min_size=256):
         super().__init__()
-        self.sp_size = sp_size
-        self.down_ratio_for_sp = down_ratio
-        self.down_ratio_for_sod = down_ratio2
         self.min_size = min_size
         self.image_name_list = image_name_list
         self.label_name_list = label_name_list
@@ -50,49 +47,35 @@ class MyEvalDataset(Dataset):
                 image = image.resize((int(self.min_size / image.size[1] * image.size[0]), self.min_size))
             pass
 
-        w, h = image.size
-
         if self.label_name_list is not None:
             label = Image.open(self.label_name_list[idx]).convert("L").resize(image.size)
         else:
             label = Image.new("L", size=image.size)
-        label_for_sod = np.asarray(label.resize((w//self.down_ratio_for_sod, h//self.down_ratio_for_sod))) / 255
 
+        label = np.asarray(label) / 255
         # 归一化
         _normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         img_data = transforms.Compose([transforms.ToTensor(), _normalize])(image).unsqueeze(dim=0)
 
-        # 超像素
-        image_small_data = np.asarray(image.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp)))
-        label_for_sp = np.asarray(label.resize((w//self.down_ratio_for_sp, h//self.down_ratio_for_sp))) / 255
-
-        graph, pixel_graph, segment = self.get_sp_info(image_small_data, label_for_sp)
         # 返回
-        return graph, pixel_graph, img_data, label_for_sp, label_for_sod, segment, image_small_data, image_name
-
-    def get_sp_info(self, image, label):
-        graph, pixel_graph, segment = MyDataset.get_sp_info(image, label, self.sp_size)
-        return graph, pixel_graph, segment
+        return img_data, label, image_name
 
     @staticmethod
     def collate_fn(samples):
-        MyDataset.collate_fn(samples=samples)
-        return MyDataset.collate_fn(samples=samples)
+        images, labels, image_name = map(list, zip(*samples))
+        images = torch.cat(images)
+        return images, labels, image_name
 
     pass
 
 
 class RunnerSPE(object):
 
-    def __init__(self, down_ratio=4, sp_size=4, min_size=256, use_gpu=True, gpu_id="1",
-                 has_bn=True, normalize=True, residual=False, concat=True):
-        self.down_ratio = down_ratio
-        self.sp_size = sp_size
+    def __init__(self, min_size=256, use_gpu=True, gpu_id="1"):
         self.min_size = min_size
 
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
-        self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, concat=concat).to(self.device)
-        # self.model = MyGCNNet().to(self.device)
+        self.model = MyGCNNet().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
         self._print_network(self.model)
@@ -117,32 +100,19 @@ class RunnerSPE(object):
         nb_data = 0
         epoch_test_mae, epoch_test_mae2 = 0.0, 0.0
         epoch_test_prec, epoch_test_recall = np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
-        epoch_test_prec2, epoch_test_recall2 = np.zeros(shape=(th_num,)) + 1e-6, np.zeros(shape=(th_num,)) + 1e-6
 
-        dataset = MyEvalDataset(image_name_list, label_name_list=label_name_list,
-                                down_ratio=self.down_ratio, sp_size=self.sp_size, min_size=self.min_size)
+        dataset = MyEvalDataset(image_name_list, label_name_list=label_name_list, min_size=self.min_size)
         loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=4, collate_fn=dataset.collate_fn)
         tr_num = len(loader)
         with torch.no_grad():
-            for i, (images, _, labels_sod,
-                    batched_graph, batched_pixel_graph, segments, _, image_names) in enumerate(loader):
+            for i, (images, labels, image_names) in enumerate(loader):
                 # Data
                 images = images.float().to(self.device)
-                labels = batched_graph.y.to(self.device)
-                labels_sod = torch.unsqueeze(torch.Tensor(labels_sod), dim=1).to(self.device)
-                batched_graph.batch = batched_graph.batch.to(self.device)
-                batched_graph.edge_index = batched_graph.edge_index.to(self.device)
+                labels_sod = torch.unsqueeze(torch.Tensor(labels), dim=1).to(self.device)
 
-                batched_pixel_graph.batch = batched_pixel_graph.batch.to(self.device)
-                batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(self.device)
-                batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(self.device)
+                _, sod_logits_sigmoid = self.model.forward(images)
 
-                _, gcn_logits_sigmoid, sod_gcn2_sigmoid, _, sod_logits_sigmoid = self.model.forward(
-                    images, batched_graph, batched_pixel_graph)
-
-                labels_val = labels.cpu().detach().numpy()
                 labels_sod_val = labels_sod.cpu().detach().numpy()
-                gcn_logits_sigmoid_val = gcn_logits_sigmoid.cpu().detach().numpy()
                 sod_logits_sigmoid_val = sod_logits_sigmoid.cpu().detach().numpy()
 
                 # Stat
@@ -155,20 +125,9 @@ class RunnerSPE(object):
                 epoch_test_prec += prec
                 epoch_test_recall += recall
 
-                # cal 2
-                mae2 = self._eval_mae(gcn_logits_sigmoid_val, labels_val)
-                prec2, recall2 = self._eval_pr(gcn_logits_sigmoid_val, labels_val, th_num)
-                epoch_test_mae2 += mae2
-                epoch_test_prec2 += prec2
-                epoch_test_recall2 += recall2
-
                 if save_path is not None:
                     im_size = Image.open(image_names[0]).size
                     image_name = os.path.splitext(os.path.basename(image_names[0]))[0]
-
-                    save_file_name = Tools.new_dir(os.path.join(save_path, "SP", "{}.png".format(image_name)))
-                    sp_result = torch.squeeze(sod_gcn2_sigmoid).detach().cpu().numpy()
-                    Image.fromarray(np.asarray(sp_result * 255, dtype=np.uint8)).resize(im_size).save(save_file_name)
 
                     save_file_name = Tools.new_dir(os.path.join(save_path, "SOD", "{}.png".format(image_name)))
                     sod_result = torch.squeeze(sod_logits_sigmoid).detach().cpu().numpy()
@@ -177,19 +136,15 @@ class RunnerSPE(object):
 
                 # Print
                 if i % 500 == 0:
-                    Tools.print("{:4d}-{:4d} sod-mse={:.4f}({:.4f}) gcn-mse={:.4f}({:.4f})".format(
-                        i, len(loader), mae, epoch_test_mae/(i+1), mae2, epoch_test_mae2/nb_data))
+                    Tools.print("{:4d}-{:4d} sod-mse={:.4f}({:.4f})".format(i, len(loader), mae, epoch_test_mae/(i+1)))
                     pass
                 pass
             pass
 
         avg_mae, avg_prec, avg_recall = epoch_test_mae/tr_num, epoch_test_prec/tr_num, epoch_test_recall/tr_num
         score = (1 + 0.3) * avg_prec * avg_recall / (0.3 * avg_prec + avg_recall)
-        avg_mae2, avg_prec2, avg_recall2 = epoch_test_mae2/nb_data, epoch_test_prec2/nb_data, epoch_test_recall2/nb_data
-        score2 = (1 + 0.3) * avg_prec2 * avg_recall2 / (0.3 * avg_prec2 + avg_recall2)
 
-        Tools.print('{} sod-mae-score={:.4f}-{:.4f} gcn-mae-score={:.4f}-{:.4f}'.format(
-            save_path, avg_mae, score.max(), avg_mae2, score2.max()))
+        Tools.print('{} sod-mae-score={:.4f}-{:.4f}'.format(save_path, avg_mae, score.max()))
         pass
 
     @staticmethod
@@ -260,16 +215,19 @@ model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAdd
 
 
 if __name__ == '__main__':
-    model_name = "FPN_Baseline"
-    from PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid import MyGCNNet, MyDataset
-    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/42/epoch_27.pkl"
+    model_name = "FPN_Baseline2"
+    from FPN_Baseline import MyGCNNet, MyDataset
+    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/FPN_Baseline/21/epoch_27.pkl"
+    # model_name = "PYG_NoGCN_NewPool_Sigmoid"
+    # from PYG_NoGCN_NewPool_Sigmoid import MyGCNNet, MyDataset
+    # model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_NoGCN_NewPool_Sigmoid/10/epoch_29.pkl"
 
     result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
     # _data_root_path = "/mnt/4T/Data/SOD"
     # _data_root_path = "/media/ubuntu/data1/ALISURE"
     _data_root_path = "/media/ubuntu/ALISURE/data/SOD"
 
-    _gpu_id = "1"
+    _gpu_id = "2"
 
     _use_gpu = True
     _improved = True
@@ -278,9 +236,7 @@ if __name__ == '__main__':
     _is_normalize = True
     _concat = True
 
-    _sp_size, _down_ratio = 4, 4
-    runner = RunnerSPE(sp_size=_sp_size, residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
-                       has_bn=_has_bn, concat=_concat, use_gpu=_use_gpu, gpu_id=_gpu_id)
+    runner = RunnerSPE(use_gpu=_use_gpu, gpu_id=_gpu_id)
 
     sod_data = SODData(data_root_path=_data_root_path)
     # for data_set in [sod_data.cssd, sod_data.ecssd, sod_data.msra_1000_asd, sod_data.msra10k,

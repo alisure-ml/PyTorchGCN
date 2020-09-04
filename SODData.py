@@ -177,10 +177,17 @@ class SODData(object):
         dataset_name_list = ["MSRA-B" for _ in image_list]
         return image_list, mask_list, dataset_name_list
 
+    # SED1: 100
+    def sed1(self, image_path="./SED/SED1/Img", mask_path="./SED/SED1/GT"):
+        image_list, mask_list = self._sod_data_file_list(
+            self.data_root_path, image_path, mask_path, image_ext=self.png, mask_ext=self.png)
+        dataset_name_list = ["SED1" for _ in image_list]
+        return image_list, mask_list, dataset_name_list
+
     # SED2: 100
     def sed2(self, image_path="./SED/SED2/Img", mask_path="./SED/SED2/GT"):
         image_list, mask_list = self._sod_data_file_list(
-            self.data_root_path, image_path, mask_path, image_ext=self.jpg, mask_ext=self.png)
+            self.data_root_path, image_path, mask_path, image_ext=self.png, mask_ext=self.png)
         dataset_name_list = ["SED2" for _ in image_list]
         return image_list, mask_list, dataset_name_list
 
@@ -196,13 +203,13 @@ class SODData(object):
                        mask_path="./DUT-OMRON/pixelwiseGT-new-PNG"):
         image_list, mask_list = self._sod_data_file_list(
             self.data_root_path, image_path, mask_path, image_ext=self.jpg, mask_ext=self.png)
-        dataset_name_list = ["DUT-OMRON" for _ in image_list]
+        dataset_name_list = ["DUT-OMRON-5168" for _ in image_list]
         return image_list, mask_list, dataset_name_list
 
     # HKU-IS: 4447
     def hku_is(self, image_path="./HKU-IS/HKU-IS/Img", mask_path="./HKU-IS/HKU-IS/GT"):
         image_list, mask_list = self._sod_data_file_list(
-            self.data_root_path, image_path, mask_path, image_ext=self.jpg, mask_ext=self.png)
+            self.data_root_path, image_path, mask_path, image_ext=self.png, mask_ext=self.png)
         dataset_name_list = ["HKU-IS" for _ in image_list]
         return image_list, mask_list, dataset_name_list
 
