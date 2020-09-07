@@ -85,13 +85,14 @@ class MyEvalDataset(Dataset):
 class RunnerSPE(object):
 
     def __init__(self, down_ratio=4, sp_size=4, min_size=256, use_gpu=True, gpu_id="1",
-                 has_bn=True, normalize=True, residual=False, concat=True):
+                 has_bn=True, normalize=True, residual=False, concat=True, pool_num=4):
         self.down_ratio = down_ratio
         self.sp_size = sp_size
         self.min_size = min_size
 
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
-        self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual, concat=concat).to(self.device)
+        self.model = MyGCNNet(has_bn=has_bn, normalize=normalize, residual=residual,
+                              concat=concat, pool_num=pool_num).to(self.device)
         # self.model = MyGCNNet().to(self.device)
 
         Tools.print("Total param: {}".format(self._view_model_param(self.model)))
@@ -272,30 +273,23 @@ model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAdd
 
 
 if __name__ == '__main__':
-    # model_name = "FPN_Baseline"
-    # from PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid import MyGCNNet, MyDataset
-    # model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/42/epoch_27.pkl"
+    _pool_num = 4
 
-    # model_name = "PYG_GCN"
-    # from PYG_GCN_Only import MyGCNNet, MyDataset
-    # model_file = "/mnt/4T/ALISURE/PyTorchGCN/SOD_2/ckpt/PYG_GCN/1_2/epoch_28.pkl"
+    _epoch = 29 if _pool_num == 1 or _pool_num == 4 else 27
 
-    # model_name = "PYG_GCN"
-    # from PYG_GCN_Only import MyGCNNet, MyDataset
-    # model_file = "/mnt/4T/ALISURE/PyTorchGCN/SOD_2/ckpt/PYG_GCN/1_2/epoch_28.pkl"
+    model_name = "PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid_Abl2468_{}".format(_pool_num)
+    from PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid_Abl2468 import MyGCNNet, MyDataset
+    model_file = "/media/ubuntu/data1/ALISURE/PyTorchGCN/SOD_1/ckpt/" \
+                 "PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid_Abl2468/{}/epoch_{}.pkl".format(_pool_num-1, _epoch)
 
-    model_name = "PYG_GCN"
-    from PYG_GCN_Only import MyGCNNet, MyDataset
-    model_file = "/mnt/4T/ALISURE/PyTorchGCN/SOD_2/ckpt/PYG_GCN/1_2/epoch_28.pkl"
-
-    # result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
-    result_path = "/mnt/4T/ALISURE/PyTorchGCN_Result"
+    result_path = "/media/ubuntu/data1/ALISURE/PyTorchGCN_Result"
+    # result_path = "/mnt/4T/ALISURE/PyTorchGCN_Result"
 
     # _data_root_path = "/mnt/4T/Data/SOD"
     # _data_root_path = "/media/ubuntu/data1/ALISURE"
     _data_root_path = "/media/ubuntu/ALISURE/data/SOD"
 
-    _gpu_id = "0"
+    _gpu_id = str(_pool_num - 1)
 
     _use_gpu = True
     _improved = True
@@ -306,7 +300,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
     runner = RunnerSPE(sp_size=_sp_size, residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio,
-                       has_bn=_has_bn, concat=_concat, use_gpu=_use_gpu, gpu_id=_gpu_id)
+                       has_bn=_has_bn, concat=_concat, use_gpu=_use_gpu, gpu_id=_gpu_id, pool_num=_pool_num)
 
     sod_data = SODData(data_root_path=_data_root_path)
     for data_set in [sod_data.cssd, sod_data.ecssd, sod_data.msra_1000_asd, sod_data.msra10k,

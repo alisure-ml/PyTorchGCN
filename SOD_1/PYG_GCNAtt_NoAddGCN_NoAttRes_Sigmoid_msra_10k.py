@@ -533,11 +533,11 @@ class DeepPoolLayer(nn.Module):
         res = torch.add(res, y4)
         res = self.relu(res)
 
-        res = self.conv_sum(res)
-
         if self.is_not_last:
             res = F.interpolate(res, x2.size()[2:], mode='bilinear', align_corners=True)
             pass
+
+        res = self.conv_sum(res)
 
         if self.has_gcn:
             x_gcn = F.interpolate(x_gcn, res.size()[2:], mode='bilinear', align_corners=True)
@@ -945,11 +945,10 @@ class RunnerSPE(object):
 
 
 """
+# ckpt:./ckpt_msra_10k/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/10
 Total param: 75346881 lr_s=[[0, 5e-05], [20, 5e-06]]
-ckpt:./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/51
-res = self.conv_sum(res)
-2020-09-01 04:11:00 E:27, Train sod-mae-score=0.0089-0.9864 gcn-mae-score=0.0451-0.9157 loss=307.8744(2147.0428+46.5851)
-2020-09-01 04:11:00 E:27, Test  sod-mae-score=0.0368-0.8833 gcn-mae-score=0.0771-0.7416 loss=0.3258(0.1821+0.1438)
+2020-09-05 09:07:21 E:17, Train sod-mae-score=0.0156-0.9781 gcn-mae-score=0.0509-0.9036 loss=419.3274(3198.1818+49.7546)
+2020-09-05 09:07:21 E:17, Test  sod-mae-score=0.0591-0.8291 gcn-mae-score=0.1227-0.6691 loss=0.5733(0.3013+0.2720)
 """
 
 
@@ -963,8 +962,8 @@ if __name__ == '__main__':
     _num_workers = 10
     _use_gpu = True
 
-    # _gpu_id = "0"
-    _gpu_id = "1"
+    _gpu_id = "0"
+    # _gpu_id = "1"
     # _gpu_id = "2"
     # _gpu_id = "3"
 
@@ -981,7 +980,7 @@ if __name__ == '__main__':
 
     _sp_size, _down_ratio = 4, 4
 
-    _root_ckpt_dir = "./ckpt/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/5{}".format(_gpu_id)
+    _root_ckpt_dir = "./ckpt_msra_10k/PYG_GCNAtt_NoAddGCN_NoAttRes_Sigmoid/1{}".format(_gpu_id)
     Tools.print("epochs:{} ckpt:{} sp size:{} down_ratio:{} workers:{} gpu:{} has_residual:{} "
                 "is_normalize:{} has_bn:{} improved:{} concat:{} is_sgd:{} weight_decay:{}".format(
         _epochs, _root_ckpt_dir, _sp_size, _down_ratio, _num_workers, _gpu_id,
