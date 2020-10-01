@@ -37,9 +37,7 @@ def gpu_setup(use_gpu, gpu_id):
 
 class DealSuperPixel(object):
 
-    def __init__(self, image_data, ds_image_size=224, super_pixel_size=14,
-                 slic_sigma=1, slic_max_iter=5, ignore_ratio=0.0):
-        self.ignore_ratio = ignore_ratio
+    def __init__(self, image_data, ds_image_size=224, super_pixel_size=14, slic_sigma=1, slic_max_iter=5):
         self.ds_image_size = ds_image_size
         self.super_pixel_num = (self.ds_image_size // super_pixel_size) ** 2
 
@@ -62,8 +60,7 @@ class DealSuperPixel(object):
             _now_adj = skimage.morphology.dilation(self.segment == i, selem=skimage.morphology.square(3))
             _position = []
             for sp_id in np.unique(self.segment[_now_adj]):
-                ignore_ratio = np.random.rand()
-                if sp_id != i and ignore_ratio >= self.ignore_ratio:
+                if sp_id != i:
                     edge_index.append([i, sp_id])
                     _position.append([self.region_props[i][0][0] - self.region_props[sp_id][0][0],
                                       self.region_props[i][0][1] - self.region_props[sp_id][0][1]])
@@ -94,11 +91,9 @@ class DealSuperPixel(object):
 
 class MyDataset(Dataset):
 
-    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True,
-                 image_size=32, sp_size=4, down_ratio=1, padding=4, ignore_ratio=0.0):
+    def __init__(self, data_root_path='D:\data\CIFAR', is_train=True, image_size=32, sp_size=4, down_ratio=1, padding=4):
         super().__init__()
         self.sp_size = sp_size
-        self.ignore_ratio = ignore_ratio
         self.is_train = is_train
         self.image_size = image_size
         self.image_size_for_sp = self.image_size // down_ratio
@@ -129,7 +124,7 @@ class MyDataset(Dataset):
         # Super Pixel
         #################################################################################
         deal_super_pixel = DealSuperPixel(image_data=img, ds_image_size=self.image_size_for_sp,
-                                          super_pixel_size=self.sp_size, ignore_ratio=self.ignore_ratio)
+                                          super_pixel_size=self.sp_size)
         segment, sp_adj, pixel_adj = deal_super_pixel.run()
         #################################################################################
         # Graph
@@ -176,13 +171,13 @@ class MyDataset(Dataset):
 
 class CONVNet(nn.Module):
 
-    def __init__(self, layer_num=6, out_dim=None):  # 6, 13
+    def __init__(self, layer_num=6, out_dim=None, pretrained=True):  # 6, 13
         super().__init__()
         if out_dim:
             layers = [nn.Conv2d(3, out_dim, kernel_size=1, padding=0), nn.ReLU(inplace=True)]
             self.features = nn.Sequential(*layers)
         else:
-            self.features = vgg13_bn(pretrained=True).features[0: layer_num]
+            self.features = vgg13_bn(pretrained=pretrained).features[0: layer_num]
         pass
 
     def forward(self, x):
@@ -450,10 +445,8 @@ class SAGENet1(nn.Module):
 
             position_embedding = pos(data.edge_w) if self.position else None
             hidden_nodes_feat = gcn(h_in, data.edge_index, edge_weight=position_embedding)
-
             if self.has_bn:
                 hidden_nodes_feat = bn(hidden_nodes_feat)
-
             hidden_nodes_feat = self.relu(hidden_nodes_feat)
 
             if self.residual and h_in.size()[-1] == hidden_nodes_feat.size()[-1]:
@@ -784,21 +777,17 @@ class ResGatedGCN2(nn.Module):
 
 class PositionEmbedding(nn.Module):
 
-    def __init__(self, in_dim, out_dim, has_act=False):
+    def __init__(self, in_dim, out_dim):
         super().__init__()
         self.position_embedding_1 = nn.Linear(in_dim, out_dim, bias=False)
         self.position_embedding_2 = nn.Linear(out_dim, out_dim, bias=False)
         self.relu = nn.ReLU()
-        self.sigmoid = nn.Sigmoid()
-        self.has_act = has_act
         pass
 
     def forward(self, x):
         out = self.position_embedding_1(x)
         out = self.relu(out)
         out = self.position_embedding_2(out)
-        if self.has_act:
-            out = self.sigmoid(out)
         return out
 
     pass
@@ -832,6 +821,7 @@ class AttentionClass(nn.Module):
         x = data.x
         x_att = torch.sigmoid(self.attention(x))
         _x = (x_att * x + x) / 2
+        # _x = x_att * x + x
         hg = global_pool_2(_x, data.batch)
         logits = self.readout_mlp(hg)
         return logits
@@ -841,11 +831,11 @@ class AttentionClass(nn.Module):
 
 class MyGCNNet(nn.Module):
 
-    def __init__(self, conv_layer_num=6, which=0, has_bn=False,
-                 normalize=False, residual=False, improved=False, concat=False):
+    def __init__(self, conv_layer_num=6, which=0, has_bn=False, normalize=False, residual=False, improved=False,
+                 concat=False, hidden_dims1=[128, 128], hidden_dims2=[128, 128, 128, 128], pretrained=True):
         super().__init__()
-        self.model_conv = CONVNet(layer_num=conv_layer_num)  # 6, 13
-        self.attention_class = AttentionClass(in_dim=128, n_classes=10)
+        self.model_conv = CONVNet(layer_num=conv_layer_num, pretrained=pretrained)  # 6, 13
+        self.attention_class = AttentionClass(in_dim=hidden_dims2[-1], n_classes=10)
 
         if which == 0:
             # 136576
@@ -856,9 +846,9 @@ class MyGCNNet(nn.Module):
 
             # 153344
             # 165696 2020-07-29 02:51:09 Epoch:147, Train:0.9513-0.9996/0.1499 Test:0.8704-0.9952/0.4132 padding=2
-            self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=[128, 128],
+            self.model_gnn1 = GCNNet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=hidden_dims1,
                                       has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
-            self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128],
+            self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=hidden_dims2,
                                       has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
 
             # 320000 Epoch:00, Train:0.9801-1.0000/0.0714 Test:0.8717-0.9950/0.4560
@@ -887,24 +877,24 @@ class MyGCNNet(nn.Module):
             # self.model_gnn2 = GCNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128, 128, 128],
             #                           has_bn=has_bn, normalize=normalize, residual=residual, improved=improved)
         elif which == 1:
-            self.model_gnn1 = SAGENet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=[128, 128],
+            self.model_gnn1 = SAGENet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=hidden_dims1,
                                        has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
-            self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128],
+            self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=hidden_dims2,
                                        has_bn=has_bn, normalize=normalize, residual=residual, concat=concat)
         elif which == 2:
-            self.model_gnn1 = GATNet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=[128, 128],
+            self.model_gnn1 = GATNet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=hidden_dims1,
                                       has_bn=has_bn, residual=residual, concat=concat, heads=8)
-            self.model_gnn2 = GATNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128],
+            self.model_gnn2 = GATNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=hidden_dims2,
                                       has_bn=has_bn, residual=residual, concat=concat, heads=8)
         elif which == 3:
-            self.model_gnn1 = ResGatedGCN1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=[128, 128],
+            self.model_gnn1 = ResGatedGCN1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=hidden_dims1,
                                            has_bn=has_bn, normalize=normalize, residual=residual)
-            self.model_gnn2 = ResGatedGCN2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128],
+            self.model_gnn2 = ResGatedGCN2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=hidden_dims2,
                                            has_bn=has_bn, normalize=normalize, residual=residual)
         elif which == 4:
-            self.model_gnn1 = CNNNet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=[128, 128],
+            self.model_gnn1 = CNNNet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=hidden_dims1,
                                       has_bn=has_bn, normalize=normalize, residual=residual)
-            self.model_gnn2 = CNNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=[128, 128, 128, 128],
+            self.model_gnn2 = CNNNet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=hidden_dims2,
                                       has_bn=has_bn, normalize=normalize, residual=residual)
         else:
             assert which == -1
@@ -936,17 +926,17 @@ class RunnerSPE(object):
     def __init__(self, data_root_path='/mnt/4T/Data/cifar/cifar-10', down_ratio=1, concat=False, which=0,
                  batch_size=64, image_size=32, sp_size=4, train_print_freq=100, test_print_freq=50, lr=None,
                  root_ckpt_dir="./ckpt2/norm3", num_workers=8, use_gpu=True, gpu_id="1", conv_layer_num=6, padding=4,
-                 has_bn=True, normalize=True, residual=False, improved=False,
-                 weight_decay=0.0, is_sgd=False, ignore_ratio=0.0):
+                 has_bn=True, normalize=True, residual=False, improved=False, weight_decay=0.0, is_sgd=False,
+                 hidden_dims1=[128, 128], hidden_dims2=[128, 128, 128, 128], pretrained=True):
         self.train_print_freq = train_print_freq
         self.test_print_freq = test_print_freq
 
         self.device = gpu_setup(use_gpu=use_gpu, gpu_id=gpu_id)
         self.root_ckpt_dir = Tools.new_dir(root_ckpt_dir)
 
-        self.train_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio, ignore_ratio=ignore_ratio,
+        self.train_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio,
                                        is_train=True, image_size=image_size, sp_size=sp_size, padding=padding)
-        self.test_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio, ignore_ratio=ignore_ratio,
+        self.test_dataset = MyDataset(data_root_path=data_root_path, down_ratio=down_ratio,
                                       is_train=False, image_size=image_size, sp_size=sp_size, padding=padding)
 
         self.train_loader = DataLoader(self.train_dataset, batch_size=batch_size, shuffle=True,
@@ -955,7 +945,8 @@ class RunnerSPE(object):
                                       num_workers=num_workers, collate_fn=self.test_dataset.collate_fn)
 
         self.model = MyGCNNet(conv_layer_num=conv_layer_num, which=which, has_bn=has_bn, normalize=normalize,
-                              residual=residual, improved=improved, concat=concat).to(self.device)
+                              residual=residual, improved=improved, concat=concat, hidden_dims1=hidden_dims1,
+                              hidden_dims2=hidden_dims2, pretrained=pretrained).to(self.device)
 
         if is_sgd:
             self.lr_s = [[0, 0.1], [50, 0.01], [100, 0.001]] if lr is None else lr
@@ -1203,6 +1194,20 @@ SGD 4_True_2_2_13_mean_mean_pool 395840 Epoch:138, Train:0.9439-0.9991/0.1725 Te
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.02 padding:2 bs:512 Epoch:97, Train:0.9964-1.0000/0.0139 Test:0.9139-0.9974/0.3748
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.01 padding:2 bs:64 Epoch:143, Train:0.9958-1.0000/0.0184 Test:0.9202-0.9972/0.3086
 
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  1072960  lr:0.01 padding:2 bs:64 256*4 Epoch:146, Train:0.9987-1.0000/0.0089 Test:0.9294-0.9971/0.2792
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  3326400  lr:0.01 padding:2 bs:64 256*2 512*4 Epoch:134, Train:0.9995-1.0000/0.0061 Test:0.9328-0.9972/0.2600
+
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  1798720  lr:0.01 padding:2 bs:64 128*2 256*2 512*2 Epoch:137, Train:0.9993-1.0000/0.0072 Test:0.9300-0.9973/0.2687
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  1798720  lr:0.01 padding:4 bs:64 128*2 256*2 512*2 Epoch:146, Train:0.9980-1.0000/0.0103 Test:0.9302-0.9982/0.2616
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  1898304  lr:0.01 padding:2 bs:64 128*2 128*2 256*2 512*2 Epoch:72, Train:0.9944-1.0000/0.0228 Test:0.9261-0.9972/0.2696
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  2835392  lr:0.01 padding:2 bs:64 128*3 256*3 512*3 Epoch:136, Train:0.9990-1.0000/0.0069 Test:0.9281-0.9980/0.2861
+
+2_2_13  NoAtt *+ ReLU  SGD 2Linear mean_max_pool 3325888  lr:0.01 padding:2 bs:64 256*2 512*4 Epoch:124, Train:0.9990-1.0000/0.0075 Test:0.9269-0.9981/0.2830
+2_2_13  NoAtt *+ ReLU  SGD 2Linear mean_max_pool  593984  lr:0.01 padding:2 bs:64 128*2 128*4 Epoch:114, Train:0.9943-1.0000/0.0233 Test:0.9182-0.9967/0.3098
+
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.01 padding:2 bs:64 128*2 128*4 NoPre Epoch:106, Train:0.9955-1.0000/0.0192 Test:0.9146-0.9969/0.3300
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool 3326400  lr:0.01 padding:2 bs:64 256*2 512*4 NoPre Epoch:124, Train:0.9995-1.0000/0.0062 Test:0.9252-0.9978/0.2830
+
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.0256 padding:2 bs:64 Epoch:111, Train:0.9932-1.0000/0.0258 Test:0.9210-0.9978/0.2913
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.0256 padding:2 bs:512 Epoch:71, Train:0.9913-1.0000/0.0278 Test:0.9112-0.9965/0.3341
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.01 padding:2 bs:64 PosHasReLU Epoch:107, Train:0.9944-1.0000/0.0225 Test:0.9163-0.9967/0.3142
@@ -1214,6 +1219,12 @@ SGD 4_True_2_2_13_mean_mean_pool 395840 Epoch:138, Train:0.9439-0.9991/0.1725 Te
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.01 padding:2 bs:64 ignore:0.1 Epoch:109, Train:0.9924-1.0000/0.0278 Test:0.9172-0.9964/0.3130
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.01 padding:2 bs:64 ignore:0.2 Epoch:111, Train:0.9921-1.0000/0.0300 Test:0.9154-0.9970/0.3134
 2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool  594112  lr:0.01 padding:2 bs:64 ignore:0.3 Epoch:107, Train:0.9889-1.0000/0.0369 Test:0.9143-0.9962/0.3193
+
+"""
+
+
+"""
+2_2_13  Att *+ ReLU  SGD 2Linear mean_max_pool 3326400  lr:0.01 padding:2 bs:64 256*2 512*4 Epoch:118, Train:0.9993-1.0000/0.0062 Test:0.9330-0.9977/0.2576
 """
 
 
@@ -1221,7 +1232,10 @@ if __name__ == '__main__':
     _data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # _data_root_path = '/home/ubuntu/ALISURE/data/cifar'
 
+    _pretrained = True
+
     _batch_size = 64
+    # _batch_size = 512
 
     _image_size = 32
     _train_print_freq = 100
@@ -1231,8 +1245,6 @@ if __name__ == '__main__':
 
     _padding = 2
     # _padding = 4
-
-    _ignore_ratio = 0.3
 
     # _which = 0  # GCN
     _which = 1  # SAGE
@@ -1248,6 +1260,19 @@ if __name__ == '__main__':
 
     # _sp_size, _down_ratio, _conv_layer_num = 4, 1, 6
     _sp_size, _down_ratio, _conv_layer_num = 2, 2, 13
+
+    # _hidden_dims1 = [128, 128]
+    # _hidden_dims2 = [128, 128, 128, 128]
+    # _hidden_dims1 = [128, 128]
+    # _hidden_dims2 = [256, 256, 256, 256]
+    _hidden_dims1 = [256, 256]
+    _hidden_dims2 = [512, 512, 512, 512]
+    # _hidden_dims1 = [128, 128]
+    # _hidden_dims2 = [256, 256, 512, 512]
+    # _hidden_dims1 = [128, 128]
+    # _hidden_dims2 = [128, 128, 256, 256, 512, 512]
+    # _hidden_dims1 = [128, 128, 128]
+    # _hidden_dims2 = [256, 256, 256, 512, 512, 512]
 
     # global_pool_1, global_pool_2, pool_name = global_mean_pool, global_mean_pool, "mean_mean_pool"
     # global_pool_1, global_pool_2, pool_name = global_max_pool, global_max_pool, "max_max_pool"
@@ -1294,8 +1319,9 @@ if __name__ == '__main__':
                        batch_size=_batch_size, image_size=_image_size, sp_size=_sp_size, is_sgd=_is_sgd,
                        residual=_has_residual, normalize=_is_normalize, down_ratio=_down_ratio, lr=_lr,
                        has_bn=_has_bn, improved=_improved, weight_decay=_weight_decay, conv_layer_num=_conv_layer_num,
-                       train_print_freq=_train_print_freq, test_print_freq=_test_print_freq, ignore_ratio=_ignore_ratio,
-                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, padding=_padding)
+                       train_print_freq=_train_print_freq, test_print_freq=_test_print_freq,
+                       num_workers=_num_workers, use_gpu=_use_gpu, gpu_id=_gpu_id, padding=_padding,
+                       hidden_dims1=_hidden_dims1, hidden_dims2=_hidden_dims2, pretrained=_pretrained)
     runner.train(_epochs)
 
     pass
