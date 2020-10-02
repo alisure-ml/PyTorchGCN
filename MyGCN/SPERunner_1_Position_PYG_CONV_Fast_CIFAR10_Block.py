@@ -209,12 +209,12 @@ class MySAGEConvBlock(nn.Module):
         self.residual = residual
         self.gcn_num = gcn_num
 
+        _in_dim = in_dim
         if Param.has_linear_in_block:
             self.linear1 = nn.Linear(in_dim, out_dim, bias=False)
             self.bn1 = nn.BatchNorm1d(out_dim)
             _in_dim = out_dim
-        else:
-            _in_dim = in_dim
+            pass
 
         self.gcn = MySAGEConv(_in_dim, out_dim, normalize=normalize, concat=concat)
         self.bn2 = nn.BatchNorm1d(out_dim)
@@ -225,7 +225,7 @@ class MySAGEConvBlock(nn.Module):
             pass
 
         if self.position:
-            self.pos = PositionEmbedding(2, out_dim)
+            self.pos = PositionEmbedding(2, _in_dim)
             if self.gcn_num == 2:
                 self.pos2 = PositionEmbedding(2, out_dim)
                 pass
@@ -758,8 +758,14 @@ class RunnerSPE(object):
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793536 lr:0.01 padding:2 bs:64   Block 128*2 128*4 Epoch:142, Train:0.9960-1.0000/0.0167 Test:0.9197-0.9968/0.3336
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  593856 lr:0.01 padding:2 bs:64 NoBlock 128*2 128*4 Epoch:149, Train:0.9960-1.0000/0.0181 Test:0.9199-0.9974/0.3082
 
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  593856 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 128*2 128*4 
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  593856 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*4 
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  593856 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 128*2 128*4 Epoch:132, Train:0.9953-1.0000/0.0187 Test:0.9209-0.9967/0.3070
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793536 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*4 Epoch:134, Train:0.9974-1.0000/0.0124 Test:0.9235-0.9976/0.3077
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793024 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*3 Epoch:146, Train:0.9971-1.0000/0.0137 Test:0.9251-0.9976/0.2969
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 6877760 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*4 Epoch:136, Train:0.9995-1.0000/0.0044 Test:0.9300-0.9976/0.2879
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5299776 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*3
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  693440 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*1 128*3
 """
 
 
@@ -804,18 +810,16 @@ class Param(object):
     # sp_size, down_ratio, conv_layer_num = 4, 1, 6
     sp_size, down_ratio, conv_layer_num = 2, 2, 13
 
-    hidden_dims1 = [128, 128]
-    hidden_dims2 = [128, 128, 128, 128]
     # hidden_dims1 = [128, 128]
-    # hidden_dims2 = [256, 256, 256, 256]
+    # hidden_dims2 = [128, 128, 128, 128]
+    # hidden_dims1 = [128, 128]
+    # hidden_dims2 = [128, 128, 128]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [512, 512, 512, 512]
-    # hidden_dims1 = [128, 128]
-    # hidden_dims2 = [256, 256, 512, 512]
-    # hidden_dims1 = [128, 128]
-    # hidden_dims2 = [128, 128, 256, 256, 512, 512]
-    # hidden_dims1 = [128, 128, 128]
-    # hidden_dims2 = [256, 256, 256, 512, 512, 512]
+    # hidden_dims1 = [256, 256]
+    # hidden_dims2 = [512, 512, 512]
+    hidden_dims1 = [128]
+    hidden_dims2 = [128, 128, 128]
 
     # global_pool_1, global_pool_2, pool_name = global_mean_pool, global_mean_pool, "mean_mean_pool"
     # global_pool_1, global_pool_2, pool_name = global_max_pool, global_max_pool, "max_max_pool"
