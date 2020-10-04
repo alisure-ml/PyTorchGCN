@@ -44,10 +44,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter)
+                                         sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -203,14 +203,16 @@ class MySAGEConv(SAGEConv):
 
 class MySAGEConvBlock(nn.Module):
 
-    def __init__(self, in_dim, out_dim, normalize, concat, position=True, residual=True, gcn_num=1):
+    def __init__(self, in_dim, out_dim, normalize, concat,
+                 position=True, residual=True, gcn_num=1, has_linear_in_block=False):
         super().__init__()
         self.position = position
         self.residual = residual
         self.gcn_num = gcn_num
+        self.has_linear_in_block = has_linear_in_block
 
         _in_dim = in_dim
-        if Param.has_linear_in_block:
+        if self.has_linear_in_block:
             self.linear1 = nn.Linear(in_dim, out_dim, bias=False)
             self.bn1 = nn.BatchNorm1d(out_dim)
             _in_dim = out_dim
@@ -231,11 +233,11 @@ class MySAGEConvBlock(nn.Module):
                 pass
             pass
 
-        if Param.has_linear_in_block:
+        if self.has_linear_in_block:
             self.linear3 = nn.Linear(out_dim, out_dim, bias=False)
             self.bn3 = nn.BatchNorm1d(out_dim)
 
-        if Param.has_linear_in_block:
+        if self.has_linear_in_block:
             if in_dim != out_dim:
                 self.linear0 = nn.Linear(in_dim, out_dim, bias=False)
                 pass
@@ -247,7 +249,7 @@ class MySAGEConvBlock(nn.Module):
     def forward(self, x, data):
         identity = x
 
-        if Param.has_linear_in_block:
+        if self.has_linear_in_block:
             out = self.relu(self.bn1(self.linear1(x)))
         else:
             out = x
@@ -263,11 +265,11 @@ class MySAGEConvBlock(nn.Module):
             out = self.relu(self.bn22(out))
         ##################################
 
-        if Param.has_linear_in_block:
+        if self.has_linear_in_block:
             out = self.bn3(self.linear3(out))
 
         if self.residual:
-            if Param.has_linear_in_block:
+            if self.has_linear_in_block:
                 if identity.size()[-1] != out.size()[-1]:
                     identity = self.linear0(identity)
                 pass
@@ -275,72 +277,7 @@ class MySAGEConvBlock(nn.Module):
                 out = out + identity
             pass
 
-        if Param.has_linear_in_block:
-            out = self.relu(out)
-
-        return out
-
-    pass
-
-
-class MySAGEConvBlock2(nn.Module):
-
-    def __init__(self, in_dim, out_dim, normalize, concat, position=True, residual=True):
-        super().__init__()
-        self.position = position
-        self.residual = residual
-
-        if Param.has_linear_in_block:
-            self.linear1 = nn.Linear(in_dim, out_dim, bias=False)
-            self.bn1 = nn.BatchNorm1d(out_dim)
-            _in_dim = out_dim
-        else:
-            _in_dim = in_dim
-
-        self.gcn = MySAGEConv(_in_dim, out_dim, normalize=normalize, concat=concat)
-        self.bn2 = nn.BatchNorm1d(out_dim)
-
-        if self.position:
-            self.pos = PositionEmbedding(2, out_dim)
-
-        if Param.has_linear_in_block:
-            self.linear3 = nn.Linear(out_dim, out_dim, bias=False)
-            self.bn3 = nn.BatchNorm1d(out_dim)
-
-        if Param.has_linear_in_block:
-            if in_dim != out_dim:
-                self.linear0 = nn.Linear(in_dim, out_dim, bias=False)
-                pass
-            pass
-
-        self.relu = nn.ReLU(inplace=True)
-        pass
-
-    def forward(self, x, data):
-        identity = x
-
-        if Param.has_linear_in_block:
-            out = self.relu(self.bn1(self.linear1(x)))
-        else:
-            out = x
-
-        position_embedding = self.pos(data.edge_w) if self.position else None
-        out = self.gcn(out, data.edge_index, edge_weight=position_embedding)
-        out = self.relu(self.bn2(out))
-
-        if Param.has_linear_in_block:
-            out = self.bn3(self.linear3(out))
-
-        if self.residual:
-            if Param.has_linear_in_block:
-                if identity.size()[-1] != out.size()[-1]:
-                    identity = self.linear0(identity)
-                pass
-            if identity.size()[-1] == out.size()[-1]:
-                out = out + identity
-            pass
-
-        if Param.has_linear_in_block:
+        if self.has_linear_in_block:
             out = self.relu(out)
 
         return out
@@ -350,8 +287,8 @@ class MySAGEConvBlock2(nn.Module):
 
 class SAGENet1(nn.Module):
 
-    def __init__(self, in_dim=64, hidden_dims=[128, 128], global_pool=global_mean_pool,
-                 normalize=False, concat=False, residual=True, position=True, gcn_num=1):
+    def __init__(self, in_dim=64, hidden_dims=[128, 128], global_pool=global_mean_pool, normalize=False,
+                 concat=False, residual=True, position=True, gcn_num=1, has_linear_in_block=False):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
@@ -360,13 +297,15 @@ class SAGENet1(nn.Module):
         self.residual = residual
         self.position = position
 
-        self.embedding_h = nn.Linear(self.in_dim, self.in_dim, bias=False)
+        embedding_dim = self.hidden_dims[0]
+        self.embedding_h = nn.Linear(self.in_dim, embedding_dim, bias=False)
 
         self.gcn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims:
-            self.gcn_list.append(MySAGEConvBlock(in_dim, hidden_dim, normalize=self.normalize, concat=self.concat,
-                                                 residual=self.residual, position=self.position, gcn_num=gcn_num))
-            in_dim = hidden_dim
+            self.gcn_list.append(MySAGEConvBlock(embedding_dim, hidden_dim, normalize=self.normalize,
+                                                 concat=self.concat, residual=self.residual, position=self.position,
+                                                 gcn_num=gcn_num, has_linear_in_block=has_linear_in_block))
+            embedding_dim = hidden_dim
             pass
         self.global_pool = global_pool
         pass
@@ -386,8 +325,8 @@ class SAGENet1(nn.Module):
 
 class SAGENet2(nn.Module):
 
-    def __init__(self, in_dim=128, hidden_dims=[128, 128],
-                 normalize=False, concat=False, residual=True, position=True, gcn_num=1):
+    def __init__(self, in_dim=128, hidden_dims=[128, 128], normalize=False,
+                 concat=False, residual=True, position=True, gcn_num=1, has_linear_in_block=False):
         super().__init__()
         self.in_dim = in_dim
         self.hidden_dims = hidden_dims
@@ -396,13 +335,15 @@ class SAGENet2(nn.Module):
         self.residual = residual
         self.position = position
 
-        self.embedding_h = nn.Linear(in_dim, in_dim, bias=False)
+        embedding_dim = self.hidden_dims[0]
+        self.embedding_h = nn.Linear(self.in_dim, embedding_dim, bias=False)
 
         self.gcn_list = nn.ModuleList()
         for hidden_dim in self.hidden_dims:
-            self.gcn_list.append(MySAGEConvBlock(in_dim, hidden_dim, normalize=self.normalize, concat=self.concat,
-                                                 residual=self.residual, position=self.position, gcn_num=gcn_num))
-            in_dim = hidden_dim
+            self.gcn_list.append(MySAGEConvBlock(embedding_dim, hidden_dim, normalize=self.normalize,
+                                                 concat=self.concat, residual=self.residual, position=self.position,
+                                                 gcn_num=gcn_num, has_linear_in_block=has_linear_in_block))
+            embedding_dim = hidden_dim
             pass
         pass
 
@@ -483,9 +424,11 @@ class MyGCNNet(nn.Module):
         self.attention_class = AttentionClass(in_dim=hidden_dims2[-1], n_classes=10, global_pool=global_pool_2)
 
         self.model_gnn1 = SAGENet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=hidden_dims1,
-                                   normalize=normalize, residual=residual,
+                                   normalize=normalize, residual=residual, position=Param.position,
+                                   has_linear_in_block=Param.has_linear_in_block1,
                                    concat=concat, global_pool=global_pool_1, gcn_num=gcn_num)
         self.model_gnn2 = SAGENet2(in_dim=self.model_gnn1.hidden_dims[-1], hidden_dims=hidden_dims2,
+                                   has_linear_in_block=Param.has_linear_in_block2, position=Param.position,
                                    normalize=normalize, residual=residual, concat=concat, gcn_num=gcn_num)
         pass
 
@@ -758,22 +701,41 @@ class RunnerSPE(object):
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793536 lr:0.01 padding:2 bs:64   Block 128*2 128*4 Epoch:142, Train:0.9960-1.0000/0.0167 Test:0.9197-0.9968/0.3336
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  593856 lr:0.01 padding:2 bs:64 NoBlock 128*2 128*4 Epoch:149, Train:0.9960-1.0000/0.0181 Test:0.9199-0.9974/0.3082
 
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  593856 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 128*2 128*4 Epoch:121, Train:0.9960-1.0000/0.0187 Test:0.9183-0.9970/0.3140
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793536 lr:0.01 padding:2 bs:64   Block gcn_num:1 128*2 128*4 Epoch:125, Train:0.9948-1.0000/0.0193 Test:0.9197-0.9970/0.3312
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  892608 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*4 Epoch:115, Train:0.9973-1.0000/0.0134 Test:0.9221-0.9973/0.3117
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1092288 lr:0.01 padding:2 bs:64   Block gcn_num:2 128*2 128*4 Epoch:124, Train:0.9951-1.0000/0.0182 Test:0.9192-0.9975/0.3269
+
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  593856 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 128*2 128*4 Epoch:132, Train:0.9953-1.0000/0.0187 Test:0.9209-0.9967/0.3070
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793536 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*4 Epoch:134, Train:0.9974-1.0000/0.0124 Test:0.9235-0.9976/0.3077
 
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793024 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*3 Epoch:146, Train:0.9971-1.0000/0.0137 Test:0.9251-0.9976/0.2969
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 6877760 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*4 Epoch:136, Train:0.9995-1.0000/0.0044 Test:0.9300-0.9976/0.2879
 
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5299776 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*3
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  693440 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*1 128*3
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 2209600 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 Epoch:110, Train:0.9990-1.0000/0.0074 Test:0.9331-0.9982/0.2593
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 2605376 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*4 Epoch:76, Train:0.9970-1.0000/0.0154 Test:0.9307-0.9969/0.2590
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793024 lr:0.0256 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*3 Epoch:138, Train:0.9971-1.0000/0.0131 Test:0.9237-0.9976/0.3016
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1598528 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 NoPos Epoch:115, Train:0.9989-1.0000/0.0084 Test:0.9283-0.9978/0.2730
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5410112 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 NoPos 
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 7795264 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 8484160 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 embedding
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 2340928 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 embedding
 """
 
 
 class Param(object):
-    data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # data_root_path = '/home/ubuntu/ALISURE/data/cifar'
+    data_root_path = "/media/ubuntu/4T/ALISURE/Data/cifar"
 
     pretrained = True
+
+    position = True
+    # position = False
 
     batch_size = 64
     # batch_size = 512
@@ -781,16 +743,20 @@ class Param(object):
     image_size = 32
     train_print_freq = 100
     test_print_freq = 50
-    num_workers = 20
+    num_workers = 10
 
     use_gpu = True
-    device = gpu_setup(use_gpu=True, gpu_id="0")
+    # device = gpu_setup(use_gpu=True, gpu_id="0")
     # device = gpu_setup(use_gpu=True, gpu_id="1")
+    # device = gpu_setup(use_gpu=True, gpu_id="2")
+    device = gpu_setup(use_gpu=True, gpu_id="3")
 
     padding = 2
     # padding = 4
 
-    has_linear_in_block = False
+    # has_linear_in_block = False
+    has_linear_in_block1 = False
+    has_linear_in_block2 = False
     # gcn_num = 1
     gcn_num = 2
 
@@ -800,8 +766,6 @@ class Param(object):
         epochs, weight_decay = 150, 5e-4
         # lr = [[0, 0.1], [50, 0.01], [100, 0.001], [130, 0.0001]]
         lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
-        # lr = [[0, 0.05], [50, 0.005], [100, 0.0005]]
-        # lr = [[0, 0.02], [50, 0.002], [100, 0.0002]]
         # lr = [[0, 0.0256], [50, 0.00256], [100, 0.000256]]
     else:
         epochs, weight_decay, lr = 100, 0.0, [[0, 0.001], [50, 0.0002], [75, 0.00004]]
@@ -816,10 +780,14 @@ class Param(object):
     # hidden_dims2 = [128, 128, 128]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [512, 512, 512, 512]
+    hidden_dims1 = [256, 256]
+    hidden_dims2 = [256, 256, 256]
+    # hidden_dims1 = [256, 256]
+    # hidden_dims2 = [256, 256, 256, 256]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [512, 512, 512]
-    hidden_dims1 = [128]
-    hidden_dims2 = [128, 128, 128]
+    # hidden_dims1 = [512, 512]
+    # hidden_dims2 = [512, 512, 512]
 
     # global_pool_1, global_pool_2, pool_name = global_mean_pool, global_mean_pool, "mean_mean_pool"
     # global_pool_1, global_pool_2, pool_name = global_max_pool, global_max_pool, "max_max_pool"
