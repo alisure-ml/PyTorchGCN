@@ -44,10 +44,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
+        self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+                                         sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -720,6 +720,18 @@ class RunnerSPE(object):
 
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1598528 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 NoPos Epoch:115, Train:0.9989-1.0000/0.0084 Test:0.9283-0.9978/0.2730
 
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5299776 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*3 Epoch:126, Train:0.9997-1.0000/0.0044 Test:0.9311-0.9974/0.2708
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  693440 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*1 128*3 Epoch:137, Train:0.9973-1.0000/0.0134 Test:0.9236-0.9973/0.3115
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793024 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*3 Epoch:126, Train:0.9975-1.0000/0.0136 Test:0.9273-0.9978/0.2879
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5299776 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*3 Epoch:124, Train:0.9995-1.0000/0.0044 Test:0.9302-0.9971/0.2871
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1418048 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 256*2 256*4 Epoch:104, Train:0.9980-1.0000/0.0122 Test:0.9303-0.9978/0.2619
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 3326016 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 256*2 512*4 Epoch:130, Train:0.9994-1.0000/0.0066 Test:0.9306-0.9979/0.2516
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1418432 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 256*2 256*4 bias Epoch:121, Train:0.9984-1.0000/0.0108 Test:0.9273-0.9977/0.2668
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 3326400 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 256*2 512*4 bias Epoch:148, Train:0.9996-1.0000/0.0056 Test:0.9314-0.9982/0.2616
+
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5410112 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 NoPos 
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 7795264 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 8484160 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 embedding
@@ -728,9 +740,9 @@ class RunnerSPE(object):
 
 
 class Param(object):
-    # data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    data_root_path = "/media/ubuntu/4T/ALISURE/Data/cifar"
+    # data_root_path = "/media/ubuntu/4T/ALISURE/Data/cifar"
 
     pretrained = True
 
@@ -743,13 +755,13 @@ class Param(object):
     image_size = 32
     train_print_freq = 100
     test_print_freq = 50
-    num_workers = 10
+    num_workers = 20
 
     use_gpu = True
-    # device = gpu_setup(use_gpu=True, gpu_id="0")
+    device = gpu_setup(use_gpu=True, gpu_id="0")
     # device = gpu_setup(use_gpu=True, gpu_id="1")
     # device = gpu_setup(use_gpu=True, gpu_id="2")
-    device = gpu_setup(use_gpu=True, gpu_id="3")
+    # device = gpu_setup(use_gpu=True, gpu_id="3")
 
     padding = 2
     # padding = 4
@@ -778,16 +790,18 @@ class Param(object):
     # hidden_dims2 = [128, 128, 128, 128]
     # hidden_dims1 = [128, 128]
     # hidden_dims2 = [128, 128, 128]
+    hidden_dims1 = [256, 256]
+    hidden_dims2 = [512, 512, 512, 512]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [512, 512, 512, 512]
-    hidden_dims1 = [256, 256]
-    hidden_dims2 = [256, 256, 256]
+    # hidden_dims1 = [256, 256]
+    # hidden_dims2 = [256, 256, 256]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [256, 256, 256, 256]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [512, 512, 512]
-    # hidden_dims1 = [512, 512]
-    # hidden_dims2 = [512, 512, 512]
+    # hidden_dims1 = [128]
+    # hidden_dims2 = [128, 128, 128]
 
     # global_pool_1, global_pool_2, pool_name = global_mean_pool, global_mean_pool, "mean_mean_pool"
     # global_pool_1, global_pool_2, pool_name = global_max_pool, global_max_pool, "max_max_pool"
