@@ -779,7 +779,8 @@ class Param(object):
     def get_data_root():
         if "Linux" in platform.platform():
             data_root_path_list = ['/mnt/4T/Data/cifar/cifar-10', '/home/ubuntu/ALISURE/data/cifar',
-                                   "/mnt/4T/Data/data/CIFAR", '/media/ubuntu/4T/ALISURE/Data/cifar']
+                                   "/mnt/4T/Data/data/CIFAR", '/media/ubuntu/4T/ALISURE/Data/cifar',
+                                   "/media/ubuntu/data1/ALISURE/cifar10", "/mnt/4T/ALISURE/cifar10"]
             data_root = None
             for data_root_path in data_root_path_list:
                 if os.path.isdir(data_root_path):
