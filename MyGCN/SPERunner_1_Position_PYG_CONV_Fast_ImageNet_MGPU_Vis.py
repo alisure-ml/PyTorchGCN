@@ -5,6 +5,7 @@ import glob
 import torch
 import skimage
 import numpy as np
+from PIL import Image
 import torch.nn as nn
 from itertools import chain
 import torch.nn.functional as F
@@ -121,13 +122,15 @@ class MyDataset(Dataset):
         return len(self.data_set)
 
     def __getitem__(self, idx):
+        img_path = self.data_set.samples[idx][0]
         img, target = self.data_set.__getitem__(idx)
         normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         img_data = transforms.Compose([transforms.ToTensor(), normalize])(np.asarray(img)).unsqueeze(dim=0)
 
+        img_vis_data = np.asarray(img)
         img_small_data = np.asarray(img.resize((self.image_size_for_sp, self.image_size_for_sp)))
         graph, pixel_graph = self.get_sp_info(img_small_data, target)
-        return graph, pixel_graph, img_data, target
+        return graph, pixel_graph, img_data, target, img_path, img_vis_data
 
     def get_sp_info(self, img, target):
         # Super Pixel
@@ -162,8 +165,9 @@ class MyDataset(Dataset):
         samples_list = [samples[i * one_num:(i + 1) * one_num] for i in range(gpu_num)] if one_num > 0 else [samples]
 
         graphs_list, pixel_graphs_list, images_list, labels_list = [], [], [], []
+        images_path_list, image_small_data_list = [], []
         for samples_now in samples_list:
-            graphs, pixel_graphs, images, labels = map(list, zip(*samples_now))
+            graphs, pixel_graphs, images, labels, images_path, image_small_data = map(list, zip(*samples_now))
 
             images = torch.cat(images)
             labels = torch.tensor(np.array(labels))
@@ -180,13 +184,15 @@ class MyDataset(Dataset):
                 pass
             batched_pixel_graph = Batch.from_data_list(_pixel_graphs)
 
+            images_path_list.append(images_path)
+            image_small_data_list.append(image_small_data)
             images_list.append(images)
             labels_list.append(labels)
             graphs_list.append(batched_graph)
             pixel_graphs_list.append(batched_pixel_graph)
             pass
 
-        return images_list, labels_list, graphs_list, pixel_graphs_list
+        return images_list, labels_list, graphs_list, pixel_graphs_list, images_path_list, image_small_data_list
 
     pass
 
@@ -407,11 +413,11 @@ class NoAttentionClass(nn.Module):
         self.readout_mlp = nn.Linear(in_dim, n_classes, bias=False)
         pass
 
-    def forward(self, data):
+    def forward(self, data, batched_pixel_graph):
         x = data.x
         hg = self.global_pool(x, data.batch)
         logits = self.readout_mlp(hg)
-        return logits
+        return logits, logits
 
     pass
 
@@ -425,13 +431,28 @@ class AttentionClass(nn.Module):
         self.readout_mlp = nn.Linear(in_dim, n_classes, bias=False)
         pass
 
-    def forward(self, data):
+    def forward(self, data, batched_pixel_graph):
         x = data.x
         x_att = torch.sigmoid(self.attention(x))
         _x = (x_att * x + x) / 2
         hg = self.global_pool(_x, data.batch)
         logits = self.readout_mlp(hg)
-        return logits
+
+        att_feature = self.att_feature(x_att, batched_pixel_graph)
+        return logits, att_feature
+
+    @staticmethod
+    def att_feature(feature, batched_pixel_graph):
+        data_where = batched_pixel_graph.data_where
+
+        # 构造特征
+        _shape = torch.max(data_where, dim=0)[0] + 1
+        _size = (_shape[0], feature.shape[-1], _shape[1], _shape[2])
+        _feature_for_vis = feature[batched_pixel_graph.batch]
+
+        feature_for_vis = torch.Tensor(size=_size).to(feature.device)
+        feature_for_vis[data_where[:, 0], :, data_where[:, 1], data_where[:, 2]] = _feature_for_vis
+        return feature_for_vis
 
     pass
 
@@ -473,8 +494,8 @@ class MyGCNNet(nn.Module):
         gcn2_feature = self.model_gnn2.forward(batched_graph)
 
         batched_graph.x = gcn2_feature
-        logits = self.attention_class.forward(batched_graph)
-        return logits
+        logits, att = self.attention_class.forward(batched_graph, batched_pixel_graph)
+        return logits, att
 
     pass
 
@@ -570,7 +591,8 @@ class RunnerSPE(object):
         self.model.train()
 
         epoch_loss, epoch_train_acc, epoch_train_acc_k, nb_data = 0, 0, 0, 0
-        for i, (images_list, labels_list, batched_graph_list, batched_pixel_graph_list) in enumerate(self.train_loader):
+        for i, (images_list, labels_list, batched_graph_list, batched_pixel_graph_list,
+                images_path_list, images_small_data_list) in enumerate(self.train_loader):
             # Run
             self.optimizer.zero_grad()
 
@@ -600,7 +622,7 @@ class RunnerSPE(object):
                 inputs.append([images, batched_graph, batched_pixel_graph])
                 pass
 
-            logits = self.model.forward(inputs)
+            logits, _ = self.model.forward(inputs)
 
             loss = self.loss_class(logits, labels)
             loss.backward()
@@ -628,8 +650,8 @@ class RunnerSPE(object):
         Tools.print()
         epoch_test_loss, epoch_test_acc, epoch_test_acc_k, nb_data = 0, 0, 0, 0
         with torch.no_grad():
-            for i, (images_list, labels_list,
-                    batched_graph_list, batched_pixel_graph_list) in enumerate(self.test_loader):
+            for i, (images_list, labels_list, batched_graph_list, batched_pixel_graph_list,
+                    images_path_list, images_small_data_list) in enumerate(self.test_loader):
                 # Data
                 inputs = []
                 labels = torch.cat(labels_list).long().to(self.device)
@@ -656,7 +678,7 @@ class RunnerSPE(object):
                     inputs.append([images, batched_graph, batched_pixel_graph])
                     pass
 
-                logits = self.model.forward(inputs)
+                logits, _ = self.model.forward(inputs)
                 loss = self.loss_class(logits, labels)
 
                 # Stat
@@ -676,6 +698,73 @@ class RunnerSPE(object):
             pass
 
         return epoch_test_loss/(len(self.test_loader)+1), epoch_test_acc/nb_data, epoch_test_acc_k/nb_data
+
+    def visual(self, is_train=False, result_path=None, th_value=0.9, max_batch=0):
+        self.model.eval()
+
+        Tools.print()
+        _loader = self.train_loader if is_train else self.test_loader
+        with torch.no_grad():
+            for i, (images_list, labels_list, batched_graph_list, batched_pixel_graph_list,
+                    images_path_list, images_small_data_list) in enumerate(_loader):
+                if 0 < max_batch < i:
+                    break
+
+                # Data
+                inputs = []
+                images_path_now = []
+                images_small_data_now = []
+                labels = torch.cat(labels_list).long().to(self.device)
+                for gpu_id, (images, batched_graph, batched_pixel_graph, images_path, images_small_data) in enumerate(
+                        zip(images_list, batched_graph_list, batched_pixel_graph_list,
+                            images_path_list, images_small_data_list)):
+                    images = images.float().to(torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+
+                    images_path_now += images_path
+                    images_small_data_now += images_small_data
+
+                    batched_graph.batch = batched_graph.batch.to(
+                        torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                    batched_graph.edge_w = batched_graph.edge_w.to(
+                        torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                    batched_graph.edge_index = batched_graph.edge_index.to(
+                        torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+
+                    batched_pixel_graph.batch = batched_pixel_graph.batch.to(
+                        torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                    batched_pixel_graph.edge_w = batched_pixel_graph.edge_w.to(
+                        torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                    batched_pixel_graph.edge_index = batched_pixel_graph.edge_index.to(
+                        torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+                    batched_pixel_graph.data_where = batched_pixel_graph.data_where.to(
+                        torch.device('cuda:{}'.format(self.model.device_ids[gpu_id])))
+
+                    inputs.append([images, batched_graph, batched_pixel_graph])
+                    pass
+
+                logits, atts = self.model.forward(inputs)
+
+                Tools.print("{} {}".format(len(_loader), i))
+                for image_path, image_small_data, att in zip(images_path_now, images_small_data_now, atts):
+                    att = att[0].cpu()
+                    att = att - torch.min(att)
+                    att = att / torch.max(att)
+
+                    # scale
+                    att[att < th_value] = th_value
+                    att = att - torch.min(att)
+                    att = att / torch.max(att)
+
+                    att = np.asarray(att * 255, dtype=np.uint8)
+
+                    base_name = os.path.basename(image_path)
+                    Image.fromarray(image_small_data).save(os.path.join(result_path, base_name))
+                    Image.fromarray(att).save(os.path.join(result_path, os.path.splitext(base_name)[0] + ".bmp"))
+                    pass
+                pass
+            pass
+
+        pass
 
     def _lr(self, epoch):
         for lr in self.lr_s:
@@ -796,6 +885,11 @@ if __name__ == '__main__':
     # runner.train(Param.epochs)
 
     runner.load_model("./ckpt2/dgl/1_Position_PYG_CONV_Fast_ImageNet_Block/abl/epoch_89.pkl")
-    runner.test()
+    # runner.test()
+
+    th_value = 98
+    max_batch = 800
+    result_path = Tools.new_dir("/mnt/4T/ALISURE/GCN/PyTorchGCN_Result/Vis_Att_{}_{}".format(th_value, max_batch))
+    runner.visual(result_path=result_path, th_value=th_value / 100, max_batch=max_batch)
 
     pass
