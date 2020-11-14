@@ -179,8 +179,8 @@ class CONVNet(nn.Module):
         self.c = c
         self.out = 64
         if self.c > 0:
-            self.features = nn.Sequential([nn.Conv2d(1, self.out, kernel_size=3, padding=1),
-                                           nn.BatchNorm2d(self.out), nn.ReLU(inplace=True)])
+            self.features = nn.Sequential(nn.Conv2d(1, self.out, kernel_size=3, padding=1),
+                                          nn.BatchNorm2d(self.out), nn.ReLU(inplace=True))
             pass
 
         self.out_dim = 1 if self.c == 0 else self.out
