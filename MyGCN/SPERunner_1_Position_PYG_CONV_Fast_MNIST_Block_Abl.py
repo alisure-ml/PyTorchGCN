@@ -720,7 +720,7 @@ class Param(object):
 
         self.train_print_freq = 400
         self.test_print_freq = 100
-        self.num_workers = 10
+        self.num_workers = 20
 
         self.sp_size = 4
 
@@ -738,8 +738,8 @@ class Param(object):
     @staticmethod
     def get_optim(is_sgd):
         if is_sgd:
-            epochs, weight_decay = 180, 5e-4
-            lr = [[0, 0.01], [80, 0.001], [140, 0.0001]]
+            epochs, weight_decay = 60, 5e-4
+            lr = [[0, 0.01], [30, 0.001], [50, 0.0001]]
         else:
             epochs, weight_decay, lr = 100, 0.0, [[0, 0.001], [50, 0.0002], [75, 0.00004]]
             pass
