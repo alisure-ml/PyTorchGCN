@@ -1134,6 +1134,20 @@ class AblConfig(object):
 
 if __name__ == '__main__':
 
+    """
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 1_a_1 --g 0
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 1_a_3 --g 1
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 1_b_1 --g 2
+    
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 1_b_2 --g 0
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 1_b_3 --g 1
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 2_a --g 2
+    
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 2_b --g 0
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 3 --g 1
+    python SPERunner_1_Position_PYG_CONV_Fast_CIFAR10_Block_Abl.py --t 5 --g 2
+    """
+
     arg = argparse.ArgumentParser()
     arg.add_argument("--g", required=True, type=int, default=1, help="gpu id")
     arg.add_argument("--t", required=True, type=str, default="1_a_1", help="table id")
