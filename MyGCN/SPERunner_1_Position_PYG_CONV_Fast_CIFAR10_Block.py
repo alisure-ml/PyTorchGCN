@@ -1,6 +1,5 @@
 import os
 import cv2
-import time
 import glob
 import torch
 import skimage
@@ -9,16 +8,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 from skimage import segmentation
 from alisuretool.Tools import Tools
-import torch_geometric.transforms as T
-from torch.utils.data import DataLoader
 import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 from torch_geometric.data import Data, Batch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.models import vgg13_bn, vgg16_bn
-from torch_scatter import scatter_max, scatter_add
+from torch_geometric.nn import MessagePassing, SAGEConv
+from torch_geometric.utils import add_remaining_self_loops
 from torch_geometric.nn import global_mean_pool, global_max_pool
-from torch_geometric.nn import MessagePassing, GCNConv, SAGEConv, GATConv
 
 
 def gpu_setup(use_gpu, gpu_id):
@@ -44,10 +41,10 @@ class DealSuperPixel(object):
         self.image_data = image_data if len(image_data) == self.ds_image_size else cv2.resize(
             image_data, (self.ds_image_size, self.ds_image_size))
 
-        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-        #                                  sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
         self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
-                                         sigma=slic_sigma, max_iter=slic_max_iter)
+                                         sigma=slic_sigma, max_iter=slic_max_iter, start_label=0)
+        # self.segment = segmentation.slic(self.image_data, n_segments=self.super_pixel_num,
+        #                                  sigma=slic_sigma, max_iter=slic_max_iter)
 
         _measure_region_props = skimage.measure.regionprops(self.segment + 1)
         self.region_props = [[region_props.centroid, region_props.coords] for region_props in _measure_region_props]
@@ -174,7 +171,7 @@ class CONVNet(nn.Module):
     def __init__(self, layer_num=6, out_dim=None, pretrained=True):  # 6, 13
         super().__init__()
         if out_dim:
-            layers = [nn.Conv2d(3, out_dim, kernel_size=1, padding=0), nn.ReLU(inplace=True)]
+            layers = [nn.Conv2d(3, out_dim, kernel_size=1), nn.BatchNorm2d(out_dim), nn.ReLU(inplace=True)]
             self.features = nn.Sequential(*layers)
         else:
             self.features = vgg13_bn(pretrained=pretrained).features[0: layer_num]
@@ -187,7 +184,42 @@ class CONVNet(nn.Module):
     pass
 
 
-class MySAGEConv(SAGEConv):
+class MySAGEConv(MessagePassing):
+
+    def __init__(self, in_channels, out_channels, normalize=False, concat=False, bias=True, **kwargs):
+        super().__init__(aggr='mean', **kwargs)
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.normalize = normalize
+
+        self.linear = nn.Linear(self.in_channels, self.out_channels, bias=bias)
+        pass
+
+    def forward(self, x, edge_index, edge_weight=None, size=None, res_n_id=None):
+        if torch.is_tensor(x):
+            edge_index, edge_weight = add_remaining_self_loops(edge_index, None, 1, x.size(self.node_dim))
+            pass
+        return self.propagate(edge_index, size=size, x=x, edge_weight=edge_weight, res_n_id=res_n_id)
+
+    def message(self, x_j, edge_weight):
+        # return x_j if edge_weight is None else edge_weight + x_j
+        # return x_j if edge_weight is None else edge_weight * x_j
+        return x_j if edge_weight is None else edge_weight * x_j + x_j
+
+    def update(self, aggr_out, x, res_n_id):
+        aggr_out = self.linear(aggr_out)
+        if self.normalize:
+            aggr_out = F.normalize(aggr_out, p=2, dim=-1)
+        return aggr_out
+
+    def __repr__(self):
+        return '{}({}, {})'.format(self.__class__.__name__, self.in_channels, self.out_channels)
+
+    pass
+
+
+class MySAGEConv2(SAGEConv):
 
     def __init__(self, in_channels, out_channels, normalize=False, concat=False, bias=True, **kwargs):
         super().__init__(in_channels, out_channels, normalize=normalize, concat=concat, bias=bias, **kwargs)
@@ -417,10 +449,11 @@ class AttentionClass(nn.Module):
 class MyGCNNet(nn.Module):
 
     def __init__(self, conv_layer_num=6, normalize=True, residual=True, concat=True, pretrained=True,
-                 hidden_dims1=[128, 128], hidden_dims2=[128, 128, 128, 128],
+                 hidden_dims1=[128, 128], hidden_dims2=[128, 128, 128, 128], has_conv=True,
                  global_pool_1=global_mean_pool, global_pool_2=global_max_pool, gcn_num=1):
         super().__init__()
-        self.model_conv = CONVNet(layer_num=conv_layer_num, pretrained=pretrained)  # 6, 13
+        _out_dim = None if has_conv else 64
+        self.model_conv = CONVNet(layer_num=conv_layer_num, out_dim=_out_dim, pretrained=pretrained)  # 6, 13
         self.attention_class = AttentionClass(in_dim=hidden_dims2[-1], n_classes=10, global_pool=global_pool_2)
 
         self.model_gnn1 = SAGENet1(in_dim=self.model_conv.features[-2].num_features, hidden_dims=hidden_dims1,
@@ -470,7 +503,7 @@ class RunnerSPE(object):
         self.test_loader = DataLoader(self.test_dataset, batch_size=Param.batch_size, shuffle=False,
                                       num_workers=Param.num_workers, collate_fn=self.test_dataset.collate_fn)
 
-        self.model = MyGCNNet(conv_layer_num=Param.conv_layer_num, normalize=Param.normalize,
+        self.model = MyGCNNet(conv_layer_num=Param.conv_layer_num, normalize=Param.normalize, has_conv=Param.has_conv,
                               residual=Param.residual, concat=Param.concat, hidden_dims1=Param.hidden_dims1,
                               hidden_dims2=Param.hidden_dims2, pretrained=Param.pretrained, gcn_num=Param.gcn_num,
                               global_pool_1=Param.global_pool_1, global_pool_2=Param.global_pool_2).to(self.device)
@@ -719,7 +752,6 @@ class RunnerSPE(object):
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  793024 lr:0.0256 padding:2 bs:64 NoBlock gcn_num:2 128*2 128*3 Epoch:138, Train:0.9971-1.0000/0.0131 Test:0.9237-0.9976/0.3016
 
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1598528 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 NoPos Epoch:115, Train:0.9989-1.0000/0.0084 Test:0.9283-0.9978/0.2730
-
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5299776 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*3 Epoch:126, Train:0.9997-1.0000/0.0044 Test:0.9311-0.9974/0.2708
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool  693440 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 128*1 128*3 Epoch:137, Train:0.9973-1.0000/0.0134 Test:0.9236-0.9973/0.3115
 
@@ -732,17 +764,34 @@ class RunnerSPE(object):
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1418432 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 256*2 256*4 bias Epoch:121, Train:0.9984-1.0000/0.0108 Test:0.9273-0.9977/0.2668
 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 3326400 lr:0.01 padding:2 bs:64 NoBlock gcn_num:1 256*2 512*4 bias Epoch:148, Train:0.9996-1.0000/0.0056 Test:0.9314-0.9982/0.2616
 
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5410112 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 NoPos 
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 7795264 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 8484160 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 embedding
-2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 2340928 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 embedding
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5410112 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 NoPos Epoch:142, Train:0.9997-1.0000/0.0047 Test:0.9315-0.9983/0.2504
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 7795264 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 Epoch:136, Train:0.9999-1.0000/0.0039 Test:0.9364-0.9982/0.2315
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 8484160 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 embedding Epoch:134, Train:0.9998-1.0000/0.0037 Test:0.9359-0.9977/0.2344
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 2340928 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 embedding Epoch:107, Train:0.9992-1.0000/0.0069 Test:0.9308-0.9977/0.2660
+
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 8484160 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 embedding 90 Epoch:74, Train:0.9989-1.0000/0.0099 Test:0.9335-0.9976/0.2387
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 2340928 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 embedding 90 Epoch:64, Train:0.9956-1.0000/0.0205 Test:0.9273-0.9978/0.2623
+"""
+
+
+"""
+2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 8484160 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 Emd 300 Epoch:155, Train:1.0000-1.0000/0.0029 Test:0.9393-0.9984/0.2156
+4_1_6  Att *+ ReLU SGD 2Linear mean_max_pool 5717568 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 512*3 Emd 300 Epoch:228, Train:1.0000-1.0000/0.0027 Test:0.9325-0.9980/0.2471
+4_1_6  Att *+ ReLU SGD 2Linear mean_max_pool 2102592 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 Emd 300 Epoch:203, Train:0.9997-1.0000/0.0052 Test:0.9322-0.9981/0.2510
+4_1_3  Att *+ ReLU SGD 2Linear mean_max_pool 2065536 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 Emd 300 Epoch:214, Train:0.9996-1.0000/0.0055 Test:0.9192-0.9972/0.3069
+4_1_0  Att *+ ReLU SGD 2Linear mean_max_pool 2064000 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 Emd 300 Epoch:176, Train:0.9949-1.0000/0.0251 Test:0.8713-0.9944/0.4637
+
+MY 4_1_3  Att *+ ReLU SGD 2Linear mean_max_pool 1410176 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 Emd 300 Epoch:242, Train:0.9981-1.0000/0.0130 Test:0.8562-0.9926/0.5487
+MY 4_1_6  Att *+ ReLU SGD 2Linear mean_max_pool 1447232 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 Emd 300 Epoch:113, Train:0.9943-1.0000/0.0289 Test:0.9044-0.9978/0.3116
+MY 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 1685568 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 256*2 256*3 Emd 300 Epoch:167, Train:0.9989-1.0000/0.0079 Test:0.9296-0.9978/0.2768
+MY 2_2_13 Att *+ ReLU SGD 2Linear mean_max_pool 5862720 lr:0.01 padding:2 bs:64 NoBlock gcn_num:2 512*2 512*3 Emd 300 Epoch:167, Train:0.9998-1.0000/0.0038 Test:0.9339-0.9977/0.2506
 """
 
 
 class Param(object):
-    data_root_path = '/mnt/4T/Data/cifar/cifar-10'
+    # data_root_path = '/mnt/4T/Data/cifar/cifar-10'
     # data_root_path = '/home/ubuntu/ALISURE/data/cifar'
-    # data_root_path = "/media/ubuntu/4T/ALISURE/Data/cifar"
+    data_root_path = "/media/ubuntu/4T/ALISURE/Data/cifar"
 
     pretrained = True
 
@@ -755,16 +804,23 @@ class Param(object):
     image_size = 32
     train_print_freq = 100
     test_print_freq = 50
-    num_workers = 20
+    num_workers = 16
+
+    # sp_size, down_ratio, conv_layer_num = 4, 1, 3
+    # sp_size, down_ratio, conv_layer_num = 4, 1, 6
+    sp_size, down_ratio, conv_layer_num = 2, 2, 13
 
     use_gpu = True
-    device = gpu_setup(use_gpu=True, gpu_id="0")
+    # device = gpu_setup(use_gpu=True, gpu_id="0")
     # device = gpu_setup(use_gpu=True, gpu_id="1")
-    # device = gpu_setup(use_gpu=True, gpu_id="2")
+    device = gpu_setup(use_gpu=True, gpu_id="2")
     # device = gpu_setup(use_gpu=True, gpu_id="3")
 
     padding = 2
     # padding = 4
+
+    has_conv = True
+    # has_conv = False
 
     # has_linear_in_block = False
     has_linear_in_block1 = False
@@ -775,23 +831,24 @@ class Param(object):
     # is_sgd = False
     is_sgd = True
     if is_sgd:
-        epochs, weight_decay = 150, 5e-4
+        # epochs, weight_decay = 150, 5e-4
         # lr = [[0, 0.1], [50, 0.01], [100, 0.001], [130, 0.0001]]
-        lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
+        # lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
         # lr = [[0, 0.0256], [50, 0.00256], [100, 0.000256]]
+
+        # epochs, weight_decay = 90, 5e-4
+        # lr = [[0, 0.01], [30, 0.001], [60, 0.0001]]
+
+        epochs, weight_decay = 300, 5e-4
+        lr = [[0, 0.01], [100, 0.001], [200, 0.0001]]
     else:
         epochs, weight_decay, lr = 100, 0.0, [[0, 0.001], [50, 0.0002], [75, 0.00004]]
         pass
-
-    # sp_size, down_ratio, conv_layer_num = 4, 1, 6
-    sp_size, down_ratio, conv_layer_num = 2, 2, 13
 
     # hidden_dims1 = [128, 128]
     # hidden_dims2 = [128, 128, 128, 128]
     # hidden_dims1 = [128, 128]
     # hidden_dims2 = [128, 128, 128]
-    hidden_dims1 = [256, 256]
-    hidden_dims2 = [512, 512, 512, 512]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [512, 512, 512, 512]
     # hidden_dims1 = [256, 256]
@@ -800,8 +857,8 @@ class Param(object):
     # hidden_dims2 = [256, 256, 256, 256]
     # hidden_dims1 = [256, 256]
     # hidden_dims2 = [512, 512, 512]
-    # hidden_dims1 = [128]
-    # hidden_dims2 = [128, 128, 128]
+    hidden_dims1 = [512, 512]
+    hidden_dims2 = [512, 512, 512]
 
     # global_pool_1, global_pool_2, pool_name = global_mean_pool, global_mean_pool, "mean_mean_pool"
     # global_pool_1, global_pool_2, pool_name = global_max_pool, global_max_pool, "max_max_pool"
