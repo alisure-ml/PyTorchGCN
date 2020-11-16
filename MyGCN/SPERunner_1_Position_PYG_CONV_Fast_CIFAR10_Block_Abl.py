@@ -944,7 +944,7 @@ class AblConfig(object):
             "LC": {"name": "LC", "pool": "avg"}
         }
 
-        return arc_02, arc_03, arc_01
+        return arc_01, arc_02, arc_03
 
     @staticmethod
     def get_table_1_b_3(name, gpu_id=0):
@@ -1012,8 +1012,7 @@ class AblConfig(object):
             "LC": {"name": "LC", "pool": "avg"}
         }
 
-        # return arc_01, arc_02, arc_03, arc_04
-        return arc_01,
+        return arc_01, arc_02, arc_03, arc_04
 
     # Table 2 (b): readout in sl-gnn and linear classifier
 
