@@ -177,7 +177,7 @@ class CONVNet(nn.Module):
     def __init__(self, c=0):  # 6, 13
         super().__init__()
         self.c = c
-        self.out = 64
+        self.out = 32
         if self.c > 0:
             self.features = nn.Sequential(nn.Conv2d(1, self.out, kernel_size=3, padding=1),
                                           nn.BatchNorm2d(self.out), nn.ReLU(inplace=True))
@@ -286,12 +286,13 @@ class MySAGEConvBlock(nn.Module):
         ##################################
         position_embedding = self.pos(data.edge_w) if self.position else None
         out = self.gcn(out, data.edge_index, edge_weight=position_embedding)
-        out = self.relu(self.bn2(out))
+        out = self.bn2(out)
 
         if self.gcn_num == 2:
+            out = self.relu(out)
             position_embedding = self.pos2(data.edge_w) if self.position else None
             out = self.gcn2(out, data.edge_index, edge_weight=position_embedding)
-            out = self.relu(self.bn22(out))
+            out = self.bn22(out)
         ##################################
 
         if self.residual:
@@ -299,6 +300,7 @@ class MySAGEConvBlock(nn.Module):
                 out = out + identity
             pass
 
+        out = self.relu(out)
         return out
 
     pass
@@ -390,8 +392,8 @@ class PositionEmbedding(nn.Module):
 
     def __init__(self, in_dim, out_dim):
         super().__init__()
-        self.position_embedding_1 = nn.Linear(in_dim, out_dim, bias=False)
-        self.position_embedding_2 = nn.Linear(out_dim, out_dim, bias=False)
+        self.position_embedding_1 = nn.Linear(in_dim, out_dim // 2, bias=False)
+        self.position_embedding_2 = nn.Linear(out_dim // 2, out_dim, bias=False)
         self.relu = nn.ReLU()
         pass
 
@@ -667,8 +669,8 @@ class Param(object):
                 "name": "final",
                 "gpu_id": 0,
                 "PL": 4,
-                "SL": {"name": "PRG", "num": 1, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-                "IL": {"name": "PRG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+                "SL": {"name": "PRG", "num": 1, "dim": 32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+                "IL": {"name": "PRG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
                 "LC": {"name": "ALC", "pool": "max"}
             }
         else:
@@ -720,12 +722,12 @@ class Param(object):
 
         self.train_print_freq = 400
         self.test_print_freq = 100
-        self.num_workers = 20
+        self.num_workers = 10
 
         self.sp_size = 4
 
-        # self.is_sgd = False
-        self.is_sgd = True
+        self.is_sgd = False
+        # self.is_sgd = True
         self.epochs, self.weight_decay, self.lr = self.get_optim(self.is_sgd)
         self.device = gpu_setup(use_gpu=True, gpu_id=str(self.arc["gpu_id"]))
         self.data_root = self.get_data_root()
@@ -738,8 +740,8 @@ class Param(object):
     @staticmethod
     def get_optim(is_sgd):
         if is_sgd:
-            epochs, weight_decay = 60, 5e-4
-            lr = [[0, 0.01], [30, 0.001], [50, 0.0001]]
+            epochs, weight_decay = 150, 5e-4
+            lr = [[0, 0.01], [50, 0.001], [100, 0.0001]]
         else:
             epochs, weight_decay, lr = 100, 0.0, [[0, 0.001], [50, 0.0002], [75, 0.00004]]
             pass
@@ -806,8 +808,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 0,
-            "SL": {"name": "BG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "BG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "BG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "BG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         # C0 BRG1 BRG2 ALC
@@ -815,8 +817,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 0,
-            "SL": {"name": "BRG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "BRG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "BRG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "BRG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         # C0 PG1 PG2 ALC
@@ -824,8 +826,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 0,
-            "SL": {"name": "PG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "PG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "PG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "PG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         # C0 PRG1 PRG2 ALC
@@ -833,8 +835,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 0,
-            "SL": {"name": "PRG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "PRG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "PRG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "PRG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         return arc_01, arc_02, arc_03, arc_04
@@ -846,8 +848,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 1,
-            "SL": {"name": "BG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "BG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "BG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "BG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         # C0 BRG1 BRG2 ALC
@@ -855,8 +857,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 1,
-            "SL": {"name": "BRG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "BRG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "BRG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "BRG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         # C0 PG1 PG2 ALC
@@ -864,8 +866,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 1,
-            "SL": {"name": "PG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "PG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "PG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "PG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         # C0 PRG1 PRG2 ALC
@@ -873,8 +875,8 @@ class AblConfig(object):
             "name": name,
             "gpu_id": gpu_id,
             "PL": 1,
-            "SL": {"name": "PRG", "num": 1, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-            "IL": {"name": "PRG", "num": 2, "dim": 128, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+            "SL": {"name": "PRG", "num": 1, "dim":  32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
+            "IL": {"name": "PRG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
             "LC": {"name": "ALC", "pool": "max"}
         }
         return arc_01, arc_02, arc_03, arc_04

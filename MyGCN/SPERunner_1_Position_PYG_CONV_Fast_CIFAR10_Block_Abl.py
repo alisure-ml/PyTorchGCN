@@ -292,12 +292,13 @@ class MySAGEConvBlock(nn.Module):
         ##################################
         position_embedding = self.pos(data.edge_w) if self.position else None
         out = self.gcn(out, data.edge_index, edge_weight=position_embedding)
-        out = self.relu(self.bn2(out))
+        out = self.bn2(out)
 
         if self.gcn_num == 2:
+            out = self.relu(out)
             position_embedding = self.pos2(data.edge_w) if self.position else None
             out = self.gcn2(out, data.edge_index, edge_weight=position_embedding)
-            out = self.relu(self.bn22(out))
+            out = self.bn22(out)
         ##################################
 
         if self.residual:
@@ -305,6 +306,7 @@ class MySAGEConvBlock(nn.Module):
                 out = out + identity
             pass
 
+        out = self.relu(out)
         return out
 
     pass
@@ -396,8 +398,8 @@ class PositionEmbedding(nn.Module):
 
     def __init__(self, in_dim, out_dim):
         super().__init__()
-        self.position_embedding_1 = nn.Linear(in_dim, out_dim, bias=False)
-        self.position_embedding_2 = nn.Linear(out_dim, out_dim, bias=False)
+        self.position_embedding_1 = nn.Linear(in_dim, out_dim // 2, bias=False)
+        self.position_embedding_2 = nn.Linear(out_dim // 2, out_dim, bias=False)
         self.relu = nn.ReLU()
         pass
 
@@ -728,7 +730,7 @@ class Param(object):
 
         self.train_print_freq = 400
         self.test_print_freq = 100
-        self.num_workers = 20
+        self.num_workers = 35
 
         if self.c == 0 or self.c == 1 or self.c == 2:
             self.sp_size, self.down_ratio = 4, 1
@@ -736,8 +738,8 @@ class Param(object):
             self.sp_size, self.down_ratio = 2, 2
             pass
 
-        # self.is_sgd = False
-        self.is_sgd = True
+        self.is_sgd = False
+        # self.is_sgd = True
         self.epochs, self.weight_decay, self.lr = self.get_optim(self.is_sgd)
         self.device = gpu_setup(use_gpu=True, gpu_id=str(self.arc["gpu_id"]))
         self.data_root = self.get_data_root()
@@ -942,7 +944,7 @@ class AblConfig(object):
             "LC": {"name": "LC", "pool": "avg"}
         }
 
-        return arc_01, arc_02, arc_03
+        return arc_02, arc_03, arc_01
 
     @staticmethod
     def get_table_1_b_3(name, gpu_id=0):
@@ -1010,7 +1012,8 @@ class AblConfig(object):
             "LC": {"name": "LC", "pool": "avg"}
         }
 
-        return arc_01, arc_02, arc_03, arc_04
+        # return arc_01, arc_02, arc_03, arc_04
+        return arc_01,
 
     # Table 2 (b): readout in sl-gnn and linear classifier
 

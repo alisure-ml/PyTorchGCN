@@ -280,24 +280,22 @@ class MySAGEConvBlock(nn.Module):
 
     def forward(self, x, data):
         identity = x
-
-        if self.has_linear_in_block:
-            out = self.relu(self.bn1(self.linear1(x)))
-        else:
-            out = x
+        out = self.relu(self.bn1(self.linear1(x))) if self.has_linear_in_block else x
 
         ##################################
         position_embedding = self.pos(data.edge_w) if self.position else None
         out = self.gcn(out, data.edge_index, edge_weight=position_embedding)
-        out = self.relu(self.bn2(out))
+        out = self.bn2(out)
 
         if self.gcn_num == 2:
+            out = self.relu(out)
             position_embedding = self.pos2(data.edge_w) if self.position else None
             out = self.gcn2(out, data.edge_index, edge_weight=position_embedding)
-            out = self.relu(self.bn22(out))
+            out = self.bn22(out)
         ##################################
 
         if self.has_linear_in_block:
+            out = self.relu(out)
             out = self.bn3(self.linear3(out))
 
         if self.residual:
@@ -309,9 +307,7 @@ class MySAGEConvBlock(nn.Module):
                 out = out + identity
             pass
 
-        if self.has_linear_in_block:
-            out = self.relu(out)
-
+        out = self.relu(out)
         return out
 
     pass
@@ -395,8 +391,8 @@ class PositionEmbedding(nn.Module):
 
     def __init__(self, in_dim, out_dim):
         super().__init__()
-        self.position_embedding_1 = nn.Linear(in_dim, out_dim, bias=False)
-        self.position_embedding_2 = nn.Linear(out_dim, out_dim, bias=False)
+        self.position_embedding_1 = nn.Linear(in_dim, out_dim // 2, bias=False)
+        self.position_embedding_2 = nn.Linear(out_dim // 2, out_dim, bias=False)
         self.relu = nn.ReLU()
         pass
 
