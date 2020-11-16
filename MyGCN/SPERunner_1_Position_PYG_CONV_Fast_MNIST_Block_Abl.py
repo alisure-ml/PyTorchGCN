@@ -670,7 +670,7 @@ class Param(object):
                 "gpu_id": 0,
                 "PL": 4,
                 "SL": {"name": "PRG", "num": 1, "dim": 32, "gcn_type": 1, "gcn_num": 2, "mean": 0, "pool": "avg"},
-                "IL": {"name": "PRG", "num": 2, "dim": 64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
+                "IL": {"name": "PRG", "num": 2, "dim":  64, "gcn_type": 1, "gcn_num": 2, "mean": 0},
                 "LC": {"name": "ALC", "pool": "max"}
             }
         else:
@@ -722,7 +722,7 @@ class Param(object):
 
         self.train_print_freq = 400
         self.test_print_freq = 100
-        self.num_workers = 10
+        self.num_workers = 32
 
         self.sp_size = 4
 
